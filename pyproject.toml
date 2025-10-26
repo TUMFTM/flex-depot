@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "flex-dep-opt"
+version = "0.1.0"
+description = "Flexibility depot optimization"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+
+[project.scripts]
+flex-dep-opt = "flex_dep_opt.cli:main" # Befehl nach Installation
+
+
+[tool.setuptools.packages.find]
+where = ["src"]

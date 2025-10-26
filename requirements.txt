@@ -1,0 +1,2 @@
+# füge hier Abhängigkeiten hinzu, z. B.:
+# python-dotenv>=1.0
