@@ -4,7 +4,7 @@ import pandas as pd
 from ..domain.vehicle import Vehicle
 
 
-def build_single_vehicle_model(vehicle: Vehicle, prices_eur_per_kwh: pd.Series) -> pyo.ConcreteModel:
+def build_single_vehicle_model(vehicle: Vehicle, prices_eur_per_kwh: pd.Series,*,timestep_hours: float | None = None) -> pyo.ConcreteModel:
     """
     Build a simple hourly storage arbitrage model for a single vehicle/storage unit.
 
@@ -33,11 +33,20 @@ def build_single_vehicle_model(vehicle: Vehicle, prices_eur_per_kwh: pd.Series) 
     prices = prices_eur_per_kwh.sort_index()
     T = range(len(prices))
 
+    # Infer Δt (in hours) from first two timestamps if not provided
+    if timestep_hours is None:
+        if len(prices.index) < 2:
+            raise ValueError("Need at least two timestamps to infer timestep.")
+        dt_seconds = (prices.index[1] - prices.index[0]).total_seconds()
+        timestep_hours = dt_seconds / 3600.0
+
     m = pyo.ConcreteModel()
     m.T = pyo.RangeSet(0, len(prices) - 1)
 
     # Parameters
     m.price = pyo.Param(m.T, initialize={t: float(prices.iloc[t]) for t in T}, mutable=False)
+    m.dt = pyo.Param(initialize=float(timestep_hours))  # hours per step
+
     m.cap = pyo.Param(initialize=float(vehicle.capacity_kwh))
     m.soc_min = pyo.Param(initialize=float(vehicle.soc_min) * float(vehicle.capacity_kwh))
     m.soc_max = pyo.Param(initialize=float(vehicle.soc_max) * float(vehicle.capacity_kwh))
@@ -52,11 +61,11 @@ def build_single_vehicle_model(vehicle: Vehicle, prices_eur_per_kwh: pd.Series) 
     m.p_dis = pyo.Var(m.T, within=pyo.NonNegativeReals)
     m.soc = pyo.Var(m.T, within=pyo.NonNegativeReals)
 
-    # SOC dynamics
+    # SOC dynamics with Δt [h]: energy change = power * time
     def soc_rule(m, t):
         if t == 0:
-            return m.soc[t] == m.soc0 + m.eta_c * m.p_ch[t] - (1.0 / m.eta_d) * m.p_dis[t]
-        return m.soc[t] == m.soc[t - 1] + m.eta_c * m.p_ch[t] - (1.0 / m.eta_d) * m.p_dis[t]
+            return m.soc[t] == m.soc0 + m.eta_c * m.p_ch[t] * m.dt - (1.0 / m.eta_d) * m.p_dis[t] * m.dt
+        return m.soc[t] == m.soc[t - 1] + m.eta_c * m.p_ch[t] * m.dt - (1.0 / m.eta_d) * m.p_dis[t] * m.dt
 
     m.soc_dyn = pyo.Constraint(m.T, rule=soc_rule)
 
@@ -66,7 +75,10 @@ def build_single_vehicle_model(vehicle: Vehicle, prices_eur_per_kwh: pd.Series) 
     m.ch_lim = pyo.Constraint(m.T, rule=lambda m, t: m.p_ch[t] <= m.p_ch_max)
     m.dis_lim = pyo.Constraint(m.T, rule=lambda m, t: m.p_dis[t] <= m.p_dis_max)
 
-    # Objective (maximize profit)
-    m.obj = pyo.Objective(expr=sum(m.price[t] * (m.p_dis[t] - m.p_ch[t]) for t in m.T), sense=pyo.maximize)
+    # Objective: profit = sum price [€/kWh] * (net energy [kWh]) = sum price * (kW * h)
+    m.obj = pyo.Objective(
+        expr=sum(m.price[t] * (m.p_dis[t] - m.p_ch[t]) * m.dt for t in m.T),
+        sense=pyo.maximize
+    )
 
     return m

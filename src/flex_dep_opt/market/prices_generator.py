@@ -21,7 +21,7 @@ def write_example_prices_csv(
     """
     # Create a DatetimeIndex for 24 hours starting at today's 00:00
     start = pd.Timestamp.now(tz=tz).normalize()
-    idx = pd.date_range(start, periods=24*7, freq="h")
+    idx = pd.date_range(start, periods=24*4*7, freq="15min")
 
     # Simple price shape: base + peak addition at typical hours
     prices = []
