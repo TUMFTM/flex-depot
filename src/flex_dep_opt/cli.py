@@ -40,6 +40,14 @@ def main() -> None:
     p_opt.add_argument("--prices", required=True, help="Path to CSV file with columns: time, price")
     p_opt.add_argument("--capacity-kwh", type=float, required=True, help="Storage capacity in kWh")
     p_opt.add_argument("--out", default="results/dispatch.csv", help="Path to output CSV for dispatch results")
+    _vehicle_defaults = Vehicle(capacity_kwh=1.0)
+    p_opt.add_argument("--soc-min", type=float, default=_vehicle_defaults.soc_min)
+    p_opt.add_argument("--soc-max", type=float, default=_vehicle_defaults.soc_max)
+    p_opt.add_argument("--soc0", type=float, default=_vehicle_defaults.soc0)
+    p_opt.add_argument("--p-charge-max-kw", type=float, default=_vehicle_defaults.p_charge_max_kw)
+    p_opt.add_argument("--p-discharge-max-kw", type=float, default=_vehicle_defaults.p_discharge_max_kw)
+    p_opt.add_argument("--eta-charge", type=float, default=_vehicle_defaults.eta_charge)
+    p_opt.add_argument("--eta-discharge", type=float, default=_vehicle_defaults.eta_discharge)
 
     # generate plot command
     p_plot = sub.add_parser("plot-results", help="Visualize dispatch and price data using Plotly")
@@ -48,6 +56,7 @@ def main() -> None:
     p_plot.add_argument("--prices", help="Optional path to day-ahead price CSV (columns: time, price)")
     p_plot.add_argument("--out", default="results/dispatch_plot.html", help="Path to output HTML file")
     p_plot.add_argument("--open", action="store_true", help="Open the HTML file automatically in your browser")
+    p_plot.add_argument("--capacity-kwh", type=float, required=True, help="Nominal capacity used to compute SoC [%]")
 
     args = parser.parse_args()
 
@@ -101,7 +110,16 @@ def main() -> None:
         prices = pd.Series(df["price"].astype(float).values, index=idx).iloc[order]
 
         # 2) Create Vehicle object
-        veh = Vehicle(capacity_kwh=args.capacity_kwh)
+        veh = Vehicle(
+            capacity_kwh=args.capacity_kwh,
+            soc_min=args.soc_min,
+            soc_max=args.soc_max,
+            soc0=args.soc0,
+            p_charge_max_kw=args.p_charge_max_kw,
+            p_discharge_max_kw=args.p_discharge_max_kw,
+            eta_charge=args.eta_charge,
+            eta_discharge=args.eta_discharge,
+        )
 
         # 3) Build and solve optimization model
         model = build_single_vehicle_model(veh, prices)
@@ -148,7 +166,7 @@ def main() -> None:
                 sys.exit(1)
 
         # 3) Generate Plotly figure
-        fig = plot_dispatch_plotly(dispatch, prices)
+        fig = plot_dispatch_plotly(dispatch, prices, capacity_kwh=args.capacity_kwh)
 
         # 4) Save to HTML
         output_path = Path(args.out)
