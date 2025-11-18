@@ -8,16 +8,16 @@ call .venv\Scripts\activate
 
 REM ---- Vehicle parameters (edit as needed) ----
 set CAPACITY_KWH=1000
-set SOC_MIN=0.10
-set SOC_MAX=0.90
+set SOC_MIN=0.1
+set SOC_MAX=0.9
 set SOC0=0.50
 set P_CHARGE_MAX_KW=1000
 set P_DISCHARGE_MAX_KW=1000
-set ETA_CHARGE=0.95
-set ETA_DISCHARGE=0.95
+set ETA_CHARGE=0.98
+set ETA_DISCHARGE=0.98
 
 REM ---- Files ----
-set PRICE_FILE=data\example_prices.csv
+set PRICE_FILE=data\epex_dayahead.csv
 set DISPATCH_FILE=results\dispatch.csv
 set PLOT_FILE=results\dispatch_plot.html
 

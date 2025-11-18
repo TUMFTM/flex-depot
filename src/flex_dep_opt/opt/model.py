@@ -56,6 +56,7 @@ def build_single_vehicle_model(vehicle: Vehicle, prices_eur_per_kwh: pd.Series,*
     m.eta_c = pyo.Param(initialize=float(vehicle.eta_charge))
     m.eta_d = pyo.Param(initialize=float(vehicle.eta_discharge))
 
+
     # Variables
     m.p_ch = pyo.Var(m.T, within=pyo.NonNegativeReals)
     m.p_dis = pyo.Var(m.T, within=pyo.NonNegativeReals)

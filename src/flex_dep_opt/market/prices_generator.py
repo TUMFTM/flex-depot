@@ -42,8 +42,8 @@ def write_example_prices_csv(
 
 
 def write_from_epex_DA_csv(
-        src_path: str,
-        dst_path: str = "data/epex_dayahead.csv",
+        src_path: str,                                          # €/MWh
+        dst_path: str = "data/epex_dayahead.csv",               # €/kWh
         *,
         tz: str = "Europe/Berlin",
         price_col: str = "Deutschland/Luxemburg [€/MWh] Originalauflösungen",
@@ -61,7 +61,7 @@ def write_from_epex_DA_csv(
     df["time"] = ts
 
     # Extract price data
-    prices = df[price_col].astype(float)
+    prices = df[price_col].astype(float) / 1000                                     # from €/MWh to €/kWh
 
     # Standardized output format
     cleaned = pd.DataFrame({
