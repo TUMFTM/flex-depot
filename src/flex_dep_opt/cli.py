@@ -1,7 +1,7 @@
 import argparse                             # read arguments from cmd
 from .core import message
 from .domain.vehicle import Vehicle
-from .market.prices_generator import write_example_prices_csv
+from .market.prices_generator import write_example_prices_csv, write_from_epex_DA_csv
 from .opt.model import build_single_vehicle_model
 from .opt.solve import solve_model, extract_dispatch
 from .viz.plots import plot_dispatch_plotly
@@ -31,9 +31,14 @@ def main() -> None:
     p_vi.add_argument("--eta-charge", type=float, default=default_vehicle.eta_charge)
     p_vi.add_argument("--eta-discharge", type=float, default=default_vehicle.eta_discharge)
 
-    # generate-prices command
+    # generate-prices command (dummy)
     p_gen = sub.add_parser("generate-prices", help="Generate a 24h dummy day-ahead price CSV")
     p_gen.add_argument("--out", default="data/example_prices.csv", help="Path to output CSV file")
+
+    # prepare epex prices command
+    p_epex = sub.add_parser("import-epex",help="Convert historic EPEX day-ahead CSV to standard time/price CSV")
+    p_epex.add_argument("src",help="Path to raw EPEX CSV file (z.B. Gro_handelspreise_..._Viertelstunde.csv)")
+    p_epex.add_argument("--out",default="data/epex_dayahead.csv",help="Path to output cleaned CSV file")
 
     # generate optimization command
     p_opt = sub.add_parser("optimize", help="Run simple day-ahead storage optimization with Gurobi")
@@ -90,6 +95,10 @@ def main() -> None:
         path = write_example_prices_csv(args.out)
         print(f"Dummy day-ahead prices written to: {path}")
         return
+
+    if args.cmd == "import-epex":
+        path = write_from_epex_DA_csv(src_path=args.src, dst_path=args.out)
+        print(f"EPEX day-ahead prices written to: {path}")
 
     if args.cmd == "optimize":
         df = pd.read_csv(args.prices)

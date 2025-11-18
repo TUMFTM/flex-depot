@@ -1,5 +1,5 @@
 # prices_generator.py
-# Utility for generating example (dummy) day-ahead price data.
+# Utility for generating example (dummy) day-ahead price data or preparation of real historic EPEX data.
 # Creates a simple 24-hour price profile with base and peak hours,
 # saves it as a CSV file under /data, and returns the output path.
 # Used for testing and demonstration purposes.
@@ -38,4 +38,42 @@ def write_example_prices_csv(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     df.to_csv(output_path, index=False)
+    return str(output_path.resolve())
+
+
+def write_from_epex_DA_csv(
+        src_path: str,
+        dst_path: str = "data/epex_dayahead.csv",
+        *,
+        tz: str = "Europe/Berlin",
+        price_col: str = "Deutschland/Luxemburg [€/MWh] Originalauflösungen",
+) -> str:
+    """Read and prepare historic EPEX dayahead data
+    """
+    df = pd.read_csv(src_path, sep=";", decimal=",")
+
+    # Create a DatetimeIndex
+    ts = pd.to_datetime(df["Datum von"],dayfirst=True,format="%d.%m.%Y %H:%M",errors="coerce")
+
+    # Timezone handling
+    ts = ts.dt.tz_localize(tz,nonexistent="shift_forward",ambiguous="NaT")
+
+    df["time"] = ts
+
+    # Extract price data
+    prices = df[price_col].astype(float)
+
+    # Standardized output format
+    cleaned = pd.DataFrame({
+        "time": df["time"],
+        "price": prices,
+    })
+
+    cleaned = cleaned.dropna()
+
+    # Ensure data directory exists
+    output_path = Path(dst_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    cleaned.to_csv(output_path, index=False)
     return str(output_path.resolve())
