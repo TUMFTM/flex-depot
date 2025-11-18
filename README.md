@@ -27,7 +27,7 @@ Available CLI Commands
     Displays the default parameters of the Vehicle model.
 
     Example:
-    flex-dep-opt vehicle-info --capacity-kwh 40
+    python.exe -m flex_dep_opt vehicle-info --capacity-kwh 40
 
 ------------------
 2) generate-prices
@@ -35,7 +35,7 @@ Available CLI Commands
     Generates dummy 15-minute day-ahead price data for testing.
 
     Example:
-    flex-dep-opt generate-prices --out data/example_prices.csv
+    python.exe -m flex_dep_opt generate-prices --out data/example_prices.csv
 
     Output:
     time, price   (price in EUR/kWh)
@@ -49,7 +49,7 @@ Available CLI Commands
     time (timezone-aware), price (EUR/MWh)
 
     Example:
-    flex-dep-opt import-epex path/to/raw.csv --out data/epex_dayahead.csv
+    python.exe -m flex_dep_opt import-epex path/to/raw.csv --out data/epex_dayahead.csv
 
 
 ------------
@@ -58,7 +58,7 @@ Available CLI Commands
     Runs a simple storage optimization (e.g., EV battery, stationary battery).
 
     Example:
-    flex-dep-opt optimize --prices data/epex_dayahead.csv --capacity-kwh 40 --out results/dispatch.csv
+    python.exe -m flex_dep_opt optimize --prices data/epex_dayahead.csv --capacity-kwh 40 --out results/dispatch.csv
 
     Key parameters:
 
@@ -81,7 +81,7 @@ Available CLI Commands
     Visualizes dispatch results, SOC evolution, and optional price data.
 
     Example:
-    flex-dep-opt plot-results --dispatch results/dispatch.csv --prices data/epex_dayahead.csv --capacity-kwh 40 --out results/dispatch_plot.html --open
+    python.exe -m flex_dep_opt plot-results --dispatch results/dispatch.csv --prices data/epex_dayahead.csv --capacity-kwh 40 --out results/dispatch_plot.html --open
 
     Produces an interactive Plotly visualization and can open it automatically.
 
