@@ -1,0 +1,24 @@
+simulation:
+  start: "2025-01-01 00:00"
+  end: "2025-01-07 23:00"
+  timestep_hours: 1.0
+
+prices:
+  source: "dayahead"      # oder "generated"
+  path: "data/prices.csv" # relative oder absolute Pfade möglich
+
+vehicles:
+  - name: "EV1"
+    capacity_kwh: 50
+    soc0: 0.2
+    soc_min: 0.1
+    soc_max: 0.9
+    p_charge_max_kw: 11
+    p_discharge_max_kw: 11
+    eta_charge: 0.95
+    eta_discharge: 0.95
+
+solver:
+  name: "cbc"
+  options:
+    maxSeconds: 30
