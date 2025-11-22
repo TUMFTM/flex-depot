@@ -3,6 +3,8 @@
 
 import pandas as pd
 from pathlib import Path
+from flex_dep_opt.market.dayahead import DayAheadPrices
+from flex_dep_opt.market.intraday import IntradayPrices
 
 def read_prices_csv(path: str, tz: str = "Europe/Berlin") -> pd.Series:
     """Read a CSV file containing columns [time, price] into a timezone-aware pandas Series."""
@@ -22,3 +24,13 @@ def write_prices_csv(prices: pd.Series, path: str) -> str:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_path, index=False)
     return str(output_path.resolve())
+
+def build_prices_from_settings(settings):
+    prices_by_market = {}
+    if settings["optimization"]["markets"]["dayahead"]["enabled"]:
+        da = DayAheadPrices.from_csv(settings["optimization"]["markets"]["dayahead"]["source"])
+        prices_by_market["DA"] = da.prices_eur_per_kwh
+    if settings["optimization"]["markets"]["intraday"]["enabled"]:
+        idp = IntradayPrices.from_csv(settings["optimization"]["markets"]["intraday"]["source"])
+        prices_by_market["ID"] = idp.prices_eur_per_kwh
+    return prices_by_market

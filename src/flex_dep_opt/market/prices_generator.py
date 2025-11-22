@@ -46,7 +46,7 @@ def write_example_prices_DA_csv(
 
 def write_from_epex_DA_csv(
         src_path: str,                                          # €/MWh
-        dst_path: str = "data/epex_dayahead.csv",               # €/kWh
+        dst_path: str = "data/epex_prices_DA.csv",               # €/kWh
         *,
         tz: str = "Europe/Berlin",
         price_col: str = "Deutschland/Luxemburg [€/MWh] Originalauflösungen",
@@ -85,7 +85,7 @@ def write_from_epex_DA_csv(
 ############### INTRADAY ##################
 def write_example_prices_ID_csv(
     path: str = "data/example_prices_ID.csv",
-    da_price_path: str = "data/epex_dayahead.csv",
+    da_price_path: str = "data/epex_prices_DA.csv",
     tz: str = "Europe/Berlin",
     spread_mean: float = 0.0,          # durchschnittliche Abweichung vom DA (€/kWh)
     spread_std: float = 0.01,          # typische Intraday-Volatilität (€/kWh)

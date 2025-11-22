@@ -2,13 +2,14 @@ from pathlib import Path
 import pandas as pd
 import webbrowser
 
-from flex_dep_opt.viz.plots import plot_dispatch_plotly
+from flex_dep_opt.viz.plots import plot_dispatch_multimarket_plotly,plot_market_cashflows_plotly
+from flex_dep_opt.io.prices_io import build_prices_from_settings
 
 
 def run_plot(cfg: dict):
     """
     End-to-end plot workflow:
-    Load dispatch → Load prices → Create Plot → Export HTML
+    Load dispatch → Load prices (all markets) → Create Plot → Export HTML
     """
 
     sim = cfg["simulation"]
@@ -18,23 +19,28 @@ def run_plot(cfg: dict):
     start = pd.to_datetime(sim["start"]).tz_localize("Europe/Berlin")
     end = pd.to_datetime(sim["end"]).tz_localize("Europe/Berlin")
 
-    # Load dispatch
+    # --- 1) Dispatch laden ---
     df = pd.read_csv(plot_cfg["dispatch"])
     idx = pd.to_datetime(df["time"], utc=True).dt.tz_convert("Europe/Berlin")
     dispatch = df.drop(columns=["time"])
     dispatch.index = idx
     dispatch = dispatch.loc[start:end]
 
-    # Load prices
-    pf = pd.read_csv(plot_cfg["prices"])
-    ts = pd.to_datetime(pf["time"], utc=True).dt.tz_convert("Europe/Berlin")
-    prices = pd.Series(pf["price"], index=ts)
-    prices = prices.loc[start:end]
+    # --- 2) Preise für alle aktivierten Märkte laden ---
+    prices_by_market = build_prices_from_settings(cfg)
 
-    # Create plot
-    fig = plot_dispatch_plotly(dispatch, prices, capacity_kwh=plot_cfg["capacity_kwh"])
+    for mkt, s in prices_by_market.items():
+        prices_by_market[mkt] = s.loc[start:end]
 
-    # Export
+    # --- 3) Plot erzeugen (Multi-Markt) ---
+    fig = plot_dispatch_multimarket_plotly(
+        dispatch=dispatch,
+        prices_by_market=prices_by_market,
+        capacity_kwh=plot_cfg["capacity_kwh"],
+        title=plot_cfg.get("title", "Dispatch and Market Positions"),
+    )
+
+    # --- 4) Export ---
     out = Path(plot_cfg["out"])
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.write_html(out, include_plotlyjs="cdn")
@@ -43,3 +49,20 @@ def run_plot(cfg: dict):
 
     if plot_cfg.get("open", False):
         webbrowser.open(out.resolve().as_uri())
+
+    # --- 5) Cashflow-Plot (optional) ---
+    if "cashflow_out" in plot_cfg:
+        out_cf = Path(plot_cfg["cashflow_out"])
+        out_cf.parent.mkdir(parents=True, exist_ok=True)
+        fig_cf = plot_market_cashflows_plotly(
+            dispatch=dispatch,
+            prices_by_market=prices_by_market,
+            timestep_hours=sim["timestep_hours"],
+        )
+        fig_cf.write_html(out_cf, include_plotlyjs="cdn")
+
+        print(f"CF Plot saved → {out_cf.resolve()}")
+        if plot_cfg.get("open", False):
+            webbrowser.open(out_cf.resolve().as_uri())
+
+

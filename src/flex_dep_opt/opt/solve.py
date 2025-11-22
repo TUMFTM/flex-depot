@@ -80,35 +80,46 @@ def solve_model(
 
 def extract_dispatch(model: pyo.ConcreteModel, time_index) -> pd.DataFrame:
     """
-    Extract a dispatch time series from a solved model into a pandas DataFrame.
+    Extract dispatch time series (charging, discharging, SOC, and market positions)
+    from a solved multi-market model.
 
-    Expects the model to define variables:
-      - m.p_ch[t]   (kW)
-      - m.p_dis[t]  (kW)
-      - m.soc[t]    (kWh)
+    Handles:
+      - p_ch[t]
+      - p_dis[t]
+      - soc[t]
+      - p_market[market, t]  for all markets in model.MARKETS
 
     Parameters
     ----------
     model : pyo.ConcreteModel
-        A solved Pyomo model with attributes p_ch, p_dis, soc and index set m.T.
-    time_index : pandas.DatetimeIndex (or list-like)
-        Index to use for the resulting DataFrame (must match the length of m.T).
+        The solved model.
+    time_index : pandas.DatetimeIndex
+        Timestamps matching model.T.
 
     Returns
     -------
     pandas.DataFrame
-        Columns: ["p_ch_kw", "p_dis_kw", "soc_kwh"], indexed by `time_index`.
+        Includes physical variables and all market dispatches.
     """
-    # Basic shape check (optional but helpful)
-    T_len_model = len(list(model.T))
-    if len(time_index) != T_len_model:
-        raise ValueError(f"time_index length ({len(time_index)}) does not match model horizon ({T_len_model}).")
+    # Basic consistency check
+    T_len = len(list(model.T))
+    if len(time_index) != T_len:
+        raise ValueError(
+            f"time_index length ({len(time_index)}) does not match model horizon ({T_len})."
+        )
 
-    return pd.DataFrame(
-        {
-            "p_ch_kw":  [pyo.value(model.p_ch[t])  for t in model.T],
-            "p_dis_kw": [pyo.value(model.p_dis[t]) for t in model.T],
-            "soc_kwh":  [pyo.value(model.soc[t])   for t in model.T],
-        },
-        index=time_index,
-    )
+    # Base dispatch dataframe
+    df = pd.DataFrame(index=time_index)
+
+    # Physical variables
+    df["p_ch_kw"]  = [pyo.value(model.p_ch[t])  for t in model.T]
+    df["p_dis_kw"] = [pyo.value(model.p_dis[t]) for t in model.T]
+    df["soc_kwh"]  = [pyo.value(model.soc[t])   for t in model.T]
+
+    # Add all market variables dynamically
+    if hasattr(model, "MARKETS"):
+        for mk in model.MARKETS:
+            col = f"p_{mk.lower()}_kw"
+            df[col] = [pyo.value(model.p_market[mk, t]) for t in model.T]
+
+    return df

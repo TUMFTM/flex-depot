@@ -30,7 +30,7 @@ def main():
 
     p_epex = sub.add_parser("import-epex-DA")
     p_epex.add_argument("src", help="Path to raw EPEX CSV file")
-    p_epex.add_argument("--out", default="data/epex_dayahead.csv")
+    p_epex.add_argument("--out", default="data/epex_prices_DA.csv")
 
     args = parser.parse_args()
 

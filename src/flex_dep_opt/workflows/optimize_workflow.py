@@ -2,7 +2,17 @@ from pathlib import Path
 import pandas as pd
 
 from flex_dep_opt.domain.vehicle import Vehicle
-from flex_dep_opt.opt.model import build_single_vehicle_model
+from flex_dep_opt.io.prices_io import build_prices_from_settings
+from flex_dep_opt.opt.model import vehicle_commercialization
+from flex_dep_opt.opt.solve import solve_model, extract_dispatch
+
+
+from pathlib import Path
+import pandas as pd
+
+from flex_dep_opt.domain.vehicle import Vehicle
+from flex_dep_opt.io.prices_io import build_prices_from_settings
+from flex_dep_opt.opt.model import vehicle_commercialization
 from flex_dep_opt.opt.solve import solve_model, extract_dispatch
 
 
@@ -14,36 +24,39 @@ def run_optimize(cfg: dict):
 
     sim = cfg["simulation"]
     opt = cfg["optimize"]
-    veh_cfg = opt["vehicle"]
 
-    # Load prices
-    df = pd.read_csv(opt["prices"])
-    idx = pd.to_datetime(df["time"], utc=True).dt.tz_convert("Europe/Berlin")
-    prices = pd.Series(df["price"].values, index=idx).sort_index()
+    # 1) Load all enabled market price series
+    prices_by_market = build_prices_from_settings(cfg)
 
-    # Timeframe
+    # 2) Cut to simulation time window
     start = pd.to_datetime(sim["start"]).tz_localize("Europe/Berlin")
     end = pd.to_datetime(sim["end"]).tz_localize("Europe/Berlin")
-    prices = prices.loc[start:end]
 
-    # Vehicle
-    vehicle = Vehicle(**veh_cfg)
+    for mkt in prices_by_market:
+        prices_by_market[mkt] = prices_by_market[mkt].loc[start:end]
 
-    # Build model
-    model = build_single_vehicle_model(
-        vehicle,
-        prices,
+    # 3) Vehicle object
+    vehicle = Vehicle(**opt["vehicle"])
+
+    # 4) Build generic multi-market model
+    model = vehicle_commercialization(
+        vehicle=vehicle,
+        prices_by_market=prices_by_market,
         timestep_hours=sim["timestep_hours"]
     )
 
-    # Solve
+    # 5) Solve
     solve_model(model)
 
-    # Save results
+    # 6) Export results
     out_path = Path(opt["out"])
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    dispatch = extract_dispatch(model, prices.index)
+    # Take time index from any market
+    any_series = next(iter(prices_by_market.values()))
+    time_index = any_series.index
+
+    dispatch = extract_dispatch(model, time_index)
     dispatch.to_csv(out_path)
 
     print(f"Optimization finished → {out_path.resolve()}")

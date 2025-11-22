@@ -44,38 +44,35 @@ class DayAheadPrices:
 
     @classmethod
     def from_csv(
-        cls,
-        path: str,
-        time_col: str = "time",
-        price_col: str = "price",
-        *,
-        unit: Unit = "eur_per_kwh",
-        tz: str = "Europe/Berlin",
-        parse_utc: bool = False,
+            cls,
+            path: str,
+            time_col: str = "time",
+            price_col: str = "price",
+            *,
+            unit: Unit = "eur_per_kwh",
+            tz: str = "Europe/Berlin",
+            parse_utc: bool = False,
     ) -> "DayAheadPrices":
         """Load from CSV with columns [time_col, price_col].
 
-        - If timestamps are tz-naive, they will be localized to `tz`.
-        - If timestamps are UTC (parse_utc=True), they will be converted to `tz`.
-        - Daylight-saving quirks are handled by shifting nonexistent times forward
-          and marking ambiguous times as NaT (which we drop).
+        - Robust gegen Strings mit Offset (z.B. '2025-10-01 00:00:00+02:00')
+        - Normalisiert alles in eine einheitliche Ziel-TZ (tz).
         """
         df = pd.read_csv(path)
         if time_col not in df or price_col not in df:
             raise ValueError(f"CSV must have columns '{time_col}' and '{price_col}'")
 
-        ts = pd.to_datetime(df[time_col], errors="coerce")
+        # 1) Immer als UTC parsen – das verträgt sowohl naive als auch offset-aware Strings
+        ts = pd.to_datetime(df[time_col], errors="coerce", utc=True)
 
-        if parse_utc:
-            # Treat input as UTC, convert to target tz
-            ts = ts.dt.tz_localize("UTC").dt.tz_convert(tz)
-        else:
-            # Localize naive timestamps to tz
-            if ts.dt.tz is None:
-                ts = ts.dt.tz_localize(tz, nonexistent="shift_forward", ambiguous="NaT")
+        # 2) In gewünschte Ziel-TZ umrechnen
+        ts = ts.dt.tz_convert(tz)
 
-        s = pd.Series(df[price_col].astype(float).values, index=ts)
-        # Drop rows where timestamp parsing failed (NaT due to ambiguity etc.)
+        # 3) Preis-Spalte
+        prices = df[price_col].astype(float)
+
+        # 4) Series bauen + NaT-Zeilen droppen
+        s = pd.Series(prices.values, index=ts)
         s = s[~s.index.isna()]
 
         return cls.from_series(s, unit=unit)

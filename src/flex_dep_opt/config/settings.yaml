@@ -1,10 +1,20 @@
 simulation:
-  start: "2025-10-07 00:00"
-  end: "2025-10-14 23:45"
+  start: "2025-10-01 00:00"
+  end: "2025-10-01 23:45"
   timestep_hours: 0.25
 
+optimization:
+  mode: joint
+  markets:
+    dayahead:
+      enabled: true
+      source: "data/epex_prices_DA.csv"
+    intraday:
+      enabled: true
+      source: "data/example_prices_ID.csv"
+  virtual_arbitrage: false
+
 optimize:
-  prices: "data/epex_dayahead.csv"
   out: "results/dispatch.csv"
   vehicle:
     capacity_kwh: 1000
@@ -18,10 +28,9 @@ optimize:
 
 plot:
   dispatch: "results/dispatch.csv"
-  prices: "data/epex_dayahead.csv"
   capacity_kwh: 1000
   out: "results/dispatch_plot.html"
+  cashflow_out: "results/cashflows_plot.html"
   open: true
-
 
 
