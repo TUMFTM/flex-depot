@@ -5,10 +5,13 @@
 # Used for testing and demonstration purposes.
 
 import pandas as pd
+import numpy as np
 from pathlib import Path
 
-def write_example_prices_csv(
-    path: str = "data/example_prices.csv",
+
+############### DAY-AHEAD ##################
+def write_example_prices_DA_csv(
+    path: str = "data/example_prices_DA.csv",
     base_price_eur_per_kwh: float = 0.10,
     peak_addition_eur_per_kwh: float = 0.05,
     tz: str = "Europe/Berlin",
@@ -76,4 +79,52 @@ def write_from_epex_DA_csv(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     cleaned.to_csv(output_path, index=False)
+    return str(output_path.resolve())
+
+
+############### INTRADAY ##################
+def write_example_prices_ID_csv(
+    path: str = "data/example_prices_ID.csv",
+    da_price_path: str = "data/epex_dayahead.csv",
+    tz: str = "Europe/Berlin",
+    spread_mean: float = 0.0,          # durchschnittliche Abweichung vom DA (€/kWh)
+    spread_std: float = 0.01,          # typische Intraday-Volatilität (€/kWh)
+    spike_prob: float = 0.03,          # Wahrscheinlichkeit für einen Preisspike
+    spike_magnitude: float = 0.05      # Größe eines Preisspikes (€/kWh)
+) -> str:
+    """
+    Generate a synthetic intraday price series based on:
+    - existing day-ahead price curve (15-min resolution)
+    - random noise (Gaussian)
+    - occasional price spikes for added realism
+
+    output: CSV in unified format (time, price)
+    """
+
+    # Load DA prices to use as basis
+    da = pd.read_csv(da_price_path, parse_dates=["time"])
+    da = da.sort_values("time").reset_index(drop=True)
+
+    # Generate base spread and volatility
+    np.random.seed(42)
+    noise = np.random.normal(loc=spread_mean, scale=spread_std, size=len(da))
+
+    # Occasional spikes
+    spikes = np.random.rand(len(da))
+    spikes = np.where(spikes < spike_prob, spike_magnitude, 0.0)
+
+    # Build intraday prices
+    id_price = da["price"] + noise + spikes
+    id_price = id_price.clip(lower=0.0)  # no negative prices here unless you want them
+
+    df_id = pd.DataFrame({
+        "time": da["time"],
+        "price": id_price
+    })
+
+    # Save
+    output_path = Path(path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    df_id.to_csv(output_path, index=False)
+
     return str(output_path.resolve())
