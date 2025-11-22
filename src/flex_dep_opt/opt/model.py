@@ -12,6 +12,7 @@ def vehicle_commercialization(
     *,
     timestep_hours: float | None = None,
     virtual_arbitrage: bool = True,
+    degradation_cost_eur_per_kwh: float = 0.0,
 ) -> pyo.ConcreteModel:
     """
     Generisches Modell für die Kommerzialisierung eines Fahrzeugs/Speichers
@@ -87,6 +88,9 @@ def vehicle_commercialization(
     m.p_dis_max = pyo.Param(initialize=float(vehicle.p_discharge_max_kw))
     m.eta_c = pyo.Param(initialize=float(vehicle.eta_charge))
     m.eta_d = pyo.Param(initialize=float(vehicle.eta_discharge))
+
+    # Degradationskosten [€/kWh Durchsatz]
+    m.c_deg = pyo.Param(initialize=float(degradation_cost_eur_per_kwh))
 
     # Max. Marktleistung (symmetrisch), hier an physische Leistung gekoppelt
     P_market_max = max(
@@ -198,11 +202,21 @@ def vehicle_commercialization(
 
     # ---------- Zielfunktion ----------
     def obj_expr(mdl):
-        return sum(
+        # Erlöse / Kosten aus Märkten
+        revenue = sum(
             mdl.price[mk, t] * mdl.p_market[mk, t] * mdl.dt
             for mk in mdl.MARKETS
             for t in mdl.T
         )
+
+        # Degradationskosten: c_deg * (p_ch + p_dis) * dt
+        deg_cost = mdl.c_deg * sum(
+            (mdl.p_ch[t] + mdl.p_dis[t]) * mdl.dt
+            for t in mdl.T
+        )
+
+        return revenue - deg_cost
+
     m.obj = pyo.Objective(expr=obj_expr(m), sense=pyo.maximize)
 
     return m

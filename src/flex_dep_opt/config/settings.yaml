@@ -9,10 +9,15 @@ optimization:
     dayahead:
       enabled: true
       source: "data/epex_prices_DA.csv"
+      tx_fee_eur_per_mwh: 2.0                   # €/MWh
     intraday:
       enabled: true
       source: "data/example_prices_ID.csv"
-  virtual_arbitrage: true
+      tx_fee_eur_per_mwh: 3.0                   # €/MWh
+  virtual_arbitrage: false
+  degradation:
+    enabled: true
+    cost_eur_per_mwh_throughput: 20.0
 
 optimize:
   out: "results/dispatch.csv"
@@ -23,8 +28,9 @@ optimize:
     soc0: 0.50
     p_charge_max_kw: 1000
     p_discharge_max_kw: 1000
-    eta_charge: 0.98
-    eta_discharge: 0.98
+    eta_charge: 0.95
+    eta_discharge: 0.95
+
 
 plot:
   dispatch: "results/dispatch.csv"

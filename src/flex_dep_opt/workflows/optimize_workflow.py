@@ -25,7 +25,16 @@ def run_optimize(cfg: dict):
     sim = cfg["simulation"]
     opt = cfg["optimize"]
     opt_conf = cfg["optimization"]
+
+    # Virtual arbitrage
     virt_arb = opt_conf.get("virtual_arbitrage", False)
+
+    # Degradation
+    deg_cfg = opt_conf.get("degradation", {})
+    if deg_cfg.get("enabled", False):
+        c_deg = float(deg_cfg["cost_eur_per_mwh_throughput"]) / 1000.0  # €/kWh
+    else:
+        c_deg = 0.0
 
     # 1) Load all enabled market price series
     prices_by_market = build_prices_from_settings(cfg)
@@ -46,6 +55,7 @@ def run_optimize(cfg: dict):
         prices_by_market=prices_by_market,
         timestep_hours=sim["timestep_hours"],
         virtual_arbitrage=virt_arb,
+        degradation_cost_eur_per_kwh=c_deg,
     )
 
     # 5) Solve
