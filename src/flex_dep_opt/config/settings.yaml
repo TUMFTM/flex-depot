@@ -12,7 +12,7 @@ optimization:
     intraday:
       enabled: true
       source: "data/example_prices_ID.csv"
-  virtual_arbitrage: false
+  virtual_arbitrage: true
 
 optimize:
   out: "results/dispatch.csv"

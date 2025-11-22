@@ -24,6 +24,8 @@ def run_optimize(cfg: dict):
 
     sim = cfg["simulation"]
     opt = cfg["optimize"]
+    opt_conf = cfg["optimization"]
+    virt_arb = opt_conf.get("virtual_arbitrage", False)
 
     # 1) Load all enabled market price series
     prices_by_market = build_prices_from_settings(cfg)
@@ -42,7 +44,8 @@ def run_optimize(cfg: dict):
     model = vehicle_commercialization(
         vehicle=vehicle,
         prices_by_market=prices_by_market,
-        timestep_hours=sim["timestep_hours"]
+        timestep_hours=sim["timestep_hours"],
+        virtual_arbitrage=virt_arb,
     )
 
     # 5) Solve
