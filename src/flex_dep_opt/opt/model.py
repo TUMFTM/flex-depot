@@ -13,6 +13,7 @@ def vehicle_commercialization(
     timestep_hours: float | None = None,
     virtual_arbitrage: bool = True,
     degradation_cost_eur_per_kwh: float = 0.0,
+    market_activity_mask: Dict[str, pd.Series] | None = None,
 ) -> pyo.ConcreteModel:
     """
     Generisches Modell für die Kommerzialisierung eines Fahrzeugs/Speichers
@@ -53,6 +54,23 @@ def vehicle_commercialization(
                 f"Timestamps for market {mkt} do not match reference market {first_market}"
             )
         prices_by_market[mkt] = s_sorted
+
+    time_index = ref.index
+
+    # Activity-Mask validieren
+    if market_activity_mask is None:
+        # Fallback: überall True
+        market_activity_mask = {mkt: pd.Series(True, index=time_index) for mkt in markets}
+    else:
+        # Sicherstellen, dass Index passt
+        for mkt in markets:
+            mask = market_activity_mask.get(mkt)
+            if mask is None:
+                # Wenn für diesen Markt keine Maske gegeben: alles True
+                market_activity_mask[mkt] = pd.Series(True, index=time_index)
+            else:
+                mask = mask.reindex(time_index, fill_value=True)
+                market_activity_mask[mkt] = mask
 
     # Δt bestimmen
     if timestep_hours is None:
@@ -127,12 +145,22 @@ def vehicle_commercialization(
         bounds=lambda mdl, mk, t: (-mdl.p_market_max, mdl.p_market_max),
     )
 
+
+    # Virtual arbitrage active / inactive
     if virtual_arbitrage:
         # ===== LP-Fall: Virtuelle Arbitrage erlaubt =====
         def market_balance_rule(mdl, t):
             return sum(mdl.p_market[mk, t] for mk in mdl.MARKETS) == \
                    mdl.p_dis[t] - mdl.p_ch[t]
         m.market_balance = pyo.Constraint(m.T, rule=market_balance_rule)
+        # --- Handelsmasken anwenden: LP-Variante ---
+        def market_activity_rule(mdl, mk, t):
+            idx = int(t)
+            allowed = bool(market_activity_mask[mk].iloc[idx])
+            if allowed:
+                return pyo.Constraint.Skip
+            return mdl.p_market[mk, t] == 0.0
+        m.market_activity = pyo.Constraint(m.MARKETS, m.T, rule=market_activity_rule)
 
     else:
         # ===== MILP-Fall: Keine virtuelle Arbitrage =====
@@ -199,6 +227,24 @@ def vehicle_commercialization(
         def import_balance_rule(mdl, t):
             return sum(mdl.p_market_neg[mk, t] for mk in mdl.MARKETS) == mdl.net_neg[t]
         m.import_balance = pyo.Constraint(m.T, rule=import_balance_rule)
+
+        # Handelsmasken anwenden
+        def market_activity_rule_pos(mdl, mk, t):
+            idx = int(t)
+            allowed = bool(market_activity_mask[mk].iloc[idx])
+            if allowed:
+                return pyo.Constraint.Skip
+            return mdl.p_market_pos[mk, t] == 0.0
+
+        def market_activity_rule_neg(mdl, mk, t):
+            idx = int(t)
+            allowed = bool(market_activity_mask[mk].iloc[idx])
+            if allowed:
+                return pyo.Constraint.Skip
+            return mdl.p_market_neg[mk, t] == 0.0
+        m.market_activity_pos = pyo.Constraint(m.MARKETS, m.T, rule=market_activity_rule_pos)
+        m.market_activity_neg = pyo.Constraint(m.MARKETS, m.T, rule=market_activity_rule_neg)
+
 
     # ---------- Zielfunktion ----------
     def obj_expr(mdl):

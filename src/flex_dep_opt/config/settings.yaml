@@ -17,7 +17,9 @@ optimization:
   virtual_arbitrage: false
   degradation:
     enabled: true
-    cost_eur_per_mwh_throughput: 20.0
+    cost_eur_per_mwh_throughput: 50.0
+  trading:
+    mode: "none"   # "none" = heutiges Verhalten. Später z.B. "realistic"
 
 optimize:
   out: "results/dispatch.csv"
