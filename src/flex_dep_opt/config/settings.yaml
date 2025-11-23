@@ -19,7 +19,15 @@ optimization:
     enabled: true
     cost_eur_per_mwh_throughput: 50.0
   trading:
-    mode: "none"   # "none" = heutiges Verhalten. Später z.B. "realistic"
+    mode: "none"   # "none", "realistic"
+    dayahead:
+      gate_closure_hour: "12:00"                # D-1
+      closes_previous_day: true
+    intraday:
+      offset_minutes_before_delivery: 30        # trading until T-30min
+  mpc:
+    enabled: true
+    horizon_hours: 24
 
 optimize:
   out: "results/dispatch.csv"
