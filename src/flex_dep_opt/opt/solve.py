@@ -58,12 +58,13 @@ def solve_model(
 
     # Construct solver and set options (classic Pyomo interface)
     opt = pyo.SolverFactory("gurobi")
-    if options:
-        for k, v in options.items():
-            opt.options[k] = v
+    #if options:
+    #    for k, v in options.items():
+    #        opt.options[k] = v
+    opt.options["OutputFlag"] = 0
 
     # Solve
-    results = opt.solve(model, tee=tee)
+    results = opt.solve(model, tee=False)
 
     # Basic status checks
     status_ok = (results.solver.status == pyo.SolverStatus.ok)

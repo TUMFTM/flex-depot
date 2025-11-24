@@ -292,3 +292,167 @@ def plot_market_cashflows_plotly(
     )
 
     return fig
+
+
+def plot_mpc_dispatch_plotly(
+    dispatch: pd.DataFrame,
+    prices_by_market: dict[str, pd.Series] | None = None,
+    *,
+    capacity_kwh: float,
+    title: str = "MPC Dispatch and Market Positions",
+) -> go.Figure:
+    """
+    Visualisierung für Rolling-Horizon-MPC:
+
+      Subplot 1: Marktpreise (alle Märkte)
+      Subplot 2: SoC [%] und Net Power [kW] (Net Power als Bars → diskrete MPC-Entscheidungen)
+      Subplot 3: Marktpositionen pro Markt [kW] (Bars, Buy/Sell unterschieden)
+
+    Erwartet im dispatch:
+      - p_ch_kw, p_dis_kw, soc_kwh
+      - optional: p_<mk>_kw für Märkte (z.B. p_da_kw, p_id_kw)
+    """
+
+    if not isinstance(dispatch.index, pd.DatetimeIndex):
+        raise ValueError("Dispatch index must be a DatetimeIndex")
+
+    # Net Power
+    net_power = dispatch["p_dis_kw"] - dispatch["p_ch_kw"]
+
+    # SoC [%]
+    soc_kwh = dispatch["soc_kwh"]
+    soc_percent = (soc_kwh / float(capacity_kwh)) * 100.0
+
+    # Marktspalten erkennen
+    market_cols = [
+        c for c in dispatch.columns
+        if c.startswith("p_")
+        and c.endswith("_kw")
+        and c not in ("p_ch_kw", "p_dis_kw")
+    ]
+
+    # Figur mit 3 Subplots
+    fig = make_subplots(
+        rows=3,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.06,
+        specs=[
+            [{"secondary_y": False}],   # Preise
+            [{"secondary_y": True}],    # Net Power + SoC
+            [{"secondary_y": False}],   # Marktpositionen
+        ],
+        subplot_titles=(
+            "Market Prices",
+            "State of Charge & Net Power (MPC decisions)",
+            "Market Positions (per market)",
+        ),
+    )
+
+    # === Subplot 1: Preise ===
+    if prices_by_market is not None:
+        for mk, s in prices_by_market.items():
+            price_mwh = s * 1000.0
+            fig.add_trace(
+                go.Scatter(
+                    x=price_mwh.index,
+                    y=price_mwh.values,
+                    mode="lines",
+                    name=f"{mk} Price [€/MWh]",
+                    line=dict(width=2),
+                ),
+                row=1,
+                col=1,
+            )
+
+    # === Subplot 2: SoC & Net Power (Bars) ===
+    fig.add_trace(
+        go.Scatter(
+            x=dispatch.index,
+            y=net_power,
+            mode="lines",
+            name="Net Power [kW]",
+            line=dict(width=2),
+            fill="tozeroy",
+            fillcolor="rgba(65,105,225,0.2)",
+        ),
+        row=2,
+        col=1,
+        secondary_y=False,
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=dispatch.index,
+            y=soc_percent,
+            mode="lines",
+            name="State of Charge [%]",
+            line=dict(width=3),
+        ),
+        row=2,
+        col=1,
+        secondary_y=True,
+    )
+
+    # === Subplot 3: Marktpositionen als Bars ===
+    # Farbwahl pro Markt wie in deinem bestehenden Plot
+    market_colors = {
+        "DA": "blue",
+        "ID": "orange",
+        # weitere Märkte hier ergänzbar
+    }
+
+    for col in market_cols:
+        inner = col[2:-3]   # p_da_kw -> da
+        mk_code = inner.upper()
+        pretty_name = f"{mk_code} Position [kW]"
+
+        values = dispatch[col]
+
+        base_color = market_colors.get(mk_code, "gray")
+
+        # Labels pro Balken → Buy / Sell / Neutral
+        labels = ["Sell" if v > 0 else "Buy" if v < 0 else "Neutral" for v in values]
+
+        # Farben: Marktfarbe + Alpha nach Vorzeichen (Sell vs. Buy)
+        colors = [
+            _rgba(mk_code, 1.0 if v > 0 else 0.3) for v in values
+        ]
+
+        fig.add_trace(
+            go.Bar(
+                x=dispatch.index,
+                y=values,
+                name=pretty_name,
+                marker_color=colors,
+                customdata=labels,
+                hovertemplate="%{y:.1f} kW<br>%{customdata}",
+            ),
+            row=3,
+            col=1,
+        )
+
+    # Achsentitel
+    fig.update_yaxes(title_text="Price [€/MWh]", row=1, col=1)
+    fig.update_yaxes(title_text="Net Power [kW]", row=2, col=1, secondary_y=False)
+    fig.update_yaxes(title_text="State of Charge [%]", row=2, col=1, secondary_y=True)
+    fig.update_yaxes(title_text="Market Position [kW] (+Sell / –Buy)", row=3, col=1)
+
+    # Layout
+    fig.update_layout(
+        title=title + " (Rolling Horizon)",
+        xaxis=dict(title="Time"),
+        template="plotly_white",
+        height=950,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.03,
+            xanchor="right",
+            x=1,
+        ),
+        margin=dict(l=60, r=60, t=80, b=60),
+        barmode="relative",
+    )
+
+    return fig

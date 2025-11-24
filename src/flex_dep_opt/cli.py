@@ -1,9 +1,9 @@
 import argparse
 import yaml
-from pathlib import Path
 
+from flex_dep_opt.workflows.mpc_workflow import run_mpc
 from flex_dep_opt.workflows.optimize_workflow import run_optimize
-from flex_dep_opt.workflows.plot_workflow import run_plot
+from flex_dep_opt.workflows.plot_workflow import run_plot, run_plot_mpc
 from flex_dep_opt.workflows.price_generation_workflow import (run_generate_prices_DA,run_import_epex_DA,run_generate_prices_ID)
 
 
@@ -19,8 +19,14 @@ def main():
     p_opt = sub.add_parser("optimize")
     p_opt.add_argument("--config", default="settings.yaml")
 
+    p_mpc = sub.add_parser("mpc")
+    p_mpc.add_argument("--config", default="settings.yaml")
+
     p_plot = sub.add_parser("plot-results")
     p_plot.add_argument("--config", default="settings.yaml")
+
+    p_plot_mpc = sub.add_parser("plot-results-mpc")
+    p_plot_mpc.add_argument("--config", default="settings.yaml")
 
     p_gen = sub.add_parser("generate-prices-DA")
     p_gen.add_argument("--out", default="data/example_prices_DA.csv")
@@ -40,10 +46,21 @@ def main():
         run_optimize(cfg)
         return
 
+    # run mpc (Rolling Horizon)
+    if args.cmd == "mpc":
+        cfg = load_settings(args.config)
+        run_mpc(cfg)
+        return
+
     # run plot
     if args.cmd == "plot-results":
         cfg = load_settings(args.config)
         run_plot(cfg)
+        return
+
+    if args.cmd == "plot-results-mpc":
+        cfg = load_settings(args.config)
+        run_plot_mpc(cfg)
         return
 
     # generate dummy DA prices

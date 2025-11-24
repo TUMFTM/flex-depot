@@ -100,7 +100,7 @@ def vehicle_commercialization(
         initialize=float(vehicle.soc_max) * float(vehicle.capacity_kwh)
     )
     m.soc0 = pyo.Param(
-        initialize=float(vehicle.soc0) * float(vehicle.capacity_kwh)
+        initialize=float(vehicle.soc0) * float(vehicle.capacity_kwh), mutable=True
     )
     m.p_ch_max = pyo.Param(initialize=float(vehicle.p_charge_max_kw))
     m.p_dis_max = pyo.Param(initialize=float(vehicle.p_discharge_max_kw))
