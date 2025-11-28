@@ -14,6 +14,7 @@ def vehicle_commercialization(
     virtual_arbitrage: bool = True,
     degradation_cost_eur_per_kwh: float = 0.0,
     market_activity_mask: Dict[str, pd.Series] | None = None,
+    committed_positions: Dict[str, pd.Series] | None = None,
 ) -> pyo.ConcreteModel:
     """
     Generisches Modell für die Kommerzialisierung eines Fahrzeugs/Speichers
@@ -71,6 +72,21 @@ def vehicle_commercialization(
             else:
                 mask = mask.reindex(time_index, fill_value=True)
                 market_activity_mask[mkt] = mask
+
+    # --- NEU: committed_positions nur validieren, noch nicht benutzen ---
+    if committed_positions is None:
+        # Fallback: überall 0
+        committed_positions = {
+            mkt: pd.Series(0.0, index=time_index) for mkt in markets
+        }
+    else:
+        # Sicherstellen, dass Index passt
+        for mkt in markets:
+            pos = committed_positions.get(mkt)
+            if pos is None:
+                committed_positions[mkt] = pd.Series(0.0, index=time_index)
+            else:
+                committed_positions[mkt] = pos.reindex(time_index, fill_value=0.0)
 
     # Δt bestimmen
     if timestep_hours is None:
@@ -246,6 +262,7 @@ def vehicle_commercialization(
         m.market_activity_neg = pyo.Constraint(m.MARKETS, m.T, rule=market_activity_rule_neg)
 
 
+
     # ---------- Zielfunktion ----------
     def obj_expr(mdl):
         # Erlöse / Kosten aus Märkten
@@ -264,5 +281,10 @@ def vehicle_commercialization(
         return revenue - deg_cost
 
     m.obj = pyo.Objective(expr=obj_expr(m), sense=pyo.maximize)
+
+    if len(markets) > 0:
+        mk0 = next(iter(markets))
+        print("[DEBUG] committed_positions example for", mk0)
+        print(committed_positions[mk0].head())
 
     return m

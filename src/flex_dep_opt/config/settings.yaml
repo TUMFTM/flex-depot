@@ -1,13 +1,13 @@
 simulation:
   start: "2025-10-01 00:00"
-  end: "2025-10-3 23:45"
+  end: "2025-10-2 23:45"
   timestep_hours: 0.25
 
 optimization:
   mode: joint
   markets:
     dayahead:
-      enabled: true
+      enabled: false
       source: "data/epex_prices_DA.csv"
       tx_fee_eur_per_mwh: 2.0                   # €/MWh
     intraday:
@@ -16,10 +16,10 @@ optimization:
       tx_fee_eur_per_mwh: 3.0                   # €/MWh
   virtual_arbitrage: false
   degradation:
-    enabled: true
+    enabled: false
     cost_eur_per_mwh_throughput: 20.0
   trading:
-    mode: "none"   # "none", "realistic"
+    mode: "realistic"   # "none", "realistic"
     dayahead:
       gate_closure_hour: "12:00"                # D-1
       closes_previous_day: true
@@ -27,7 +27,7 @@ optimization:
       offset_minutes_before_delivery: 30        # trading until T-30min
   mpc:
     enabled: true
-    horizon_hours: 24
+    horizon_hours: 12
 
 optimize:
   out: "results/dispatch.csv"
