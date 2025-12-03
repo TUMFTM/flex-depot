@@ -22,6 +22,37 @@ def run_mpc(cfg: dict):
     sim = cfg["simulation"]
     opt = cfg["optimize"]
     opt_conf = cfg["optimization"]
+    trading_cfg = opt_conf["trading"]
+
+    def compute_gate_closure(market: str, tau: pd.Timestamp) -> pd.Timestamp:
+        """
+        Berechnet die Gate-Closure-Zeit für einen Lieferzeitpunkt tau
+        und einen Markt (z.B. "DA", "ID"), konsistent zu
+        build_market_activity_mask_for_time().
+        """
+        if market == "ID":
+            id_cfg = trading_cfg.get("intraday", {})
+            offset_min = int(id_cfg.get("offset_minutes_before_delivery", 30))
+            return tau - pd.Timedelta(minutes=offset_min)
+
+        if market == "DA":
+            da_cfg = trading_cfg.get("dayahead", {})
+            gc_hour_str = da_cfg.get("gate_closure_hour", "12:00")
+            closes_prev = da_cfg.get("closes_previous_day", True)
+            try:
+                hh_str, mm_str = gc_hour_str.split(":")
+                gc_h = int(hh_str)
+                gc_m = int(mm_str)
+            except Exception:
+                gc_h, gc_m = 12, 0  # Fallback
+            # Basisdatum = Lieferdatum oder Vortag
+            if closes_prev:
+                gc_date = tau.normalize() - pd.Timedelta(days=1)
+            else:
+                gc_date = tau.normalize()
+            gc_ts = gc_date + pd.Timedelta(hours=gc_h, minutes=gc_m)
+            return gc_ts
+
 
     step_hours = float(sim["timestep_hours"])
     horizon_hours = float(opt_conf["mpc"]["horizon_hours"])
@@ -133,9 +164,7 @@ def run_mpc(cfg: dict):
                 now_open = bool(mask_now_mk.loc[tau])
                 next_open = bool(mask_next_mk.loc[tau])
 
-                gc_ts = tau - pd.Timedelta(
-                    minutes=int(opt_conf["trading"]["intraday"]["offset_minutes_before_delivery"])
-                )
+                gc_ts = compute_gate_closure(mk, tau)
                 val = float(dispatch_window.loc[tau, p_col])
 
                 row = {
@@ -159,7 +188,7 @@ def run_mpc(cfg: dict):
                     row["committed_new"] = val
 
                     # Optionales Debugging für die ersten paar Commits:
-                    if i < 3:
+                    if i < 5:
                         print(f"[COMMIT] mk={mk}, delivery={tau}, "
                               f"p={val:.2f} kW (current_time={current_time}, next_time={next_time})")
 
