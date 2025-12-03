@@ -128,3 +128,117 @@ def write_example_prices_ID_csv(
     df_id.to_csv(output_path, index=False)
 
     return str(output_path.resolve())
+
+
+############### reBAP ##################
+def write_from_rebap_csv(
+        src_path: str,
+        dst_dir: str = "data",
+        *,
+        tz: str = "Europe/Berlin",
+) -> str:
+    """
+    Read and prepare historic reBAP data.
+
+    The function inspects the source file name to determine whether it
+    contains data for "unterdeckt" (under-supplied) or "überdeckt/ueberdeckt"
+    (over-supplied), automatically selects the corresponding price column,
+    and writes a standardized CSV.
+
+    Expected input CSV structure (column names may have additional units):
+    - A date column, e.g. 'Datum'          (01.10.2025)
+    - A time column, e.g. 'von'            (00:00)
+    - A price column containing either:
+        * 'unterdeckt'
+        * 'überdeckt' or 'ueberdeckt'
+      in its header text, in EUR/MWh.
+
+    Output:
+    - A CSV in `dst_dir` with:
+        * 'time'  (timezone-aware timestamp)
+        * 'price' (in EUR/kWh)
+      named:
+        * reBAP_prices_pos.csv  for "unterdeckt"
+        * reBAP_prices_neg.csv  for "überdeckt"/"ueberdeckt"
+
+    Returns
+    -------
+    str
+        Absolute path of the written output file.
+    """
+    src_path = Path(src_path)
+    file_name_lower = src_path.name.lower()
+
+    # Determine whether this is "unterdeckt" (positive) or "überdeckt" (negative)
+    if "unterdeckt" in file_name_lower:
+        mode = "unterdeckt"
+        sign_label = "pos"
+    elif "überdeckt" in file_name_lower or "ueberdeckt" in file_name_lower:
+        mode = "ueberdeckt"
+        sign_label = "neg"
+    else:
+        raise ValueError(
+            f"Could not determine reBAP mode from file name '{src_path.name}'. "
+            "Expected 'unterdeckt' or 'überdeckt/ueberdeckt' in the file name."
+        )
+
+    # Read the raw CSV (semicolon separated, German decimal comma)
+    df = pd.read_csv(src_path, sep=";", decimal=",")
+
+    # Try to detect the date and time columns
+    # Assumes typical column names like 'Datum' and 'von'
+    date_col_candidates = [c for c in df.columns if "datum" in c.lower()]
+    time_col_candidates = [c for c in df.columns if c.lower() in ("von", "start", "time", "uhrzeit")]
+
+    if not date_col_candidates:
+        raise ValueError("Could not find a date column (e.g. 'Datum') in the input file.")
+    if not time_col_candidates:
+        raise ValueError("Could not find a time column (e.g. 'von') in the input file.")
+
+    date_col = date_col_candidates[0]
+    time_col = time_col_candidates[0]
+
+    # Build a datetime column from date + time
+    ts = pd.to_datetime(
+        df[date_col].astype(str) + " " + df[time_col].astype(str),
+        dayfirst=True,
+        format="%d.%m.%Y %H:%M",
+        errors="coerce",
+    )
+
+    # Apply timezone localization
+    ts = ts.dt.tz_localize(tz, nonexistent="shift_forward", ambiguous="NaT")
+    df["time"] = ts
+
+    # Detect the price column based on the mode
+    if mode == "unterdeckt":
+        price_cols = [c for c in df.columns if "unterdeckt" in c.lower()]
+    else:  # "ueberdeckt"
+        price_cols = [c for c in df.columns if "überdeckt" in c.lower() or "ueberdeckt" in c.lower()]
+
+    if not price_cols:
+        raise ValueError(
+            f"Could not find a price column for mode '{mode}' in the input file. "
+            "Expected a column containing 'unterdeckt' or 'überdeckt/ueberdeckt'."
+        )
+
+    price_col = price_cols[0]
+
+    # Convert EUR/MWh to EUR/kWh
+    prices = df[price_col].astype(float) / 1000.0
+
+    # Standardized output format
+    cleaned = pd.DataFrame({
+        "time": df["time"],
+        "price": prices,
+    }).dropna()
+
+    # Build destination path based on sign label
+    dst_dir_path = Path(dst_dir)
+    dst_dir_path.mkdir(parents=True, exist_ok=True)
+
+    output_path = dst_dir_path / f"reBAP_prices_{sign_label}.csv"
+
+    cleaned.to_csv(output_path, index=False)
+    return str(output_path.resolve())
+

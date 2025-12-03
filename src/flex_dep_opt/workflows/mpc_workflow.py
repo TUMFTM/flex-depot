@@ -197,9 +197,9 @@ def run_mpc(cfg: dict):
                     row["committed_new"] = val
 
                     # Optionales Debugging für die ersten paar Commits:
-                    if i < 5:
-                        print(f"[COMMIT] mk={mk}, delivery={tau}, "
-                              f"p={val:.2f} kW (current_time={current_time}, next_time={next_time})")
+                    #if i < 5:
+                    #    print(f"[COMMIT] mk={mk}, delivery={tau}, "
+                    #          f"p={val:.2f} kW (current_time={current_time}, next_time={next_time})")
 
                 commit_rows.append(row)
 

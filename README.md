@@ -32,7 +32,7 @@ The MPC uses **one common 15-minute time index** but applies different
 effective horizons:
 
     ┌─────────────────────────────┬─────────────────────────────┐
-    │     DA Optimization Window  │   Entire DA Delivery Day     │
+    │     DA Optimization Window  │   Entire DA Delivery Day    │
     └─────────────────────────────┴─────────────────────────────┘
     <---------------------- ~48 hours -------------------------->
 
@@ -151,3 +151,9 @@ This asymmetric MPC architecture mirrors real-world trading for battery/EV asset
 -   **Different visibility horizons**
 -   **Single rolling 48h optimization window**
 
+------------------------------------------------------------------------
+
+## 9. Price generator
+-   **Dayahead prices from EPEX**: `python.exe -m flex_dep_opt import-epex-DA SRCDIRECTORY/SRCFILE.csv --out data/epex_prices_DA.csv`
+-   **Intraday prices from DA**: `python.exe -m flex_dep_opt generate-prices-ID`
+-   **reBAP prices from Netztransparenz.de**:  `python.exe -m flex_dep_opt import-reBAP SRCDIRECTORY/SRCFILE.csv`

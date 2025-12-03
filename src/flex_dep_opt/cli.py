@@ -4,7 +4,7 @@ import yaml
 from flex_dep_opt.workflows.mpc_workflow import run_mpc
 from flex_dep_opt.workflows.optimize_workflow import run_optimize
 from flex_dep_opt.workflows.plot_workflow import run_plot, run_plot_mpc
-from flex_dep_opt.workflows.price_generation_workflow import (run_generate_prices_DA,run_import_epex_DA,run_generate_prices_ID)
+from flex_dep_opt.workflows.price_generation_workflow import (run_generate_prices_DA,run_import_epex_DA,run_generate_prices_ID, run_import_reBAP)
 
 
 def load_settings(path: str):
@@ -37,6 +37,9 @@ def main():
     p_epex = sub.add_parser("import-epex-DA")
     p_epex.add_argument("src", help="Path to raw EPEX CSV file")
     p_epex.add_argument("--out", default="data/epex_prices_DA.csv")
+
+    p_reBAP = sub.add_parser("import-reBAP")
+    p_reBAP.add_argument("src", help="Path to raw reBAP CSV file")
 
     args = parser.parse_args()
 
@@ -76,4 +79,9 @@ def main():
     # generate dummy ID prices
     if args.cmd == "generate-prices-ID":
         run_generate_prices_ID(args.out)
+        return
+
+    # import reBAP data
+    if args.cmd == "import-reBAP":
+        run_import_reBAP(args.src)
         return
