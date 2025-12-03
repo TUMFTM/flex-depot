@@ -24,7 +24,7 @@ optimization:
       gate_closure_hour: "12:00"                # D-1
       closes_previous_day: true
     intraday:
-      offset_minutes_before_delivery: 30        # trading until T-30min
+      offset_minutes_before_delivery: 15        # trading until T-30min
   mpc:
     enabled: true
     horizon_hours: 12

@@ -62,6 +62,7 @@ def run_mpc(cfg: dict):
 
     # Ergebnisse sammeln (eine Zeile pro sim-Schritt)
     rows = []
+    commit_rows = []
 
     n_steps = len(full_index)
 
@@ -98,64 +99,82 @@ def run_mpc(cfg: dict):
         # Start-SOC für dieses Fenster überschreiben
         model.soc0.set_value(float(soc))
 
-        # DEBUG: Bounds der Marktvariablen prüfen
-        #mk_test = list(window_masks.keys())[0]  # z.B. "ID"
-        #allowed_slots = window_masks[mk_test][window_masks[mk_test]].index
-        #if len(allowed_slots) > 0:
-        #    debug_time = allowed_slots[0]  # erste erlaubte Stunde
-        #    debug_t = list(window_idx).index(debug_time)  # Index im MPC-Fenster
-        #    print("DEBUG MARKET SLOT:", mk_test, debug_time, "→ t =", debug_t)
-        #    print("p_market bounds:",
-        #          model.p_market[mk_test, debug_t].lb,
-        #          model.p_market[mk_test, debug_t].ub)
-        #    print("p_ch bounds:",
-        #          model.p_ch[debug_t].lb,
-        #          model.p_ch[debug_t].ub)
-        #    print("p_dis bounds:",
-        #          model.p_dis[debug_t].lb,
-        #          model.p_dis[debug_t].ub)
-
         # 4) Lösen
         solve_model(model)
-
-        # === DEBUG: erste MPC-Optimierung inspizieren ===
-        #if i == 0:
-        #    print("\n=== DEBUG: Lösung für erstes MPC-Fenster ===")
-        #    print("Solver-Objective:", pyo.value(model.obj))
-        #    # ein paar Zeitschritte anschauen (z.B. t = 0..5)
-        #    for t in range(min(6, len(window_idx))):
-        #        ts = window_idx[t]
-        #        print(f"\n--- t = {t}, time = {ts} ---")
-        #        print("price_ID =", model.price["ID", t])
-        #        print("p_ch      =", model.p_ch[t].value)
-        #        print("p_dis     =", model.p_dis[t].value)
-        #        if hasattr(model, "p_market_pos"):  # MILP-Zweig (virtual_arbitrage=False)
-        #            print("p_market_pos[ID] =", model.p_market_pos["ID", t].value)
-        #            print("p_market_neg[ID] =", model.p_market_neg["ID", t].value)
-        #        print("p_market[ID]   =", model.p_market["ID", t].value)
-        #    print("=== ENDE DEBUG FENSTER 1 ===\n")
 
         # 5) Dispatch extrahieren und nur erste Zeile benutzen
         dispatch_window = extract_dispatch(model, window_idx)
         first_row = dispatch_window.iloc[0].copy()
         first_row.name = window_idx[0]  # Zeitindex
 
-        #if i == 0:
-        #    print("\n=== DEBUG: extract_dispatch – erstes Fenster ===")
-        #    print(dispatch_window.head(6))  # zeigt alle Spalten
-        #    print("FIRST ROW (t=0):")
-        #    print(first_row)
-        #    print("=== ENDE DEBUG extract_dispatch ===\n")
+        # === NEU: Marktpositionen committen, wenn Gate Closure überschritten wird ===
+        # Wir vergleichen Maske zum aktuellen Zeitpunkt und zum "nächsten" MPC-Schritt
+        next_time = current_time + pd.Timedelta(hours=step_hours)
+
+        masks_now = window_masks
+        masks_next = build_market_activity_mask_for_time(
+            current_time=next_time,
+            delivery_times=window_idx,
+            optimization_cfg=opt_conf,
+        )
+
+        for mk in committed_positions.keys():
+            # passende Spaltennamen in dispatch_window: z.B. "p_id_kw" für "ID"
+            p_col = f"p_{mk.lower()}_kw"
+            if p_col not in dispatch_window.columns:
+                continue  # diesen Markt ignorieren, falls nicht im Dispatch
+
+            mask_now_mk = masks_now.get(mk)
+            mask_next_mk = masks_next.get(mk)
+            if mask_now_mk is None or mask_next_mk is None:
+                continue
+
+            for tau in window_idx:
+                now_open = bool(mask_now_mk.loc[tau])
+                next_open = bool(mask_next_mk.loc[tau])
+
+                gc_ts = tau - pd.Timedelta(
+                    minutes=int(opt_conf["trading"]["intraday"]["offset_minutes_before_delivery"])
+                )
+                val = float(dispatch_window.loc[tau, p_col])
+
+                row = {
+                    "market": mk,
+                    "delivery_time": tau,
+                    "current_time": current_time,
+                    "next_time": next_time,
+                    "gate_closure_time": gc_ts,
+                    "p_opt": val,
+                    "open_now": now_open,
+                    "open_next": next_open,
+                    "committed_old": committed_positions[mk].loc[tau],
+                    "committed_new": committed_positions[mk].loc[tau],  # evtl. gleich, wird unten überschrieben
+                    "commit_now": False,
+                }
+
+                # Gate Closure: bisher handelbar, im nächsten Schritt nicht mehr
+                if now_open and (not next_open):
+                    committed_positions[mk].loc[tau] = val
+                    row["commit_now"] = True
+                    row["committed_new"] = val
+
+                    # Optionales Debugging für die ersten paar Commits:
+                    if i < 3:
+                        print(f"[COMMIT] mk={mk}, delivery={tau}, "
+                              f"p={val:.2f} kW (current_time={current_time}, next_time={next_time})")
+
+                commit_rows.append(row)
 
         rows.append(first_row)
 
         # 6) SOC updaten für nächsten Schritt
         soc = float(first_row["soc_kwh"])
 
-
     # Alles zu einem DataFrame zusammenbauen
     result = pd.DataFrame(rows)
     result.index.name = "time"
+    commit_df = pd.DataFrame(commit_rows)
+    commit_df.sort_values(["delivery_time", "current_time"], inplace=True)
 
     # Zeitindex auch als Spalte (UTC) für die Plot-Workflows
     result_reset = result.reset_index()
@@ -164,5 +183,8 @@ def run_mpc(cfg: dict):
     out_path = Path("results/dispatch_mpc.csv")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     result_reset.to_csv(out_path, index=False)
+    out_path_commit = Path("results/commit_mpc.csv", index=False)
+    out_path_commit.parent.mkdir(parents=True, exist_ok=True)
+    commit_df.to_csv(out_path_commit, index=False)
 
     print(f"MPC finished → {out_path.resolve()}")

@@ -161,6 +161,18 @@ def vehicle_commercialization(
         bounds=lambda mdl, mk, t: (-mdl.p_market_max, mdl.p_market_max),
     )
 
+    # --- NEU: committed positions als Param ins Modell bringen ---
+    def committed_init(mdl, mk, t):
+        # mk ist ein Element aus m.MARKETS, t ist ein Index in m.T
+        series = committed_positions[mk]
+        return float(series.iloc[int(t)])
+
+    m.p_market_committed = pyo.Param(
+        m.MARKETS,
+        m.T,
+        initialize=committed_init,
+    )
+
 
     # Virtual arbitrage active / inactive
     if virtual_arbitrage:
@@ -174,8 +186,11 @@ def vehicle_commercialization(
             idx = int(t)
             allowed = bool(market_activity_mask[mk].iloc[idx])
             if allowed:
+                # Slot handelbar → p_market kann frei optimiert werden
                 return pyo.Constraint.Skip
-            return mdl.p_market[mk, t] == 0.0
+            # Slot geschlossen → p_market fest auf committed position
+            return mdl.p_market[mk, t] == mdl.p_market_committed[mk, t]
+
         m.market_activity = pyo.Constraint(m.MARKETS, m.T, rule=market_activity_rule)
 
     else:
@@ -245,21 +260,23 @@ def vehicle_commercialization(
         m.import_balance = pyo.Constraint(m.T, rule=import_balance_rule)
 
         # Handelsmasken anwenden
-        def market_activity_rule_pos(mdl, mk, t):
+        # --- NEU: Handelsmasken im MILP-Fall ---
+        #
+        # Geschlossene Slots sollen die Gesamtmarktleistung auf den
+        # bereits verpflichteten Wert festnageln.
+        #
+        # p_market[mk, t] = p_market_pos[mk, t] - p_market_neg[mk, t]
+        # → in offenen Slots frei, in geschlossenen Slots = committed.
+        def market_activity_rule_fix(mdl, mk, t):
             idx = int(t)
             allowed = bool(market_activity_mask[mk].iloc[idx])
             if allowed:
                 return pyo.Constraint.Skip
-            return mdl.p_market_pos[mk, t] == 0.0
+            return mdl.p_market[mk, t] == mdl.p_market_committed[mk, t]
 
-        def market_activity_rule_neg(mdl, mk, t):
-            idx = int(t)
-            allowed = bool(market_activity_mask[mk].iloc[idx])
-            if allowed:
-                return pyo.Constraint.Skip
-            return mdl.p_market_neg[mk, t] == 0.0
-        m.market_activity_pos = pyo.Constraint(m.MARKETS, m.T, rule=market_activity_rule_pos)
-        m.market_activity_neg = pyo.Constraint(m.MARKETS, m.T, rule=market_activity_rule_neg)
+        m.market_activity_fix = pyo.Constraint(
+            m.MARKETS, m.T, rule=market_activity_rule_fix
+        )
 
 
 
