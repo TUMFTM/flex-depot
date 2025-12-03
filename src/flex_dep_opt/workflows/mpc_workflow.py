@@ -23,6 +23,7 @@ def run_mpc(cfg: dict):
     opt = cfg["optimize"]
     opt_conf = cfg["optimization"]
     trading_cfg = opt_conf["trading"]
+    mpc_cfg = opt_conf["mpc"]
 
     def compute_gate_closure(market: str, tau: pd.Timestamp) -> pd.Timestamp:
         """
@@ -55,8 +56,9 @@ def run_mpc(cfg: dict):
 
 
     step_hours = float(sim["timestep_hours"])
-    horizon_hours = float(opt_conf["mpc"]["horizon_hours"])
-    horizon_steps = int(horizon_hours / step_hours)
+    da_horizon_hours = float(mpc_cfg["da_horizon_hours"])
+    id_horizon_hours = float(mpc_cfg["id_horizon_hours"])
+    da_horizon_steps = int(da_horizon_hours / step_hours)
 
     # Vehicle
     vehicle = Vehicle(**opt["vehicle"])
@@ -104,7 +106,7 @@ def run_mpc(cfg: dict):
 
         # 1) Rolling-Fenster definieren
         window_start = full_index[i]
-        window_end_idx = min(i + horizon_steps, len(full_index))
+        window_end_idx = min(i + da_horizon_steps, len(full_index))
         window_idx = full_index[i:window_end_idx]
 
         if len(window_idx) == 0:
@@ -115,6 +117,13 @@ def run_mpc(cfg: dict):
 
         # 2b) Handelsmasken entsprechend GATE CLOSURE REGELN
         window_masks = build_market_activity_mask_for_time(current_time=current_time,delivery_times=window_idx,optimization_cfg=opt_conf)
+        id_horizon_end = current_time + pd.Timedelta(hours=id_horizon_hours)
+
+        if "ID" in window_masks:
+            id_mask = window_masks["ID"].copy()
+            # alles jenseits des ID-Horizonts auf "geschlossen" setzen
+            id_mask[window_idx > id_horizon_end] = False
+            window_masks["ID"] = id_mask
 
         # 3) Modell bauen
         model = vehicle_commercialization(
@@ -212,7 +221,7 @@ def run_mpc(cfg: dict):
     out_path = Path("results/dispatch_mpc.csv")
     out_path.parent.mkdir(parents=True, exist_ok=True)
     result_reset.to_csv(out_path, index=False)
-    out_path_commit = Path("results/commit_mpc.csv", index=False)
+    out_path_commit = Path("results/commit_mpc.csv")
     out_path_commit.parent.mkdir(parents=True, exist_ok=True)
     commit_df.to_csv(out_path_commit, index=False)
 

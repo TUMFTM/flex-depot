@@ -28,6 +28,8 @@ optimization:
   mpc:
     enabled: true
     horizon_hours: 48
+    da_horizon_hours: 48
+    id_horizon_hours: 12
 
 optimize:
   out: "results/dispatch.csv"
