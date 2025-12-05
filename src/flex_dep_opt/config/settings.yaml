@@ -1,6 +1,6 @@
 simulation:
-  start: "2025-10-01 00:00"
-  end: "2025-10-3 23:45"
+  start: "2025-10-17 17:00"
+  end: "2025-10-20 06:00"
   timestep_hours: 0.25
 
 optimization:
@@ -16,10 +16,10 @@ optimization:
       tx_fee_eur_per_mwh: 3.0                   # €/MWh
   virtual_arbitrage: false
   degradation:
-    enabled: false
-    cost_eur_per_mwh_throughput: 20.0
+    enabled: true
+    cost_eur_per_mwh_throughput: 30.0
   trading:
-    mode: "realistic"   # "none", "realistic"
+    mode: "none"   # "none", "realistic"
     dayahead:
       gate_closure_hour: "12:00"                # D-1
       closes_previous_day: true
@@ -34,19 +34,20 @@ optimization:
 optimize:
   out: "results/dispatch.csv"
   vehicle:
-    capacity_kwh: 1000
+    capacity_kwh: 4800
     soc_min: 0.1
     soc_max: 0.9
     soc0: 0.50
-    p_charge_max_kw: 1000
-    p_discharge_max_kw: 1000
+    soc_end: 0.8
+    p_charge_max_kw: 500
+    p_discharge_max_kw: 0
     eta_charge: 0.95
     eta_discharge: 0.95
 
 plot:
   dispatch: "results/dispatch.csv"
   dispatch_mpc: "results/dispatch_mpc.csv"
-  capacity_kwh: 1000
+  capacity_kwh: 4800
   out: "results/dispatch_plot.html"
   cashflow_out: "results/cashflows_plot.html"
   open: true

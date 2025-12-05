@@ -108,6 +108,7 @@ def run_mpc(cfg: dict):
         window_start = full_index[i]
         window_end_idx = min(i + da_horizon_steps, len(full_index))
         window_idx = full_index[i:window_end_idx]
+        is_last_window = (window_end_idx == len(full_index))
 
         if len(window_idx) == 0:
             break
@@ -134,6 +135,7 @@ def run_mpc(cfg: dict):
             degradation_cost_eur_per_kwh=c_deg,
             market_activity_mask=window_masks,
             committed_positions={mk: committed_positions[mk].loc[window_idx] for mk in committed_positions},
+            enforce_terminal_soc=is_last_window,
         )
 
         # Start-SOC für dieses Fenster überschreiben

@@ -58,6 +58,7 @@ def run_optimize(cfg: dict):
         virtual_arbitrage=virt_arb,
         degradation_cost_eur_per_kwh=c_deg,
         market_activity_mask=market_activity_mask,
+        enforce_terminal_soc=True,
     )
 
     # 5) Solve

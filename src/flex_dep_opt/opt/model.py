@@ -15,6 +15,7 @@ def vehicle_commercialization(
     degradation_cost_eur_per_kwh: float = 0.0,
     market_activity_mask: Dict[str, pd.Series] | None = None,
     committed_positions: Dict[str, pd.Series] | None = None,
+    enforce_terminal_soc: bool = True
 ) -> pyo.ConcreteModel:
     """
     Generisches Modell für die Kommerzialisierung eines Fahrzeugs/Speichers
@@ -109,15 +110,10 @@ def vehicle_commercialization(
 
     # Fahrzeugparameter
     m.cap = pyo.Param(initialize=float(vehicle.capacity_kwh))
-    m.soc_min = pyo.Param(
-        initialize=float(vehicle.soc_min) * float(vehicle.capacity_kwh)
-    )
-    m.soc_max = pyo.Param(
-        initialize=float(vehicle.soc_max) * float(vehicle.capacity_kwh)
-    )
-    m.soc0 = pyo.Param(
-        initialize=float(vehicle.soc0) * float(vehicle.capacity_kwh), mutable=True
-    )
+    m.soc_min = pyo.Param(initialize=float(vehicle.soc_min) * float(vehicle.capacity_kwh))
+    m.soc_max = pyo.Param(initialize=float(vehicle.soc_max) * float(vehicle.capacity_kwh))
+    m.soc0 = pyo.Param(initialize=float(vehicle.soc0) * float(vehicle.capacity_kwh), mutable=True)
+    m.soc_end = pyo.Param(initialize=float(vehicle.soc_end) * float(vehicle.capacity_kwh), mutable=True)
     m.p_ch_max = pyo.Param(initialize=float(vehicle.p_charge_max_kw))
     m.p_dis_max = pyo.Param(initialize=float(vehicle.p_discharge_max_kw))
     m.eta_c = pyo.Param(initialize=float(vehicle.eta_charge))
@@ -153,6 +149,12 @@ def vehicle_commercialization(
     m.soc_ub = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.soc[t] <= mdl.soc_max)
     m.ch_lim = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_ch[t] <= mdl.p_ch_max)
     m.dis_lim = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_dis[t] <= mdl.p_dis_max)
+
+    if enforce_terminal_soc:
+        def soc_terminal_rule(mdl):
+            t_last = mdl.T.last()  # letzter Index in m.T
+            return mdl.soc[t_last] >= mdl.soc_end
+        m.soc_terminal = pyo.Constraint(rule=soc_terminal_rule)
 
     # ---------- Markt-Variablen (für beide Modi) ----------
     m.p_market = pyo.Var(
@@ -299,9 +301,9 @@ def vehicle_commercialization(
 
     m.obj = pyo.Objective(expr=obj_expr(m), sense=pyo.maximize)
 
-    if len(markets) > 0:
-        mk0 = next(iter(markets))
-        print("[DEBUG] committed_positions example for", mk0)
-        print(committed_positions[mk0].head())
+    #if len(markets) > 0:
+    #    mk0 = next(iter(markets))
+    #    print("[DEBUG] committed_positions example for", mk0)
+    #    print(committed_positions[mk0].head())
 
     return m
