@@ -9,8 +9,10 @@ from typing import Dict
 
 # Einheitliche Farbcodierung je Markt (R, G, B)
 MARKET_COLORS: Dict[str, tuple[int, int, int]] = {
-    "DA": (0,101,189),
-    "ID": (227,114,34),
+    #"DA": (0,101,189),
+    #"ID": (227,114,34),
+    "DA": (228,0,69),
+    "ID": (145,185,0),
     # später z.B. "FCR": (0, 120, 255),
 }
 
@@ -81,6 +83,7 @@ def plot_dispatch_multimarket_plotly(
         for mk, s in prices_by_market.items():
             price_mwh = s * 1000.0
             color = _rgb(mk)
+
 
             fig.add_trace(
                 go.Scatter(
@@ -344,8 +347,8 @@ def plot_mpc_dispatch_plotly(
         ],
         subplot_titles=(
             "Market Prices",
-            "State of Charge & Net Power (MPC decisions)",
-            "Market Positions (per market)",
+            "Fleet State of Charge & Net Power",
+            "Market Positions",
         ),
     )
 
@@ -353,13 +356,15 @@ def plot_mpc_dispatch_plotly(
     if prices_by_market is not None:
         for mk, s in prices_by_market.items():
             price_mwh = s * 1000.0
+            color = _rgb(mk)
+
             fig.add_trace(
                 go.Scatter(
                     x=price_mwh.index,
                     y=price_mwh.values,
                     mode="lines",
                     name=f"{mk} Price [€/MWh]",
-                    line=dict(width=2),
+                    line=dict(width=3, color=color),
                 ),
                 row=1,
                 col=1,
@@ -372,9 +377,9 @@ def plot_mpc_dispatch_plotly(
             y=net_power,
             mode="lines",
             name="Net Power [kW]",
-            line=dict(width=2),
+            line=dict(width=3, color="rgb(159, 186, 54)"),
             fill="tozeroy",
-            fillcolor="rgba(65,105,225,0.2)",
+            fillcolor="rgba(159, 186, 54, 0.2)",
         ),
         row=2,
         col=1,
@@ -387,7 +392,7 @@ def plot_mpc_dispatch_plotly(
             y=soc_percent,
             mode="lines",
             name="State of Charge [%]",
-            line=dict(width=3),
+            line=dict(width=3, color="rgb(0,0,0)"),
         ),
         row=2,
         col=1,
@@ -456,3 +461,232 @@ def plot_mpc_dispatch_plotly(
     )
 
     return fig
+
+
+
+# Presentation one-pager
+def plot_mpc_onepager(
+    dispatch: pd.DataFrame,
+    prices_by_market: dict[str, pd.Series] | None = None,
+    *,
+    capacity_kwh: float,
+    title: str = "MPC Dispatch and Market Positions",
+) -> Dict[str, go.Figure]:
+    """
+    Erzeugt 4 einzelne Plots (je eine Figure), statt Subplots:
+
+      - fig_prices:        Marktpreise (alle Märkte)
+      - fig_power_pos:     Net Power + Marktpositionen
+      - fig_soc:           State of Charge [%]
+      - fig_empty:         leerer Platzhalter (z.B. für spätere Ergänzungen)
+
+    Rückgabe: dict mit Schlüsseln {"prices", "power_positions", "soc", "empty"}
+    """
+
+    if not isinstance(dispatch.index, pd.DatetimeIndex):
+        raise ValueError("Dispatch index must be a DatetimeIndex")
+
+    # Net Power
+    net_power = dispatch["p_dis_kw"] - dispatch["p_ch_kw"]
+
+    # SoC [%]
+    soc_kwh = dispatch["soc_kwh"]
+    soc_percent = (soc_kwh / float(capacity_kwh)) * 100.0
+
+    # Marktspalten erkennen
+    market_cols = [
+        c for c in dispatch.columns
+        if c.startswith("p_")
+        and c.endswith("_kw")
+        and c not in ("p_ch_kw", "p_dis_kw")
+    ]
+
+    # ---------- Helper für einheitlichen PPT-Style ----------
+    def _style_for_ppt(fig: go.Figure, subtitle: str | None = None) -> go.Figure:
+        fig.update_layout(
+            title=subtitle,
+            template="plotly_white",
+            width=2000,
+            height=1100,
+            margin=dict(l=60, r=60, t=80, b=60),
+            font=dict(size=45),
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            showlegend=False,  # Legend im PPT nachbauen, wenn gewünscht
+        )
+        fig.update_xaxes(showgrid=True, gridcolor="black", gridwidth=1)
+
+        return fig
+
+    # ---------- Plot 1: Preise ----------
+    fig_prices = go.Figure()
+    if prices_by_market is not None:
+        for mk, s in prices_by_market.items():
+            price_mwh = s * 1000.0
+            color = _rgb(mk)
+
+            fig_prices.add_trace(
+                go.Scatter(
+                    x=price_mwh.index,
+                    y=price_mwh.values,
+                    mode="lines",
+                    name=f"{mk} Price [€/MWh]",
+                    line=dict(width=5, color=color),
+                )
+            )
+
+
+
+    # ---------- Plot 2: Net Power + Marktpositionen ----------
+    fig_power_pos = go.Figure()
+
+    # Bars je Markt
+    for col in market_cols:
+        inner = col[2:-3]   # p_da_kw -> da
+        mk_code = inner.upper()
+        pretty_name = f"{mk_code} Position [kW]"
+
+        values = dispatch[col]
+        labels = ["Sell" if v > 0 else "Buy" if v < 0 else "Neutral" for v in values]
+        colors = [_rgba(mk_code, 1.0 if v > 0 else 0.3) for v in values]
+
+        fig_power_pos.add_trace(
+            go.Bar(
+                x=dispatch.index,
+                y=values,
+                name=pretty_name,
+                marker_color=colors,
+                customdata=labels,
+                hovertemplate="%{y:.1f} kW<br>%{customdata}",
+            )
+        )
+
+    # Net Power als Linie obendrauf
+    fig_power_pos.add_trace(
+        go.Scatter(
+            x=dispatch.index,
+            y=net_power,
+            mode="lines",
+            name="Net Power [kW]",
+            line=dict(width=4, color="rgb(106, 117, 126)"),
+        )
+    )
+
+
+
+    # ---------- Plot 3: SoC ----------
+    fig_soc = go.Figure()
+    fig_soc.add_trace(
+        go.Scatter(
+            x=dispatch.index,
+            y=soc_percent,
+            mode="lines",
+            name="State of Charge [%]",
+            line=dict(width=8, color="rgb(228,0,69)"),
+        )
+    )
+
+
+    # ========= Plot 4: Cashflows (Bars) + kumulative Summe (Linie) =========
+    fig_cash = make_subplots(
+        rows=1,
+        cols=1,
+        specs=[[{"secondary_y": False}]],
+    )
+
+    cf_df = None
+    if prices_by_market is not None:
+        # Δt aus Index ableiten (h)
+        if len(dispatch.index) >= 2:
+            dt_seconds = (dispatch.index[1] - dispatch.index[0]).total_seconds()
+            dt = dt_seconds / 3600.0
+        else:
+            dt = 1.0  # Fallback
+
+        cf_df = pd.DataFrame(index=dispatch.index)
+
+        # Cashflows pro Markt berechnen
+        for col in market_cols:
+            inner = col[2:-3]  # "p_da_kw" -> "da"
+            mk_code = inner.upper()  # "DA", "ID", ...
+            pretty_name = f"{mk_code} Cashflow [€/step]"
+
+            if mk_code not in prices_by_market:
+                continue
+
+            p_series = dispatch[col]  # kW
+            price_series = prices_by_market[mk_code]  # €/kWh
+
+            # auf gemeinsamen Index ausrichten
+            p_series, price_series = p_series.align(price_series, join="inner")
+
+            cf = price_series * p_series * dt  # €/step
+            cf_df[pretty_name] = cf
+
+        # Gesamt-Cashflow & kumulative Summe
+        if not cf_df.empty:
+            cf_df["Total Cashflow [€/step]"] = cf_df.sum(axis=1)
+            cf_df["Cumulative Profit [€]"] = cf_df["Total Cashflow [€/step]"].cumsum()
+
+            # Bars: Markt-Cashflows
+            cash_cols = [
+                c for c in cf_df.columns
+                if c.endswith("Cashflow [€/step]") and not c.startswith("Total")
+            ]
+            for col in cash_cols:
+                mk_code = col.split()[0]  # "DA", "ID", ...
+                base_color = _rgb(mk_code)
+
+                #fig_cash.add_trace(
+                #    go.Bar(
+                #        x=cf_df.index,
+                #        y=cf_df[col],
+                #        name=col,
+                #        marker_color=base_color,
+                #    ),
+                #    row=1,
+                #    col=1,
+                #    secondary_y=True,  # linke Achse
+                #)
+
+            # Linie: kumulativer Profit (rechte Achse)
+            fig_cash.add_trace(
+                go.Scatter(
+                    x=cf_df.index,
+                    y=cf_df["Cumulative Profit [€]"],
+                    mode="lines",
+                    name="Cumulative Profit [€]",
+                    line=dict(width=8, color="rgb(228,0,69)"),
+                ),
+                row=1,
+                col=1,
+                secondary_y=False,  # rechte Achse
+            )
+
+
+    # ---------- Layout ----------
+
+    fig_prices.update_yaxes(title_text=None, range=[0, 200], showgrid=True, gridcolor="black", gridwidth=1,)
+    fig_prices.update_xaxes(title_text=None)
+    _style_for_ppt(fig_prices, subtitle=None)
+
+    fig_power_pos.update_yaxes(title_text=None, range=[-500, 500], showgrid=True, gridcolor="black", gridwidth=1,)
+    fig_power_pos.update_xaxes(title_text=None)
+    _style_for_ppt(fig_power_pos, subtitle=None)
+
+    fig_soc.update_yaxes(title_text=None, range=[0, 100], showgrid=True, gridcolor="black", gridwidth=1,)
+    fig_soc.update_xaxes(title_text=None)
+    _style_for_ppt(fig_soc, subtitle=None)
+
+    fig_cash.update_xaxes(title_text=None)
+    fig_cash.update_yaxes(title_text="", range=[0, 400], showgrid=True, gridcolor="black", gridwidth=1, secondary_y=False)
+    #fig_cash.update_yaxes(title_text=None,range=[-30, 30], showgrid=False, secondary_y=True)
+    fig_cash.update_xaxes(title_text=None)
+    _style_for_ppt(fig_cash, subtitle=None)
+
+    return {
+        "prices": fig_prices,
+        "power_positions": fig_power_pos,
+        "soc": fig_soc,
+        "cash": fig_cash,
+    }

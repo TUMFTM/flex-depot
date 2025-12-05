@@ -3,7 +3,7 @@ import yaml
 
 from flex_dep_opt.workflows.mpc_workflow import run_mpc
 from flex_dep_opt.workflows.optimize_workflow import run_optimize
-from flex_dep_opt.workflows.plot_workflow import run_plot, run_plot_mpc
+from flex_dep_opt.workflows.plot_workflow import run_plot, run_plot_mpc, run_plot_mpc_onepager
 from flex_dep_opt.workflows.price_generation_workflow import (run_generate_prices_DA,run_import_epex_DA,run_generate_prices_ID, run_import_reBAP)
 
 
