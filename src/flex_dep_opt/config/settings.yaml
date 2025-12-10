@@ -8,11 +8,11 @@ optimization:
   markets:
     dayahead:
       enabled: true
-      source: "data/epex_prices_DA.csv"
+      source: "data/prices/epex_prices_DA.csv"
       tx_fee_eur_per_mwh: 2.0                   # €/MWh
     intraday:
       enabled: true
-      source: "data/example_prices_ID.csv"
+      source: "data/prices/example_prices_ID.csv"
       tx_fee_eur_per_mwh: 3.0                   # €/MWh
   virtual_arbitrage: false
   degradation:
