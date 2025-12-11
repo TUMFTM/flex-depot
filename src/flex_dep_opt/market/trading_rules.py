@@ -49,7 +49,7 @@ def build_market_activity_mask_for_time(
             mask_by_market[mk] = pd.Series(True, index=delivery_times)
         return mask_by_market
 
-    # --- Mode "realistic": nutze deine Trading-Settings ---------------------
+    # --- Mode "realistic": nutze Trading-Settings ---------------------
     if mode == "realistic":
 
         # Day-Ahead
