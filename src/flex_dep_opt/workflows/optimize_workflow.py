@@ -3,7 +3,7 @@ import pandas as pd
 
 from flex_dep_opt.domain.vehicle import Vehicle
 from flex_dep_opt.io.prices_io import build_prices_from_settings
-from flex_dep_opt.opt.model import vehicle_commercialization
+from flex_dep_opt.opt.model import fleet_commercialization
 from flex_dep_opt.opt.solve import solve_model, extract_dispatch
 from flex_dep_opt.market.trading_rules import build_market_activity_mask
 
@@ -51,7 +51,7 @@ def run_optimize(cfg: dict):
     vehicle = Vehicle(**opt["vehicle"])
 
     # 4) Build generic multi-market model
-    model = vehicle_commercialization(
+    model = fleet_commercialization(
         vehicle=vehicle,
         prices_by_market=prices_by_market,
         timestep_hours=sim["timestep_hours"],

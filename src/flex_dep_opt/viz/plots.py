@@ -50,8 +50,8 @@ def plot_dispatch_multimarket_plotly(
     net_power = dispatch["p_dis_kw"] - dispatch["p_ch_kw"]
 
     # SoC in %
-    soc_kwh = dispatch["soc_kwh"]
-    soc_percent = (soc_kwh / float(capacity_kwh)) * 100.0
+    E_kWh = dispatch["E_kWh"]
+    soc_percent = (E_kWh / float(capacity_kwh)) * 100.0
 
     # Marktspalten automatisch erkennen: p_{mk}_kw, aber p_ch/p_dis ignorieren
     market_cols = [
@@ -312,7 +312,7 @@ def plot_mpc_dispatch_plotly(
       Subplot 3: Marktpositionen pro Markt [kW] (Bars, Buy/Sell unterschieden)
 
     Erwartet im dispatch:
-      - p_ch_kw, p_dis_kw, soc_kwh
+      - p_ch_kw, p_dis_kw, E_kWh
       - optional: p_<mk>_kw für Märkte (z.B. p_da_kw, p_id_kw)
     """
 
@@ -323,8 +323,8 @@ def plot_mpc_dispatch_plotly(
     net_power = dispatch["p_dis_kw"] - dispatch["p_ch_kw"]
 
     # SoC [%]
-    soc_kwh = dispatch["soc_kwh"]
-    soc_percent = (soc_kwh / float(capacity_kwh)) * 100.0
+    E_kWh = dispatch["E_kWh"]
+    soc_percent = (E_kWh / float(capacity_kwh)) * 100.0
 
     # Marktspalten erkennen
     market_cols = [
@@ -490,8 +490,8 @@ def plot_mpc_onepager(
     net_power = dispatch["p_dis_kw"] - dispatch["p_ch_kw"]
 
     # SoC [%]
-    soc_kwh = dispatch["soc_kwh"]
-    soc_percent = (soc_kwh / float(capacity_kwh)) * 100.0
+    E_kWh = dispatch["E_kWh"]
+    soc_percent = (E_kWh / float(capacity_kwh)) * 100.0
 
     # Marktspalten erkennen
     market_cols = [

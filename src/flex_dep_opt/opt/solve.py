@@ -115,7 +115,7 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index) -> pd.DataFrame:
     # Physical variables
     df["p_ch_kw"]  = [pyo.value(model.p_ch[t])  for t in model.T]
     df["p_dis_kw"] = [pyo.value(model.p_dis[t]) for t in model.T]
-    df["soc_kwh"]  = [pyo.value(model.soc[t])   for t in model.T]
+    df["E_kWh"]  = [pyo.value(model.E[t]) for t in model.T]
 
     # Add all market variables dynamically
     if hasattr(model, "MARKETS"):
