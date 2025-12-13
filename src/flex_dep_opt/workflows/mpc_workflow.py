@@ -5,7 +5,8 @@ import pyomo.environ as pyo
 
 from flex_dep_opt.domain.vehicle import Vehicle
 from flex_dep_opt.io.prices_io import build_prices_from_settings
-from flex_dep_opt.opt.model import vehicle_commercialization
+from flex_dep_opt.io.mobility_io import read_mobility_bounds_csv, slice_mobility_bounds
+from flex_dep_opt.opt.model import fleet_commercialization
 from flex_dep_opt.opt.solve import solve_model, extract_dispatch
 from flex_dep_opt.market.trading_rules import build_market_activity_mask_for_time
 
@@ -24,6 +25,11 @@ def run_mpc(cfg: dict):
     opt_conf = cfg["optimization"]
     trading_cfg = opt_conf["trading"]
     mpc_cfg = opt_conf["mpc"]
+    mob_cfg = opt_conf.get("mobility", {})
+    mobility_bounds_full = None
+    if mob_cfg.get("enabled", False):
+        bounds_path = mob_cfg["bounds_file"]
+        mobility_bounds_full = read_mobility_bounds_csv(bounds_path)
 
     def compute_gate_closure(market: str, tau: pd.Timestamp) -> pd.Timestamp:
         """
@@ -74,6 +80,10 @@ def run_mpc(cfg: dict):
 
     full_index = prices_by_market[next(iter(prices_by_market))].index
 
+    # Mobility auf Simulationsfenster zuschneiden
+    if mobility_bounds_full is not None:
+        mobility_bounds_full = mobility_bounds_full.loc[full_index]
+
     # Virtual arbitrage
     virt_arb = opt_conf.get("virtual_arbitrage", False)
 
@@ -116,6 +126,11 @@ def run_mpc(cfg: dict):
         # 2) Preisfenster bauen
         window_prices = {mk: prices_by_market[mk].loc[window_idx]for mk in prices_by_market}
 
+        # 2a) Mobilitäts-Bounds für Fenster bauen
+        window_mobility_bounds = None
+        if mobility_bounds_full is not None:
+            window_mobility_bounds = slice_mobility_bounds(mobility_bounds_full, window_idx)
+
         # 2b) Handelsmasken entsprechend GATE CLOSURE REGELN
         window_masks = build_market_activity_mask_for_time(current_time=current_time,delivery_times=window_idx,optimization_cfg=opt_conf)
         id_horizon_end = current_time + pd.Timedelta(hours=id_horizon_hours)
@@ -127,7 +142,7 @@ def run_mpc(cfg: dict):
             window_masks["ID"] = id_mask
 
         # 3) Modell bauen
-        model = vehicle_commercialization(
+        model = fleet_commercialization(
             vehicle=vehicle,
             prices_by_market=window_prices,
             timestep_hours=step_hours,
@@ -135,11 +150,16 @@ def run_mpc(cfg: dict):
             degradation_cost_eur_per_kwh=c_deg,
             market_activity_mask=window_masks,
             committed_positions={mk: committed_positions[mk].loc[window_idx] for mk in committed_positions},
-            enforce_terminal_soc=is_last_window,
+            enforce_terminal_soc=False,
+            mobility_bounds=window_mobility_bounds,
         )
 
         # Start-SOC für dieses Fenster überschreiben
-        model.soc0.set_value(float(soc))
+        if window_mobility_bounds is not None:
+            E0_mid = 0.5 * (float(window_mobility_bounds["Capacity_lower_kWh"].iloc[0])+float(window_mobility_bounds["Capacity_upper_kWh"].iloc[0]))
+            model.E0.set_value(E0_mid)
+        else:
+            model.E0.set_value(0.0)
 
         # 4) Lösen
         solve_model(model)
@@ -208,7 +228,7 @@ def run_mpc(cfg: dict):
         rows.append(first_row)
 
         # 6) SOC updaten für nächsten Schritt
-        soc = float(first_row["soc_kwh"])
+        soc = float(first_row["E_kWh"])
 
     # Alles zu einem DataFrame zusammenbauen
     result = pd.DataFrame(rows)
