@@ -87,7 +87,7 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index) -> pd.DataFrame:
     Handles:
       - p_ch[t]
       - p_dis[t]
-      - soc[t]
+      - E[t]
       - p_market[market, t]  for all markets in model.MARKETS
 
     Parameters
@@ -113,14 +113,24 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index) -> pd.DataFrame:
     df = pd.DataFrame(index=time_index)
 
     # Physical variables
-    df["p_ch_kw"]  = [pyo.value(model.p_ch[t])  for t in model.T]
-    df["p_dis_kw"] = [pyo.value(model.p_dis[t]) for t in model.T]
-    df["E_kWh"]  = [pyo.value(model.E[t]) for t in model.T]
+    df["E_kWh"] = [pyo.value(model.E[t]) for t in model.T]
+    df["p_net_kW"] = [pyo.value(model.p_net[t]) for t in model.T]
+    df["p_ch_kW"]  = [pyo.value(model.p_ch[t])  for t in model.T]
+    df["p_dis_kW"] = [pyo.value(model.p_dis[t]) for t in model.T]
+
 
     # Add all market variables dynamically
     if hasattr(model, "MARKETS"):
         for mk in model.MARKETS:
             col = f"p_{mk.lower()}_kw"
             df[col] = [pyo.value(model.p_market[mk, t]) for t in model.T]
+
+    if hasattr(model, "E_lower"):
+        df["E_lower_kWh"] = [pyo.value(model.E_lower[t]) for t in model.T]
+        df["E_upper_kWh"] = [pyo.value(model.E_upper[t]) for t in model.T]
+
+    if hasattr(model, "P_lower"):
+        df["P_lower_kW"] = [pyo.value(model.P_lower[t]) for t in model.T]
+        df["P_upper_kW"] = [pyo.value(model.P_upper[t]) for t in model.T]
 
     return df

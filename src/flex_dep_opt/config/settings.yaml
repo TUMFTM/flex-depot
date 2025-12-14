@@ -50,7 +50,6 @@ optimize:
 plot:
   dispatch: "results/dispatch.csv"
   dispatch_mpc: "results/dispatch_mpc.csv"
-  capacity_kwh: 4800
   out: "results/dispatch_plot.html"
   cashflow_out: "results/cashflows_plot.html"
   open: true

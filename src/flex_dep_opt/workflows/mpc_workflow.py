@@ -100,8 +100,14 @@ def run_mpc(cfg: dict):
     else:
         c_deg = 0.0
 
-    # Anfangs-SOC in kWh
-    soc = vehicle.soc0 * vehicle.capacity_kwh
+    # Initialer Energiezustand E (virtuell, band-konsistent)
+    if mobility_bounds_full is not None:
+        E_state = 0.5 * (
+                float(mobility_bounds_full["Capacity_lower_kWh"].iloc[0]) +
+                float(mobility_bounds_full["Capacity_upper_kWh"].iloc[0])
+        )
+    else:
+        E_state = 0.0
 
     # Ergebnisse sammeln (eine Zeile pro sim-Schritt)
     rows = []
@@ -112,7 +118,7 @@ def run_mpc(cfg: dict):
     pbar = tqdm(range(n_steps), desc="MPC", unit="step")
     for i in pbar:
         current_time = full_index[i]
-        pbar.set_postfix(time=str(current_time), soc=f"{soc:.1f} kWh")
+        pbar.set_postfix(time=str(current_time), E=f"{E_state:.1f} kWh")
 
         # 1) Rolling-Fenster definieren
         window_start = full_index[i]
@@ -156,10 +162,19 @@ def run_mpc(cfg: dict):
 
         # Start-SOC für dieses Fenster überschreiben
         if window_mobility_bounds is not None:
-            E0_mid = 0.5 * (float(window_mobility_bounds["Capacity_lower_kWh"].iloc[0])+float(window_mobility_bounds["Capacity_upper_kWh"].iloc[0]))
-            model.E0.set_value(E0_mid)
+            lb0 = float(window_mobility_bounds["Capacity_lower_kWh"].iloc[0])
+            ub0 = float(window_mobility_bounds["Capacity_upper_kWh"].iloc[0])
+
+            if i == 0:
+                E0 = 0.5 * (lb0 + ub0)  # start policy
+            else:
+                E0 = E_state  # rolled state
+
+            # safety clamp
+            E0 = min(max(E0, lb0), ub0)
+            model.E0.set_value(float(E0))
         else:
-            model.E0.set_value(0.0)
+            model.E0.set_value(float(E_state))
 
         # 4) Lösen
         solve_model(model)
@@ -228,7 +243,7 @@ def run_mpc(cfg: dict):
         rows.append(first_row)
 
         # 6) SOC updaten für nächsten Schritt
-        soc = float(first_row["E_kWh"])
+        E_state = float(first_row["E_kWh"])
 
     # Alles zu einem DataFrame zusammenbauen
     result = pd.DataFrame(rows)

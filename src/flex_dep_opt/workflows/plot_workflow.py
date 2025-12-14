@@ -93,8 +93,7 @@ def run_plot_mpc(cfg: dict):
     fig = plot_mpc_dispatch_plotly(
         dispatch=dispatch,
         prices_by_market=prices_by_market,
-        capacity_kwh=plot_cfg["capacity_kwh"],
-        title=plot_cfg.get("title", "MPC Dispatch and Market Positions"),
+        title=plot_cfg.get("title", "MPC Flexband Dispatch and Market Positions"),
     )
 
     out = Path(plot_cfg.get("mpc_out", "results/dispatch_mpc_plot.html"))
