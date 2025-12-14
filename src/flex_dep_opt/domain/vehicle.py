@@ -8,12 +8,5 @@ from dataclasses import dataclass
 
 @dataclass
 class Vehicle:
-    capacity_kwh: float
-    soc_min: float
-    soc_max: float
-    soc0: float
-    soc_end: float
-    p_charge_max_kw: float
-    p_discharge_max_kw: float
     eta_charge: float
     eta_discharge: float

@@ -19,7 +19,7 @@ optimization:
     enabled: true
     cost_eur_per_mwh_throughput: 20.0
   trading:
-    mode: "none"   # "none", "realistic"
+    mode: "realistic"   # "none", "realistic"
     dayahead:
       gate_closure_hour: "12:00"                # D-1
       closes_previous_day: true
@@ -37,13 +37,6 @@ optimization:
 optimize:
   out: "results/dispatch.csv"
   vehicle:
-    capacity_kwh: 4800
-    soc_min: 0.1
-    soc_max: 0.9
-    soc0: 0.50
-    soc_end: 0.8
-    p_charge_max_kw: 500
-    p_discharge_max_kw: 500
     eta_charge: 0.95
     eta_discharge: 0.95
 
