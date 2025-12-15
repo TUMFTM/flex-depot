@@ -44,6 +44,8 @@ optimize:
   vehicle:
     eta_charge: 0.95
     eta_discharge: 0.95
+  site:
+    grid_connection_limit: 1000
 
 plot:
   dispatch: "results/dispatch.csv"

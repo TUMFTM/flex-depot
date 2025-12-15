@@ -3,6 +3,7 @@ import pandas as pd
 from tqdm.auto import tqdm
 
 from flex_dep_opt.domain.vehicle import Vehicle
+from flex_dep_opt.domain.site import Site
 from flex_dep_opt.io.prices_io import build_prices_from_settings
 from flex_dep_opt.io.mobility_io import (
     read_mobility_bounds_csv,
@@ -191,6 +192,7 @@ def run_mpc(cfg: dict):
         # --------------------------------------------------------
         model = fleet_commercialization(
             vehicle=Vehicle(**opt_cfg["vehicle"]),
+            site=Site(**opt_cfg["site"]),
             prices_by_market=window_prices,
             timestep_hours=step_hours,
             virtual_arbitrage=virtual_arbitrage,
