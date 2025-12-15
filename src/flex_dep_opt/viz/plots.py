@@ -301,6 +301,7 @@ def plot_mpc_dispatch_plotly(
     dispatch: pd.DataFrame,
     prices_by_market: dict[str, pd.Series] | None = None,
     *,
+    commit_df: pd.DataFrame | None = None,
     title: str = "MPC Flexband Dispatch and Market Positions",
 ) -> go.Figure:
     """
@@ -325,6 +326,21 @@ def plot_mpc_dispatch_plotly(
         c for c in dispatch.columns
         if c.startswith("p_") and c.endswith("_kw")
     ]
+
+    commit_time_by_market: dict[str, pd.Series] = {}
+
+    if commit_df is not None and not commit_df.empty:
+        tmp = commit_df.copy()
+        tmp["delivery_time"] = pd.to_datetime(tmp["delivery_time"])
+        tmp["current_time"] = pd.to_datetime(tmp["current_time"])
+        if "market" in tmp.columns and "commit_now" in tmp.columns:
+            for mk in tmp["market"].unique():
+                mk_rows = tmp[(tmp["market"] == mk) & (tmp["commit_now"] == True)]
+                if mk_rows.empty:
+                    continue
+                # one commit per delivery_time expected; take first if duplicates
+                s = mk_rows.sort_values("current_time").drop_duplicates("delivery_time")
+                commit_time_by_market[mk] = s.set_index("delivery_time")["current_time"]
 
     fig = make_subplots(
         rows=4,
@@ -421,8 +437,23 @@ def plot_mpc_dispatch_plotly(
         inner = col[2:-3]
         mk_code = inner.upper()
         values = dispatch[col]
+
         colors = [_rgba(mk_code, 1.0 if v > 0 else 0.3) for v in values]
         labels = ["Sell" if v > 0 else "Buy" if v < 0 else "Neutral" for v in values]
+
+        # Build commit time strings aligned to dispatch.index (delivery_time axis)
+        commit_times = None
+        if mk_code in commit_time_by_market:
+            ct = commit_time_by_market[mk_code].reindex(dispatch.index)
+            # Format nicely; NaT -> "not committed"
+            commit_times = ct.dt.strftime("%Y-%m-%d %H:%M").fillna("not committed")
+        else:
+            commit_times = pd.Series(["not committed"] * len(dispatch.index), index=dispatch.index)
+
+        custom = pd.DataFrame({
+            "side": labels,
+            "commit_time": commit_times.values,
+        }).values
 
         fig.add_trace(
             go.Bar(
@@ -430,8 +461,12 @@ def plot_mpc_dispatch_plotly(
                 y=values,
                 name=f"{mk_code} Position [kW]",
                 marker_color=colors,
-                customdata=labels,
-                hovertemplate="%{y:.1f} kW<br>%{customdata}",
+                customdata=custom,
+                hovertemplate=(
+                    "%{y:.1f} kW<br>"
+                    "%{customdata[0]}<br>"
+                    "Committed at: %{customdata[1]}<extra></extra>"
+                ),
             ),
             row=4, col=1
         )

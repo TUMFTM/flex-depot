@@ -85,7 +85,11 @@ def fleet_commercialization(
     # 4) Pyomo model structure
     # ----------------------------
     m = pyo.ConcreteModel()
-    m.T = pyo.RangeSet(0, len(time_index) - 1)
+
+    N = len(time_index)  # number of decision steps
+    m.T = pyo.RangeSet(0, N - 1)  # decisions (power, markets)
+    m.S = pyo.RangeSet(0, N)  # states (energy) incl. terminal
+
     m.MARKETS = pyo.Set(initialize=list(markets))
     m.dt = pyo.Param(initialize=float(timestep_hours))
 
@@ -100,8 +104,10 @@ def fleet_commercialization(
     # Flex bands (power + energy)
     m.P_lower = pyo.Param(m.T, initialize=lambda mdl, t: float(P_lower_ser.iloc[int(t)]))
     m.P_upper = pyo.Param(m.T, initialize=lambda mdl, t: float(P_upper_ser.iloc[int(t)]))
-    m.E_lower = pyo.Param(m.T, initialize=lambda mdl, t: float(E_lower_ser.iloc[int(t)]))
-    m.E_upper = pyo.Param(m.T, initialize=lambda mdl, t: float(E_upper_ser.iloc[int(t)]))
+    E_lower_ext = pd.concat([E_lower_ser, E_lower_ser.iloc[[-1]]], ignore_index=True)
+    E_upper_ext = pd.concat([E_upper_ser, E_upper_ser.iloc[[-1]]], ignore_index=True)
+    m.E_lower = pyo.Param(m.S, initialize=lambda mdl, s: float(E_lower_ext.iloc[int(s)]))
+    m.E_upper = pyo.Param(m.S, initialize=lambda mdl, s: float(E_upper_ext.iloc[int(s)]))
 
     # Tight per-timestep import/export maxima (Big-M values)
     m.P_ch_max_t = pyo.Param(m.T, initialize=lambda mdl, t: float(P_ch_max_ser.iloc[int(t)]))
@@ -143,7 +149,10 @@ def fleet_commercialization(
     m.p_ch = pyo.Var(m.T, within=pyo.NonNegativeReals)   # Charging power (import magnitude) [kW]
     m.p_dis = pyo.Var(m.T, within=pyo.NonNegativeReals)  # Discharging power (export magnitude) [kW]
     m.p_net = pyo.Var(m.T, within=pyo.Reals)             # Net grid power (+export / -import) [kW]
-    m.E = pyo.Var(m.T, within=pyo.Reals)                 # Aggregated energy state [kWh] (can be negative)
+    m.E = pyo.Var(m.S, within=pyo.Reals)                 # Aggregated energy state [kWh] (can be negative)
+
+    # Initial condition
+    m.energy_init = pyo.Constraint(expr=m.E[0] == m.E0)
 
     m.p_market = pyo.Var(
         m.MARKETS, m.T,
@@ -185,25 +194,23 @@ def fleet_commercialization(
 
     # Energy state dynamics with efficiencies
     def energy_state_rule(mdl, t):
-        if t == 0:
-            return mdl.E[t] == mdl.E0 \
-                   + mdl.eta_c * mdl.p_ch[t] * mdl.dt \
-                   - (1.0 / mdl.eta_d) * mdl.p_dis[t] * mdl.dt
-        return mdl.E[t] == mdl.E[t - 1] \
-               + mdl.eta_c * mdl.p_ch[t] * mdl.dt \
-               - (1.0 / mdl.eta_d) * mdl.p_dis[t] * mdl.dt
-    m.energy_state = pyo.Constraint(m.T, rule=energy_state_rule)  # Updates energy state based on (in)efficiency
+        # t in decision set 0..N-1 updates E[t+1]
+        return mdl.E[t + 1] == mdl.E[t] \
+            + mdl.eta_c * mdl.p_ch[t] * mdl.dt \
+            - (1.0 / mdl.eta_d) * mdl.p_dis[t] * mdl.dt
+
+    m.energy_state = pyo.Constraint(m.T, rule=energy_state_rule)
 
     # Fleet energy band (lower bound)
     m.E_lb = pyo.Constraint(
-        m.T,
-        rule=lambda mdl, t: mdl.E[t] >= mdl.E_lower[t]
+        m.S,
+        rule=lambda mdl, s: mdl.E[s] >= mdl.E_lower[s]
     )  # Enforces energy not below fleet lower energy band
 
     # Fleet energy band (upper bound)
     m.E_ub = pyo.Constraint(
-        m.T,
-        rule=lambda mdl, t: mdl.E[t] <= mdl.E_upper[t]
+        m.S,
+        rule=lambda mdl, s: mdl.E[s] <= mdl.E_upper[s]
     )  # Enforces energy not above fleet upper energy band
 
     # ----------------------------

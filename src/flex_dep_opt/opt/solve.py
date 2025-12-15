@@ -81,56 +81,67 @@ def solve_model(
 
 def extract_dispatch(model: pyo.ConcreteModel, time_index) -> pd.DataFrame:
     """
-    Extract dispatch time series (charging, discharging, SOC, and market positions)
-    from a solved multi-market model.
+    Extract dispatch time series from a solved multi-market model.
 
-    Handles:
-      - p_ch[t]
-      - p_dis[t]
-      - E[t]
-      - p_market[market, t]  for all markets in model.MARKETS
-
-    Parameters
-    ----------
-    model : pyo.ConcreteModel
-        The solved model.
-    time_index : pandas.DatetimeIndex
-        Timestamps matching model.T.
-
-    Returns
-    -------
-    pandas.DataFrame
-        Includes physical variables and all market dispatches.
+    Convention (new):
+      - E[s] is the energy state at the BEGINNING of interval s (state index S = 0..N)
+      - Decisions (p_ch, p_dis, p_net, p_market) live on T = 0..N-1
+      - Transition: E[t+1] = E[t] + ...
     """
-    # Basic consistency check
-    T_len = len(list(model.T))
+    # Basic consistency check (decisions live on T)
+    T_list = list(model.T)
+    T_len = len(T_list)
     if len(time_index) != T_len:
         raise ValueError(
             f"time_index length ({len(time_index)}) does not match model horizon ({T_len})."
         )
 
-    # Base dispatch dataframe
     df = pd.DataFrame(index=time_index)
 
-    # Physical variables
-    df["E_kWh"] = [pyo.value(model.E[t]) for t in model.T]
-    df["p_net_kW"] = [pyo.value(model.p_net[t]) for t in model.T]
-    df["p_ch_kW"]  = [pyo.value(model.p_ch[t])  for t in model.T]
-    df["p_dis_kW"] = [pyo.value(model.p_dis[t]) for t in model.T]
+    # -------------------------
+    # Physical variables (T)
+    # -------------------------
+    df["p_net_kW"] = [pyo.value(model.p_net[t]) for t in T_list]
+    df["p_ch_kW"]  = [pyo.value(model.p_ch[t])  for t in T_list]
+    df["p_dis_kW"] = [pyo.value(model.p_dis[t]) for t in T_list]
 
+    # -------------------------
+    # Energy state (S or T)
+    # -------------------------
+    # New model: E is indexed by S (0..N). We publish both E[t] and E[t+1] aligned to time_index.
+    if hasattr(model, "S"):
+        df["E_kWh"] = [pyo.value(model.E[t]) for t in T_list]           # state at timestamp (start of interval)
+        df["E_next_kWh"] = [pyo.value(model.E[t + 1]) for t in T_list]  # state after interval
+        # Optional: terminal value (single number) can be useful for debugging
+        df.attrs["E_terminal_kWh"] = float(pyo.value(model.E[T_len]))
+    else:
+        # Fallback to old convention
+        df["E_kWh"] = [pyo.value(model.E[t]) for t in T_list]
 
-    # Add all market variables dynamically
+    # -------------------------
+    # Market positions (T)
+    # -------------------------
     if hasattr(model, "MARKETS"):
         for mk in model.MARKETS:
-            col = f"p_{mk.lower()}_kw"
-            df[col] = [pyo.value(model.p_market[mk, t]) for t in model.T]
+            col = f"p_{str(mk).lower()}_kw"
+            df[col] = [pyo.value(model.p_market[mk, t]) for t in T_list]
 
-    if hasattr(model, "E_lower"):
-        df["E_lower_kWh"] = [pyo.value(model.E_lower[t]) for t in model.T]
-        df["E_upper_kWh"] = [pyo.value(model.E_upper[t]) for t in model.T]
+    # -------------------------
+    # Bands for plotting/debug (align to T)
+    # -------------------------
+    if hasattr(model, "E_lower") and hasattr(model, "S"):
+        df["E_lower_kWh"] = [pyo.value(model.E_lower[t]) for t in T_list]
+        df["E_upper_kWh"] = [pyo.value(model.E_upper[t]) for t in T_list]
+        # Optional: next-step bounds aligned to the same row (useful to see upcoming tightening)
+        df["E_lower_next_kWh"] = [pyo.value(model.E_lower[t + 1]) for t in T_list]
+        df["E_upper_next_kWh"] = [pyo.value(model.E_upper[t + 1]) for t in T_list]
+    elif hasattr(model, "E_lower"):
+        # Old convention
+        df["E_lower_kWh"] = [pyo.value(model.E_lower[t]) for t in T_list]
+        df["E_upper_kWh"] = [pyo.value(model.E_upper[t]) for t in T_list]
 
     if hasattr(model, "P_lower"):
-        df["P_lower_kW"] = [pyo.value(model.P_lower[t]) for t in model.T]
-        df["P_upper_kW"] = [pyo.value(model.P_upper[t]) for t in model.T]
+        df["P_lower_kW"] = [pyo.value(model.P_lower[t]) for t in T_list]
+        df["P_upper_kW"] = [pyo.value(model.P_upper[t]) for t in T_list]
 
     return df

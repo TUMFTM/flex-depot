@@ -2,6 +2,7 @@ from pathlib import Path
 import pandas as pd
 import webbrowser
 import plotly.io as pio
+import os
 
 from flex_dep_opt.viz.plots import plot_dispatch_multimarket_plotly,plot_market_cashflows_plotly,plot_mpc_dispatch_plotly, plot_mpc_onepager
 from flex_dep_opt.io.prices_io import build_prices_from_settings
@@ -80,11 +81,26 @@ def run_plot_mpc(cfg: dict):
     start = pd.to_datetime(sim["start"]).tz_localize("Europe/Berlin")
     end = pd.to_datetime(sim["end"]).tz_localize("Europe/Berlin")
 
+    # --- Load dispatch_mpc.csv (robust) ---
     df = pd.read_csv(plot_cfg["dispatch_mpc"])
     idx = pd.to_datetime(df["time"], utc=True).dt.tz_convert("Europe/Berlin")
     dispatch = df.drop(columns=["time"])
     dispatch.index = idx
     dispatch = dispatch.loc[start:end]
+
+    # --- Load commit_mpc.csv (optional/robust) ---
+    commit_path = plot_cfg.get("commit_mpc", "results/commit_mpc.csv")
+    commit_df = None
+    if os.path.exists(commit_path):
+        cdf = pd.read_csv(commit_path)
+        # Parse times; delivery_time/current_time are timestamps written by MPC
+        cdf["delivery_time"] = pd.to_datetime(cdf["delivery_time"], utc=True).dt.tz_convert("Europe/Berlin")
+        cdf["current_time"] = pd.to_datetime(cdf["current_time"], utc=True).dt.tz_convert("Europe/Berlin")
+        commit_df = cdf
+        # Optional: restrict to visible window for speed
+        commit_df = commit_df[(commit_df["delivery_time"] >= start) & (commit_df["delivery_time"] <= end)]
+    else:
+        print(f"INFO: commit_mpc file not found: {commit_path} (plot without commit hover)")
 
     prices_by_market = build_prices_from_settings(cfg)
     for mkt, s in prices_by_market.items():
@@ -93,6 +109,7 @@ def run_plot_mpc(cfg: dict):
     fig = plot_mpc_dispatch_plotly(
         dispatch=dispatch,
         prices_by_market=prices_by_market,
+        commit_df=commit_df,
         title=plot_cfg.get("title", "MPC Flexband Dispatch and Market Positions"),
     )
 
