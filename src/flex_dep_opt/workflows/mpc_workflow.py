@@ -172,20 +172,43 @@ def run_mpc(cfg: dict):
         )
 
         # --------------------------------------------------------
-        # 10.3) Build market activity masks (gate closures)
+        # 10.3) Build market activity masks (GATE CLOSURES only)
         # --------------------------------------------------------
-        window_masks = build_market_activity_mask_for_time(
+        # NOTE:
+        # We distinguish between two different masks:
+        #
+        # trading_mask:
+        #   Encodes exogenous market rules (gate closures).
+        #   Determines whether a market position is still legally tradable.
+        #   Used to trigger commitments once the market closes.
+        #
+        # decision_mask:
+        #   Encodes endogenous information constraints of the optimizer.
+        #   Limits the optimizer's freedom to choose new positions when
+        #   price information is unavailable (e.g. intraday price foresight).
+        #
+        # A market may be open for trading while the optimizer deliberately
+        # refrains from trading due to missing information.
+        # Therefore, decision_mask is always a subset of trading_mask.
+        # In general: decision_mask ⊆ trading_mask
+
+        trading_masks = build_market_activity_mask_for_time(
             current_time=current_time,
             delivery_times=window_idx,
             optimization_cfg=opt_conf,
         )
 
-        # Intraday horizon cut-off
+        # --------------------------------------------------------
+        # 10.3b) Build DECISION masks = trading masks + price foresight
+        # --------------------------------------------------------
+        decision_masks = {mk: s.copy() for mk, s in trading_masks.items()}
+
+        # Intraday price-foresight cut-off (information constraint, not gate-closure!)
         id_horizon_end = current_time + pd.Timedelta(hours=id_horizon_hours)
-        if "ID" in window_masks:
-            id_mask = window_masks["ID"].copy()
+        if "ID" in decision_masks:
+            id_mask = decision_masks["ID"].copy()
             id_mask[window_idx > id_horizon_end] = False
-            window_masks["ID"] = id_mask
+            decision_masks["ID"] = id_mask
 
         # --------------------------------------------------------
         # 10.4) Build and parameterize optimization model
@@ -197,7 +220,7 @@ def run_mpc(cfg: dict):
             timestep_hours=step_hours,
             virtual_arbitrage=virtual_arbitrage,
             degradation_cost_eur_per_kwh=c_deg,
-            market_activity_mask=window_masks,
+            market_activity_mask=decision_masks,
             committed_positions={
                 mk: committed_positions[mk].loc[window_idx]
                 for mk in committed_positions
@@ -228,10 +251,11 @@ def run_mpc(cfg: dict):
         rows.append(first_row)
 
         # --------------------------------------------------------
-        # 10.7) Commit market positions at gate closure
+        # 10.7) Commit market positions at gate closure (TRADING masks only)
         # --------------------------------------------------------
         next_time = current_time + pd.Timedelta(hours=step_hours)
-        masks_next = build_market_activity_mask_for_time(
+
+        trading_masks_next = build_market_activity_mask_for_time(
             current_time=next_time,
             delivery_times=window_idx,
             optimization_cfg=opt_conf,
@@ -243,8 +267,8 @@ def run_mpc(cfg: dict):
                 continue
 
             for tau in window_idx:
-                now_open = bool(window_masks[mk].loc[tau])
-                next_open = bool(masks_next[mk].loc[tau])
+                now_open = bool(trading_masks[mk].loc[tau])
+                next_open = bool(trading_masks_next[mk].loc[tau])
 
                 row = {
                     "market": mk,

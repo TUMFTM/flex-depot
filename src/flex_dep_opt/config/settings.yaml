@@ -27,13 +27,12 @@ optimization:
       gate_closure_hour: "12:00"                # D-1
       closes_previous_day: true
     intraday:
-      offset_minutes_before_delivery: 30       # trading until T-30min
+      offset_minutes_before_delivery: 5       # trading until T-30min
 
   mpc:
     enabled: true
-    horizon_hours: 48
     da_horizon_hours: 48
-    id_horizon_hours: 12
+    id_horizon_hours: 3
 
   mobility:
     enabled: true
@@ -45,7 +44,7 @@ optimize:
     eta_charge: 0.95
     eta_discharge: 0.95
   site:
-    grid_connection_limit: 1000
+    grid_connection_limit: 10000
 
 plot:
   dispatch: "results/dispatch.csv"
