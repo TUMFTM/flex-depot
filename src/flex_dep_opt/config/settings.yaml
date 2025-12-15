@@ -14,10 +14,13 @@ optimization:
       enabled: true
       source: "data/prices/example_prices_ID.csv"
       tx_fee_eur_per_mwh: 3.0                   # €/MWh
+
   virtual_arbitrage: false
+
   degradation:
     enabled: true
     cost_eur_per_mwh_throughput: 20.0
+
   trading:
     mode: "realistic"   # "none", "realistic"
     dayahead:
@@ -25,11 +28,13 @@ optimization:
       closes_previous_day: true
     intraday:
       offset_minutes_before_delivery: 30       # trading until T-30min
+
   mpc:
     enabled: true
     horizon_hours: 48
     da_horizon_hours: 48
     id_horizon_hours: 12
+
   mobility:
     enabled: true
     bounds_file: "data/mobility/fleet_3_vb_bounds_15min.csv"

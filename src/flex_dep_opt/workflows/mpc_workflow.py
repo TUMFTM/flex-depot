@@ -5,7 +5,7 @@ import pyomo.environ as pyo
 
 from flex_dep_opt.domain.vehicle import Vehicle
 from flex_dep_opt.io.prices_io import build_prices_from_settings
-from flex_dep_opt.io.mobility_io import read_mobility_bounds_csv, slice_mobility_bounds
+from flex_dep_opt.io.mobility_io import read_mobility_bounds_csv, align_and_validate_mobility_bounds
 from flex_dep_opt.opt.model import fleet_commercialization
 from flex_dep_opt.opt.solve import solve_model, extract_dispatch
 from flex_dep_opt.market.trading_rules import build_market_activity_mask_for_time
@@ -30,6 +30,7 @@ def run_mpc(cfg: dict):
     if mob_cfg.get("enabled", False):
         bounds_path = mob_cfg["bounds_file"]
         mobility_bounds_full = read_mobility_bounds_csv(bounds_path)
+
 
     def compute_gate_closure(market: str, tau: pd.Timestamp) -> pd.Timestamp:
         """
@@ -135,7 +136,10 @@ def run_mpc(cfg: dict):
         # 2a) Mobilitäts-Bounds für Fenster bauen
         window_mobility_bounds = None
         if mobility_bounds_full is not None:
-            window_mobility_bounds = slice_mobility_bounds(mobility_bounds_full, window_idx)
+            window_mobility_bounds = align_and_validate_mobility_bounds(
+                bounds=mobility_bounds_full,
+                time_index=window_idx,
+            )
 
         # 2b) Handelsmasken entsprechend GATE CLOSURE REGELN
         window_masks = build_market_activity_mask_for_time(current_time=current_time,delivery_times=window_idx,optimization_cfg=opt_conf)
@@ -156,7 +160,6 @@ def run_mpc(cfg: dict):
             degradation_cost_eur_per_kwh=c_deg,
             market_activity_mask=window_masks,
             committed_positions={mk: committed_positions[mk].loc[window_idx] for mk in committed_positions},
-            enforce_terminal_soc=False,
             mobility_bounds=window_mobility_bounds,
         )
 

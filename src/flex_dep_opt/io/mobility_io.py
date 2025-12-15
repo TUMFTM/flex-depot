@@ -29,9 +29,41 @@ def read_mobility_bounds_csv(path: str, tz: str = "Europe/Berlin") -> pd.DataFra
     bounds = bounds.sort_index()
     return bounds
 
-def slice_mobility_bounds(bounds: pd.DataFrame, window_index: pd.DatetimeIndex) -> pd.DataFrame:
-    window_bounds = bounds.reindex(window_index)
-    if window_bounds.isnull().any().any():
-        missing_idx = window_bounds[window_bounds.isnull().any(axis=1)].index[:5]
+def align_and_validate_mobility_bounds(
+    bounds: pd.DataFrame,
+    time_index: pd.DatetimeIndex,
+    *,
+    require_complete: bool = True,
+    check_monotone: bool = True,
+    check_band_consistency: bool = True,
+) -> pd.DataFrame:
+    """
+    Align mobility bounds to a target time_index and optionally validate consistency.
+
+    - Reindexes to time_index
+    - Ensures no missing timestamps (if require_complete)
+    - Ensures E_lower <= E_upper and P_lower <= P_upper (if check_band_consistency)
+    """
+    if not isinstance(bounds.index, pd.DatetimeIndex):
+        raise ValueError("mobility bounds must have a DatetimeIndex")
+
+    b = bounds.sort_index().reindex(time_index)
+
+    if require_complete and b.isnull().any().any():
+        missing_idx = b[b.isnull().any(axis=1)].index[:5]
         raise ValueError(f"Missing mobility bounds for timestamps (examples): {list(missing_idx)}")
-    return window_bounds
+
+    if check_band_consistency:
+        bad_power = (b["Power_lower_kW"] > b["Power_upper_kW"])
+        bad_energy = (b["Capacity_lower_kWh"] > b["Capacity_upper_kWh"])
+        if bad_power.any():
+            ex = b.index[bad_power][:5]
+            raise ValueError(f"Inconsistent power band (lower > upper) at: {list(ex)}")
+        if bad_energy.any():
+            ex = b.index[bad_energy][:5]
+            raise ValueError(f"Inconsistent energy band (lower > upper) at: {list(ex)}")
+
+    if check_monotone and not b.index.is_monotonic_increasing:
+        b = b.sort_index()
+
+    return b
