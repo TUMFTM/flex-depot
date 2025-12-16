@@ -11,6 +11,7 @@ from typing import Dict
 MARKET_COLORS: Dict[str, tuple[int, int, int]] = {
     "DA": (0,101,189),
     "ID": (227,114,34),
+    "IMB": (120, 80, 160),
     #"DA": (228,0,69),
     #"ID": (145,185,0),
     # später z.B. "FCR": (0, 120, 255),
@@ -327,8 +328,16 @@ def plot_mpc_dispatch_plotly(
         if c.startswith("p_") and c.endswith("_kw")
     ]
 
-    commit_time_by_market: dict[str, pd.Series] = {}
+    # --- Imbalance / reBAP columns (optional) ---
+    has_imb = ("p_imb_pos_kW" in dispatch.columns) and ("p_imb_neg_kW" in dispatch.columns)
+    if has_imb:
+        p_imb_net = dispatch["p_imb_pos_kW"] - dispatch["p_imb_neg_kW"]
+    else:
+        p_imb_net = None
+    has_used_flag = "used_rebap" in dispatch.columns
 
+    # Commit times
+    commit_time_by_market: dict[str, pd.Series] = {}
     if commit_df is not None and not commit_df.empty:
         tmp = commit_df.copy()
         tmp["delivery_time"] = pd.to_datetime(tmp["delivery_time"])
@@ -365,6 +374,9 @@ def plot_mpc_dispatch_plotly(
     if prices_by_market is not None:
         for mk, s in prices_by_market.items():
             price_mwh = s * 1000.0
+            # Default visibility: hide reBAP/imbalance prices until legend click
+            is_imb_price = mk in {"IMB_POS", "IMB_NEG", "IMB"}  # robust for your naming
+
             fig.add_trace(
                 go.Scatter(
                     x=price_mwh.index,
@@ -372,6 +384,7 @@ def plot_mpc_dispatch_plotly(
                     mode="lines",
                     name=f"{mk} Price [€/MWh]",
                     line=dict(width=3, color=_rgb(mk)),
+                    visible="legendonly" if is_imb_price else True,
                 ),
                 row=1, col=1
             )
@@ -470,6 +483,75 @@ def plot_mpc_dispatch_plotly(
             ),
             row=4, col=1
         )
+
+        # --- Row 4b: Imbalance (reBAP) net position ---
+        if has_imb:
+            values = p_imb_net
+
+            colors = [_rgba("IMB", 1.0 if v > 0 else 0.3) for v in values]
+            labels = ["Sell" if v > 0 else "Buy" if v < 0 else "Neutral" for v in values]
+
+            if has_used_flag:
+                used = dispatch["used_rebap"].astype(bool)
+                used_str = used.map(lambda x: "reBAP used" if x else "no reBAP").values
+            else:
+                used_str = ["reBAP unknown"] * len(dispatch)
+
+            custom = pd.DataFrame({
+                "side": labels,
+                "used": used_str,
+                "pos": dispatch["p_imb_pos_kW"].values,
+                "neg": dispatch["p_imb_neg_kW"].values,
+            }).values
+
+            fig.add_trace(
+                go.Bar(
+                    x=dispatch.index,
+                    y=values,
+                    name="IMB (reBAP) Net [kW]",
+                    marker_color=colors,
+                    customdata=custom,
+                    hovertemplate=(
+                        "IMB net: %{y:.1f} kW<br>"
+                        "%{customdata[0]}<br>"
+                        "%{customdata[1]}<br>"
+                        "pos: %{customdata[2]:.1f} kW<br>"
+                        "neg: %{customdata[3]:.1f} kW"
+                        "<extra></extra>"
+                    ),
+                ),
+                row=4, col=1
+            )
+
+            # --- Optional: highlight periods where reBAP was used ---
+        if has_used_flag:
+            used = dispatch["used_rebap"].astype(bool).fillna(False)
+
+            # find contiguous True segments
+            start = None
+            for ts, flag in used.items():
+                if flag and start is None:
+                    start = ts
+                if (not flag) and start is not None:
+                    end = ts
+                    fig.add_vrect(
+                        x0=start, x1=end,
+                        fillcolor="rgba(120,80,160,0.12)",
+                        line_width=0,
+                        layer="below",
+                        row=4, col=1
+                    )
+                    start = None
+
+            # handle if ends with True
+            if start is not None:
+                fig.add_vrect(
+                    x0=start, x1=dispatch.index[-1],
+                    fillcolor="rgba(120,80,160,0.12)",
+                    line_width=0,
+                    layer="below",
+                    row="all", col=1
+                )
 
     fig.update_yaxes(title_text="Price [€/MWh]", row=1, col=1)
     fig.update_yaxes(title_text="Power [kW]", row=2, col=1)

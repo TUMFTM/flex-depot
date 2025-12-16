@@ -1,6 +1,8 @@
 from pathlib import Path
 import pandas as pd
 from tqdm.auto import tqdm
+import pyomo.environ as pyo
+
 
 from flex_dep_opt.domain.vehicle import Vehicle
 from flex_dep_opt.domain.site import Site
@@ -241,7 +243,8 @@ def run_mpc(cfg: dict):
                     for mk in committed_positions
                 },
                 mobility_bounds=window_mobility_bounds,
-                allow_imbalance=False
+                allow_imbalance=False,
+                imbalance_volume_penalty_eur_per_kwh=0.0
             )
 
             # Set initial energy state for this MPC window
@@ -256,52 +259,94 @@ def run_mpc(cfg: dict):
                 model.E0.set_value(float(E_state))
 
             # --------------------------------------------------------
-            # 10.5) Solve optimization problem
+            # 10.5) Solve optimization problem (Two-pass: no reBAP -> reBAP fallback)
             # --------------------------------------------------------
-            try:
-                solve_model(model)
-                used_rebap = False
-            except RuntimeError as e1:
-                if not imb_enabled:
-                    raise
-                model = fleet_commercialization(
-                    vehicle=Vehicle(**opt_cfg["vehicle"]),
-                    site=Site(**opt_cfg["site"]),
-                    prices_by_market=window_prices,
-                    timestep_hours=step_hours,
-                    virtual_arbitrage=virtual_arbitrage,
-                    degradation_cost_eur_per_kwh=c_deg,
-                    market_activity_mask=decision_masks,
-                    committed_positions={
-                        mk: committed_positions[mk].loc[window_idx]
-                        for mk in committed_positions
-                    },
-                    mobility_bounds=window_mobility_bounds,
-                    allow_imbalance=True,
-                    imbalance_prices_pos=window_imb_pos,
-                    imbalance_prices_neg=window_imb_neg
-                )
+            solved = False
+            used_rebap = False
 
-                # Set initial energy state for this MPC window
+            # Helper to set E0 consistently on a given model
+            def _set_E0(_model):
                 if window_mobility_bounds is not None:
-                    lb0 = window_mobility_bounds["Capacity_lower_kWh"].iloc[0]
-                    ub0 = window_mobility_bounds["Capacity_upper_kWh"].iloc[0]
-                    E0 = E_state if i > 0 else 0.5 * (lb0 + ub0)
+                    lb0 = float(window_mobility_bounds["Capacity_lower_kWh"].iloc[0])
+                    ub0 = float(window_mobility_bounds["Capacity_upper_kWh"].iloc[0])
+                    E0 = float(E_state if i > 0 else 0.5 * (lb0 + ub0))
                     if not (lb0 - 1e-6 <= E0 <= ub0 + 1e-6):
-                        logger.warning(f"E0 out of bounds at {current_time}: E0={E0}, lb={lb0}, ub={ub0} (clamping)")
-                    model.E0.set_value(float(min(max(E0, lb0), ub0)))
+                        logger.warning(
+                            f"E0 out of bounds at {current_time}: E0={E0}, lb={lb0}, ub={ub0} (clamping)"
+                        )
+                    _model.E0.set_value(float(min(max(E0, lb0), ub0)))
                 else:
-                    model.E0.set_value(float(E_state))
+                    _model.E0.set_value(float(E_state))
 
-                # Solve model incl. reBAP
+            # ---- PASS 1: solve without imbalance
+            try:
+                _set_E0(model)
                 solve_model(model)
-                used_rebap = True
+                solved = True
+                used_rebap = False
 
+            except RuntimeError as e1:
+                logger.error(f"PASS1 infeasible: {e1}")
+
+                # If no imbalance fallback enabled, abort
+                if not imb_enabled:
+                    solved = False
+                else:
+                    # ---- PASS 2: rebuild with imbalance
+                    model2 = fleet_commercialization(
+                        vehicle=Vehicle(**opt_cfg["vehicle"]),
+                        site=Site(**opt_cfg["site"]),
+                        prices_by_market=window_prices,
+                        timestep_hours=step_hours,
+                        virtual_arbitrage=virtual_arbitrage,
+                        degradation_cost_eur_per_kwh=c_deg,
+                        market_activity_mask=decision_masks,
+                        committed_positions={
+                            mk: committed_positions[mk].loc[window_idx]
+                            for mk in committed_positions
+                        },
+                        mobility_bounds=window_mobility_bounds,
+                        allow_imbalance=True,
+                        imbalance_prices_pos=window_imb_pos,
+                        imbalance_prices_neg=window_imb_neg,
+                        imbalance_volume_penalty_eur_per_kwh=float(
+                            imb_cfg.get("imbalance_volume_penalty_eur_per_kwh", 1000.0)
+                        ),
+                    )
+
+                    try:
+                        _set_E0(model2)
+                        solve_model(model2)
+                        solved = True
+                        used_rebap = True
+
+                        if hasattr(model2, "p_imb_pos"):
+                            max_pos = max(pyo.value(model2.p_imb_pos[t]) for t in model2.T)
+                            max_neg = max(pyo.value(model2.p_imb_neg[t]) for t in model2.T)
+                            logger.warning(
+                                f"[PASS2] {current_time} max_imb_pos={max_pos:.3f} kW, max_imb_neg={max_neg:.3f} kW")
+                            imb0 = pyo.value(model2.p_imb_pos[0]) - pyo.value(model2.p_imb_neg[0])
+                            logger.warning(f"[PASS2] {current_time} imb0={imb0:.3f} kW, max_pos={max_pos:.3f} kW")
+
+                        # IMPORTANT: from here on, use the solved fallback model
+                        model = model2
+
+                    except RuntimeError as e2:
+                        logger.error(f"PASS2 also infeasible: {e2}")
+                        solved = False
+
+            # If neither pass solved, stop MPC cleanly (avoid uninitialized VarData crashes)
+            if not solved:
+                logger.error(f"Both passes infeasible at current_time={current_time} → aborting MPC loop.")
+                break
 
             # --------------------------------------------------------
             # 10.6) Extract first-step dispatch
             # --------------------------------------------------------
             dispatch_window = extract_dispatch(model, window_idx)
+            if i == 0 and used_rebap:
+                dispatch_window.to_csv("results/debug_pass2_window.csv")
+
             first_row = dispatch_window.iloc[0].copy()
             first_row["used_rebap"] = used_rebap
             first_row.name = window_idx[0]

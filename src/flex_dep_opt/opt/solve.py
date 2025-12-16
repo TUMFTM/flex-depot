@@ -151,4 +151,5 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index) -> pd.DataFrame:
         df["p_imb_pos_kW"] = [pyo.value(model.p_imb_pos[t]) for t in model.T]
         df["p_imb_neg_kW"] = [pyo.value(model.p_imb_neg[t]) for t in model.T]
 
+
     return df

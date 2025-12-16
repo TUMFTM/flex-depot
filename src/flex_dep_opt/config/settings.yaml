@@ -1,6 +1,6 @@
 simulation:
   start: "2025-10-01 00:00"
-  end: "2025-10-14 23:45"
+  end: "2025-10-05 23:45"
   timestep_hours: 0.25
 
 optimization:
@@ -43,6 +43,7 @@ optimization:
     only_on_infeasible: true
     source_pos: "data/prices/reBAP_prices_pos.csv"
     source_neg: "data/prices/reBAP_prices_neg.csv"
+    imbalance_volume_penalty_eur_per_kwh: 1000
 
 optimize:
   out: "results/dispatch.csv"

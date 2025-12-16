@@ -22,6 +22,7 @@ def fleet_commercialization(
     allow_imbalance: bool = False,
     imbalance_prices_pos: pd.Series | None = None,
     imbalance_prices_neg: pd.Series | None = None,
+    imbalance_volume_penalty_eur_per_kwh: float = 0.0,
 ) -> pyo.ConcreteModel:
     """
     Flex-band based fleet commercialization model.
@@ -118,10 +119,11 @@ def fleet_commercialization(
     m.P_ch_max_t = pyo.Param(m.T, initialize=lambda mdl, t: float(P_ch_max_ser.iloc[int(t)]))
     m.P_dis_max_t = pyo.Param(m.T, initialize=lambda mdl, t: float(P_dis_max_ser.iloc[int(t)]))
 
-    # Efficiency + degradation
+    # Efficiency + degradation + imbalance
     m.eta_c = pyo.Param(initialize=float(vehicle.eta_charge))
     m.eta_d = pyo.Param(initialize=float(vehicle.eta_discharge))
     m.c_deg = pyo.Param(initialize=float(degradation_cost_eur_per_kwh))
+    m.c_imb_vol = pyo.Param(initialize=float(imbalance_volume_penalty_eur_per_kwh))
 
     # Global market max (symmetric)
     m.p_market_max = pyo.Param(initialize=float(p_market_max_value))
@@ -308,22 +310,30 @@ def fleet_commercialization(
         revenue = sum(
             mdl.price[mk, t] * mdl.p_market[mk, t] * mdl.dt
             for mk in mdl.MARKETS for t in mdl.T
-        )  # Revenue from market positions (€/kWh * kW * h = €)
+        )
 
         deg_cost = mdl.c_deg * sum(
             (mdl.p_ch[t] + mdl.p_dis[t]) * mdl.dt
             for t in mdl.T
-        )  # Degradation proportional to throughput (kWh)
+        )
 
-        imb = 0.0
+        imb_cash = 0.0
+        imb_vol_pen = 0.0
+
         if allow_imbalance:
-            imb = sum(
+            imb_cash = sum(
                 mdl.price_imb_pos[t] * mdl.p_imb_pos[t] * mdl.dt
                 - mdl.price_imb_neg[t] * mdl.p_imb_neg[t] * mdl.dt
                 for t in mdl.T
             )
 
-        return revenue + imb - deg_cost
+            # Penalize absolute imbalance volume (kWh) to prevent schedule-vs-physical arbitrage
+            imb_vol_pen = mdl.c_imb_vol * sum(
+                (mdl.p_imb_pos[t] + mdl.p_imb_neg[t]) * mdl.dt
+                for t in mdl.T
+            )
+
+        return revenue + imb_cash - deg_cost - imb_vol_pen
 
     m.obj = pyo.Objective(rule=obj_expr, sense=pyo.maximize)
 
