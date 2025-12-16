@@ -1,8 +1,5 @@
-from pathlib import Path
 import pandas as pd
 from tqdm.auto import tqdm
-import pyomo.environ as pyo
-
 
 from flex_dep_opt.domain.vehicle import Vehicle
 from flex_dep_opt.domain.site import Site
@@ -18,6 +15,8 @@ from flex_dep_opt.market.trading_rules import build_market_activity_mask_for_tim
 import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+logging.getLogger("gurobipy").setLevel(logging.WARNING)
+logging.getLogger("pyomo").setLevel(logging.WARNING)
 
 
 def run_mpc(cfg: dict):
@@ -153,8 +152,14 @@ def run_mpc(cfg: dict):
     # 10) Rolling-horizon MPC loop
     # ============================================================
     try:
-        pbar = tqdm(range(len(full_index)), desc="MPC", unit="step")
-        for i in pbar:
+        pbar = tqdm(
+            total=len(full_index),
+            desc="MPC",
+            unit="step",
+            dynamic_ncols=True,
+        )
+
+        for i in range(len(full_index)):
             current_time = full_index[i]
             pbar.set_postfix(time=str(current_time), E=f"{E_state:.1f} kWh")
 
@@ -170,10 +175,7 @@ def run_mpc(cfg: dict):
             # --------------------------------------------------------
             # 10.2) Slice prices and mobility bounds
             # --------------------------------------------------------
-            window_prices = {
-                mk: prices_by_market[mk].loc[window_idx]
-                for mk in prices_by_market
-            }
+            window_prices = {mk: prices_by_market[mk].loc[window_idx] for mk in prices_by_market}
 
             window_mobility_bounds = (
                 align_and_validate_mobility_bounds(
@@ -187,28 +189,9 @@ def run_mpc(cfg: dict):
             window_imb_pos = imb_pos_full.loc[window_idx] if (imb_enabled and imb_pos_full is not None) else None
             window_imb_neg = imb_neg_full.loc[window_idx] if (imb_enabled and imb_neg_full is not None) else None
 
-
             # --------------------------------------------------------
             # 10.3) Build market activity masks (GATE CLOSURES only)
             # --------------------------------------------------------
-            # NOTE:
-            # We distinguish between two different masks:
-            #
-            # trading_mask:
-            #   Encodes exogenous market rules (gate closures).
-            #   Determines whether a market position is still legally tradable.
-            #   Used to trigger commitments once the market closes.
-            #
-            # decision_mask:
-            #   Encodes endogenous information constraints of the optimizer.
-            #   Limits the optimizer's freedom to choose new positions when
-            #   price information is unavailable (e.g. intraday price foresight).
-            #
-            # A market may be open for trading while the optimizer deliberately
-            # refrains from trading due to missing information.
-            # Therefore, decision_mask is always a subset of trading_mask.
-            # In general: decision_mask ⊆ trading_mask
-
             trading_masks = build_market_activity_mask_for_time(
                 current_time=current_time,
                 delivery_times=window_idx,
@@ -220,7 +203,6 @@ def run_mpc(cfg: dict):
             # --------------------------------------------------------
             decision_masks = {mk: s.copy() for mk, s in trading_masks.items()}
 
-            # Intraday price-foresight cut-off (information constraint, not gate-closure!)
             id_horizon_end = current_time + pd.Timedelta(hours=id_horizon_hours)
             if "ID" in decision_masks:
                 id_mask = decision_masks["ID"].copy()
@@ -238,31 +220,11 @@ def run_mpc(cfg: dict):
                 virtual_arbitrage=virtual_arbitrage,
                 degradation_cost_eur_per_kwh=c_deg,
                 market_activity_mask=decision_masks,
-                committed_positions={
-                    mk: committed_positions[mk].loc[window_idx]
-                    for mk in committed_positions
-                },
+                committed_positions={mk: committed_positions[mk].loc[window_idx] for mk in committed_positions},
                 mobility_bounds=window_mobility_bounds,
                 allow_imbalance=False,
-                imbalance_volume_penalty_eur_per_kwh=0.0
+                imbalance_volume_penalty_eur_per_kwh=0.0,
             )
-
-            # Set initial energy state for this MPC window
-            if window_mobility_bounds is not None:
-                lb0 = window_mobility_bounds["Capacity_lower_kWh"].iloc[0]
-                ub0 = window_mobility_bounds["Capacity_upper_kWh"].iloc[0]
-                E0 = E_state if i > 0 else 0.5 * (lb0 + ub0)
-                if not (lb0 - 1e-6 <= E0 <= ub0 + 1e-6):
-                    logger.warning(f"E0 out of bounds at {current_time}: E0={E0}, lb={lb0}, ub={ub0} (clamping)")
-                model.E0.set_value(float(min(max(E0, lb0), ub0)))
-            else:
-                model.E0.set_value(float(E_state))
-
-            # --------------------------------------------------------
-            # 10.5) Solve optimization problem (Two-pass: no reBAP -> reBAP fallback)
-            # --------------------------------------------------------
-            solved = False
-            used_rebap = False
 
             # Helper to set E0 consistently on a given model
             def _set_E0(_model):
@@ -278,7 +240,12 @@ def run_mpc(cfg: dict):
                 else:
                     _model.E0.set_value(float(E_state))
 
-            # ---- PASS 1: solve without imbalance
+            # --------------------------------------------------------
+            # 10.5) Solve optimization problem (Two-pass)
+            # --------------------------------------------------------
+            solved = False
+            used_rebap = False
+
             try:
                 _set_E0(model)
                 solve_model(model)
@@ -286,13 +253,12 @@ def run_mpc(cfg: dict):
                 used_rebap = False
 
             except RuntimeError as e1:
+                # tqdm.write(f"PASS1 infeasible: {e1}")
                 logger.error(f"PASS1 infeasible: {e1}")
 
-                # If no imbalance fallback enabled, abort
                 if not imb_enabled:
                     solved = False
                 else:
-                    # ---- PASS 2: rebuild with imbalance
                     model2 = fleet_commercialization(
                         vehicle=Vehicle(**opt_cfg["vehicle"]),
                         site=Site(**opt_cfg["site"]),
@@ -301,10 +267,7 @@ def run_mpc(cfg: dict):
                         virtual_arbitrage=virtual_arbitrage,
                         degradation_cost_eur_per_kwh=c_deg,
                         market_activity_mask=decision_masks,
-                        committed_positions={
-                            mk: committed_positions[mk].loc[window_idx]
-                            for mk in committed_positions
-                        },
+                        committed_positions={mk: committed_positions[mk].loc[window_idx] for mk in committed_positions},
                         mobility_bounds=window_mobility_bounds,
                         allow_imbalance=True,
                         imbalance_prices_pos=window_imb_pos,
@@ -319,23 +282,12 @@ def run_mpc(cfg: dict):
                         solve_model(model2)
                         solved = True
                         used_rebap = True
-
-                        if hasattr(model2, "p_imb_pos"):
-                            max_pos = max(pyo.value(model2.p_imb_pos[t]) for t in model2.T)
-                            max_neg = max(pyo.value(model2.p_imb_neg[t]) for t in model2.T)
-                            logger.warning(
-                                f"[PASS2] {current_time} max_imb_pos={max_pos:.3f} kW, max_imb_neg={max_neg:.3f} kW")
-                            imb0 = pyo.value(model2.p_imb_pos[0]) - pyo.value(model2.p_imb_neg[0])
-                            logger.warning(f"[PASS2] {current_time} imb0={imb0:.3f} kW, max_pos={max_pos:.3f} kW")
-
-                        # IMPORTANT: from here on, use the solved fallback model
-                        model = model2
+                        model = model2  # IMPORTANT
 
                     except RuntimeError as e2:
                         logger.error(f"PASS2 also infeasible: {e2}")
                         solved = False
 
-            # If neither pass solved, stop MPC cleanly (avoid uninitialized VarData crashes)
             if not solved:
                 logger.error(f"Both passes infeasible at current_time={current_time} → aborting MPC loop.")
                 break
@@ -395,6 +347,11 @@ def run_mpc(cfg: dict):
             # 10.8) Roll energy state forward
             # --------------------------------------------------------
             E_state = float(first_row["E_next_kWh"])
+
+            pbar.update(1)
+
+        pbar.close()
+
 
     # ============================================================
     # 11) Export results

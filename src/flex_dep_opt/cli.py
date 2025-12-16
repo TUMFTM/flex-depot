@@ -3,7 +3,7 @@ import yaml
 
 from flex_dep_opt.workflows.mpc_workflow import run_mpc
 from flex_dep_opt.workflows.optimize_workflow import run_optimize
-from flex_dep_opt.workflows.plot_workflow import run_plot, run_plot_mpc, run_plot_mpc_onepager
+from flex_dep_opt.workflows.plot_workflow import run_plot_mpc
 
 
 def load_settings(path: str):
@@ -42,11 +42,6 @@ def main():
         return
 
     # run plot
-    if args.cmd == "plot-results":
-        cfg = load_settings(args.config)
-        run_plot(cfg)
-        return
-
     if args.cmd == "plot-results-mpc":
         cfg = load_settings(args.config)
         run_plot_mpc(cfg)

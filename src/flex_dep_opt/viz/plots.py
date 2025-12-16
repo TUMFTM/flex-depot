@@ -30,157 +30,6 @@ def _rgba(market: str, alpha: float) -> str:
     return f"rgba({r},{g},{b},{alpha})"
 
 
-def plot_dispatch_multimarket_plotly(
-    dispatch: pd.DataFrame,
-    prices_by_market: dict[str, pd.Series] | None = None,
-    *,
-    capacity_kwh: float,
-    title: str = "Dispatch and Market Positions",
-) -> go.Figure:
-    """
-    Multi-market visualization:
-
-      Subplot 1 (oben):   Prices per market [€/MWh]
-      Subplot 2 (mitte):  State of Charge [%] + Net Power [kW]
-      Subplot 3 (unten):  Market positions per market [kW] as bars
-    """
-    if not isinstance(dispatch.index, pd.DatetimeIndex):
-        raise ValueError("Dispatch index must be a DatetimeIndex")
-
-    # Net power (positive = discharging)
-    net_power = dispatch["p_dis_kw"] - dispatch["p_ch_kw"]
-
-    # SoC in %
-    E_kWh = dispatch["E_kWh"]
-    soc_percent = (E_kWh / float(capacity_kwh)) * 100.0
-
-    # Marktspalten automatisch erkennen: p_{mk}_kw, aber p_ch/p_dis ignorieren
-    market_cols = [
-        c for c in dispatch.columns
-        if c.startswith("p_")
-        and c.endswith("_kw")
-        and c not in ("p_ch_kw", "p_dis_kw")
-    ]
-
-    fig = make_subplots(
-        rows=3,
-        cols=1,
-        shared_xaxes=True,
-        vertical_spacing=0.06,
-        specs=[
-            [{"secondary_y": False}],   # Prices
-            [{"secondary_y": True}],    # Net Power + SoC
-            [{"secondary_y": False}],   # Market positions (bars)
-        ],
-        subplot_titles=(
-            "Market Prices",
-            "State of Charge & Net Power",
-            "Market Positions",
-        ),
-    )
-
-    # === Subplot 1: nur Preise ===
-    if prices_by_market is not None:
-        for mk, s in prices_by_market.items():
-            price_mwh = s * 1000.0
-            color = _rgb(mk)
-
-
-            fig.add_trace(
-                go.Scatter(
-                    x=price_mwh.index,
-                    y=price_mwh.values,
-                    mode="lines",
-                    name=f"{mk} Price [€/MWh]",
-                    line=dict(width=2, color=color),
-                ),
-                row=1,
-                col=1,
-            )
-
-    # === Subplot 2: Net Power + SoC ===
-    fig.add_trace(
-        go.Scatter(
-            x=dispatch.index,
-            y=net_power,
-            mode="lines",
-            name="Net Power [kW]",
-            line=dict(width=2),
-            fill="tozeroy",
-            fillcolor="rgba(65,105,225,0.2)",
-        ),
-        row=2,
-        col=1,
-        secondary_y=False,
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=dispatch.index,
-            y=soc_percent,
-            mode="lines",
-            name="State of Charge [%]",
-            line=dict(width=3),
-        ),
-        row=2,
-        col=1,
-        secondary_y=True,
-    )
-
-    # === Subplot 3: Market Positions als Bars ===
-    for col in market_cols:
-        inner = col[2:-3]       # "p_da_kw" -> "da"
-        mk_code = inner.upper() # "DA", "ID", ...
-        pretty_name = f"{mk_code} Position [kW]"
-
-        values = dispatch[col]
-
-        # Farben: Marktfarbe + Alpha nach Vorzeichen (Sell vs. Buy)
-        colors = [
-            _rgba(mk_code, 1.0 if v > 0 else 0.3) for v in values
-        ]
-
-        # Labels pro Balken → Buy / Sell / Neutral
-        labels = ["Sell" if v > 0 else "Buy" if v < 0 else "Neutral" for v in values]
-
-        fig.add_trace(
-            go.Bar(
-                x=dispatch.index,
-                y=values,
-                marker_color=colors,
-                name=pretty_name,
-                customdata=labels,
-                hovertemplate="%{y:.1f} kW<br>%{customdata}",
-            ),
-            row=3,
-            col=1,
-        )
-
-    # Achsentitel
-    fig.update_yaxes(title_text="Price [€/MWh]", row=1, col=1)
-    fig.update_yaxes(title_text="Net Power [kW]", row=2, col=1, secondary_y=False)
-    fig.update_yaxes(title_text="State of Charge [%]", row=2, col=1, secondary_y=True)
-    fig.update_yaxes(title_text="Market Position [kW] (+Sell / –Buy)",row=3,col=1)
-
-    fig.update_layout(
-        title=title,
-        xaxis=dict(title="Time"),
-        template="plotly_white",
-        height=950,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.03,
-            xanchor="right",
-            x=1,
-        ),
-        margin=dict(l=60, r=60, t=80, b=60),
-        barmode="relative",  # positive/negative Beiträge relativ
-    )
-
-    return fig
-
-
 def plot_market_cashflows_plotly(
     dispatch: pd.DataFrame,
     prices_by_market: dict[str, pd.Series],
@@ -188,12 +37,7 @@ def plot_market_cashflows_plotly(
     timestep_hours: float,
     title: str = "Market Cashflows per Timestep",
 ) -> go.Figure:
-    """
-    Plot cashflows [€/timestep] per market as bars, plus cumulative profit line.
 
-    - Bars: Cashflow je Markt und Zeitschritt (DA, ID, ...)
-    - Line: Kumulierte Summe über alle Märkte
-    """
     if not isinstance(dispatch.index, pd.DatetimeIndex):
         raise ValueError("Dispatch index must be a DatetimeIndex")
 
@@ -206,64 +50,185 @@ def plot_market_cashflows_plotly(
         and c not in ("p_ch_kw", "p_dis_kw")
     ]
 
+    # =========================================================
+    # 1) Cashflow time series
+    # =========================================================
     cf_df = pd.DataFrame(index=dispatch.index)
 
-    # Cashflows pro Markt berechnen
     for col in market_cols:
-        inner = col[2:-3]       # "p_da_kw" -> "da"
-        mk_code = inner.upper() # "DA", "ID", ...
-        pretty_name = f"{mk_code} Cashflow [€/step]"
-
-        if mk_code not in prices_by_market:
+        mk = col[2:-3].upper()
+        if mk not in prices_by_market:
             continue
 
-        p_series = dispatch[col]                 # kW
-        price_series = prices_by_market[mk_code] # €/kWh
+        p = dispatch[col]
+        price = prices_by_market[mk]
+        p, price = p.align(price, join="inner")
 
-        # auf gemeinsamen Index ausrichten
-        p_series, price_series = p_series.align(price_series, join="inner")
+        cf_df[f"{mk} Cashflow [€/step]"] = price * p * dt
 
-        cf = price_series * p_series * dt        # €/step
-        cf_df[pretty_name] = cf
-
-    # Gesamt-Cashflow & kumulative Summe
     cf_df["Total Cashflow [€/step]"] = cf_df.sum(axis=1)
     cf_df["Cumulative Profit [€]"] = cf_df["Total Cashflow [€/step]"].cumsum()
 
+    # =========================================================
+    # 2) Aggregate volumes for sunburst  (robust index alignment)
+    # =========================================================
+    energy_data = []
+    cash_data = []
+
+    for col in market_cols:
+        mk = col[2:-3].upper()
+        if mk not in prices_by_market:
+            continue
+
+        # align p and price to avoid boolean indexing mismatch
+        p = dispatch[col]
+        price = prices_by_market[mk]
+        p, price = p.align(price, join="inner")
+
+        # if after align nothing left, skip
+        if p.empty:
+            continue
+
+        energy_kwh = p * dt  # signed kWh/step (since p is kW)
+        cash_eur = price * p * dt  # signed €/step
+
+        buy_mask = p < 0
+        sell_mask = p > 0
+
+        if buy_mask.any():
+            energy_data.append((mk, "Buy", float((-energy_kwh[buy_mask]).sum())))
+            cash_data.append((mk, "Buy", float((-cash_eur[buy_mask]).sum())))
+
+        if sell_mask.any():
+            energy_data.append((mk, "Sell", float((energy_kwh[sell_mask]).sum())))
+            cash_data.append((mk, "Sell", float((cash_eur[sell_mask]).sum())))
+
+    # =========================================================
+    # 3) Figure layout (3 rows!)
+    # =========================================================
     fig = make_subplots(
-        rows=2,
-        cols=1,
+        rows=3,
+        cols=2,
         shared_xaxes=True,
         vertical_spacing=0.06,
         specs=[
-            [{"secondary_y": False}],  # Cashflow-Bars
-            [{"secondary_y": False}],  # Cumulative Profit
+            [{"colspan": 2}, None],            # Row 1: Bars
+            [{"type": "sunburst"}, {"type": "sunburst"}],  # Row 2
+            [{"colspan": 2}, None],            # Row 3: Cumulative
         ],
-        subplot_titles=("Market Cashflows per Timestep", "Cumulative Profit"),
+        subplot_titles=(
+            "Market Cashflows per Timestep",
+            "Energy volumes by market (kWh)",
+            "Cashflow volumes by market (€)",
+            "Cumulative Profit",
+        ),
     )
 
-    # Oben: NUR Markt-Cashflows als Bars (ohne Total)
-    cash_cols = [
-        c for c in cf_df.columns
-        if c.endswith("Cashflow [€/step]") and not c.startswith("Total")
-    ]
-    for col in cash_cols:
-        # Marktcode aus Spaltennamen holen ("DA Cashflow ...")
-        mk_code = col.split()[0]  # "DA", "ID", ...
-        base_color = _rgb(mk_code)
+    # ---------------------------------------------------------
+    # Row 1: Bars
+    # ---------------------------------------------------------
+    for col in cf_df.columns:
+        if not col.endswith("Cashflow [€/step]") or col.startswith("Total"):
+            continue
+
+        mk = col.split()[0]
+        values = cf_df[col]
+
+        colors = [
+            _rgba(mk, 1.0) if v > 0 else _rgba(mk, 0.3)
+            for v in values
+        ]
 
         fig.add_trace(
             go.Bar(
                 x=cf_df.index,
-                y=cf_df[col],
+                y=values,
                 name=col,
-                marker_color=base_color,
+                marker_color=colors,
             ),
             row=1,
             col=1,
         )
 
-    # Unten: kumulativer Gewinn als Linie
+        # ---------------------------------------------------------
+        # Row 2: Sunbursts  (build hierarchy + colors)
+        # ---------------------------------------------------------
+
+        def _build_sunburst(data: list[tuple[str, str, float]], *, kind: str):
+            """
+            data: list of (mk, side, value) with side in {"Buy","Sell"} and value >= 0
+            Returns labels, parents, values, colors for a 2-level sunburst:
+            Total -> MK -> MK Side
+            """
+            # Root
+            labels = ["Total"]
+            parents = [""]
+            values = [sum(v for _, _, v in data)]
+            colors = ["rgba(200,200,200,0.0)"]  # root invisible-ish
+
+            # Markets
+            markets = sorted({mk for mk, _, _ in data})
+            for mk in markets:
+                mk_total = sum(v for m, _, v in data if m == mk)
+                if mk_total <= 0:
+                    continue
+
+                labels.append(mk)
+                parents.append("Total")
+                values.append(mk_total)
+                colors.append(_rgba(mk, 0.7))  # market ring slightly transparent
+
+                # Sides (Buy/Sell)
+                for side in ["Buy", "Sell"]:
+                    side_total = sum(v for m, s, v in data if m == mk and s == side)
+                    if side_total <= 0:
+                        continue
+
+                    labels.append(f"{mk} {side}")
+                    parents.append(mk)
+                    values.append(side_total)
+
+                    # alpha logic like in dispatch plot:
+                    # Sell -> 1.0, Buy -> 0.3
+                    alpha = 1.0 if side == "Sell" else 0.3
+                    colors.append(_rgba(mk, alpha))
+
+            return labels, parents, values, colors
+
+        # Build sunburst inputs
+        e_labels, e_parents, e_values, e_colors = _build_sunburst(energy_data, kind="energy")
+        c_labels, c_parents, c_values, c_colors = _build_sunburst(cash_data, kind="cash")
+
+        # Add traces
+        fig.add_trace(
+            go.Sunburst(
+                labels=e_labels,
+                parents=e_parents,
+                values=e_values,
+                marker=dict(colors=e_colors),
+                branchvalues="total",
+                name="Energy",
+                hovertemplate="%{label}<br>%{value:.2f}<extra></extra>",
+            ),
+            row=2, col=1,
+        )
+
+        fig.add_trace(
+            go.Sunburst(
+                labels=c_labels,
+                parents=c_parents,
+                values=c_values,
+                marker=dict(colors=c_colors),
+                branchvalues="total",
+                name="Cashflow",
+                hovertemplate="%{label}<br>%{value:.2f}<extra></extra>",
+            ),
+            row=2, col=2,
+        )
+
+    # ---------------------------------------------------------
+    # Row 3: Cumulative profit
+    # ---------------------------------------------------------
     fig.add_trace(
         go.Scatter(
             x=cf_df.index,
@@ -272,18 +237,17 @@ def plot_market_cashflows_plotly(
             name="Cumulative Profit [€]",
             line=dict(width=3, color="rgb(162,173,0)"),
         ),
-        row=2,
+        row=3,
         col=1,
     )
 
-    fig.update_yaxes(title_text="Cashflow [€/step]", row=1, col=1)
-    fig.update_yaxes(title_text="Cumulative Profit [€]", row=2, col=1)
-
+    # =========================================================
+    # Layout
+    # =========================================================
     fig.update_layout(
         title=title,
-        xaxis=dict(title="Time"),
         template="plotly_white",
-        height=900,
+        height=1100,
         legend=dict(
             orientation="h",
             yanchor="bottom",
@@ -295,7 +259,11 @@ def plot_market_cashflows_plotly(
         barmode="relative",
     )
 
+    fig.update_yaxes(title_text="Cashflow [€/step]", row=1, col=1)
+    fig.update_yaxes(title_text="Cumulative Profit [€]", row=3, col=1)
+
     return fig
+
 
 
 def plot_mpc_dispatch_plotly(
@@ -570,231 +538,3 @@ def plot_mpc_dispatch_plotly(
 
     return fig
 
-
-
-# Presentation one-pager
-def plot_mpc_onepager(
-    dispatch: pd.DataFrame,
-    prices_by_market: dict[str, pd.Series] | None = None,
-    *,
-    capacity_kwh: float,
-    title: str = "MPC Dispatch and Market Positions",
-) -> Dict[str, go.Figure]:
-    """
-    Erzeugt 4 einzelne Plots (je eine Figure), statt Subplots:
-
-      - fig_prices:        Marktpreise (alle Märkte)
-      - fig_power_pos:     Net Power + Marktpositionen
-      - fig_soc:           State of Charge [%]
-      - fig_empty:         leerer Platzhalter (z.B. für spätere Ergänzungen)
-
-    Rückgabe: dict mit Schlüsseln {"prices", "power_positions", "soc", "empty"}
-    """
-
-    if not isinstance(dispatch.index, pd.DatetimeIndex):
-        raise ValueError("Dispatch index must be a DatetimeIndex")
-
-    # Net Power
-    net_power = dispatch["p_dis_kw"] - dispatch["p_ch_kw"]
-
-    # SoC [%]
-    E_kWh = dispatch["E_kWh"]
-    soc_percent = (E_kWh / float(capacity_kwh)) * 100.0
-
-    # Marktspalten erkennen
-    market_cols = [
-        c for c in dispatch.columns
-        if c.startswith("p_")
-        and c.endswith("_kw")
-        and c not in ("p_ch_kw", "p_dis_kw")
-    ]
-
-    # ---------- Helper für einheitlichen PPT-Style ----------
-    def _style_for_ppt(fig: go.Figure, subtitle: str | None = None) -> go.Figure:
-        fig.update_layout(
-            title=subtitle,
-            template="plotly_white",
-            width=2000,
-            height=1100,
-            margin=dict(l=60, r=60, t=80, b=60),
-            font=dict(size=45),
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            showlegend=False,  # Legend im PPT nachbauen, wenn gewünscht
-        )
-        fig.update_xaxes(showgrid=True, gridcolor="black", gridwidth=1)
-
-        return fig
-
-    # ---------- Plot 1: Preise ----------
-    fig_prices = go.Figure()
-    if prices_by_market is not None:
-        for mk, s in prices_by_market.items():
-            price_mwh = s * 1000.0
-            color = _rgb(mk)
-
-            fig_prices.add_trace(
-                go.Scatter(
-                    x=price_mwh.index,
-                    y=price_mwh.values,
-                    mode="lines",
-                    name=f"{mk} Price [€/MWh]",
-                    line=dict(width=5, color=color),
-                )
-            )
-
-
-
-    # ---------- Plot 2: Net Power + Marktpositionen ----------
-    fig_power_pos = go.Figure()
-
-    # Bars je Markt
-    for col in market_cols:
-        inner = col[2:-3]   # p_da_kw -> da
-        mk_code = inner.upper()
-        pretty_name = f"{mk_code} Position [kW]"
-
-        values = dispatch[col]
-        labels = ["Sell" if v > 0 else "Buy" if v < 0 else "Neutral" for v in values]
-        colors = [_rgba(mk_code, 1.0 if v > 0 else 0.3) for v in values]
-
-        fig_power_pos.add_trace(
-            go.Bar(
-                x=dispatch.index,
-                y=values,
-                name=pretty_name,
-                marker_color=colors,
-                customdata=labels,
-                hovertemplate="%{y:.1f} kW<br>%{customdata}",
-            )
-        )
-
-    # Net Power als Linie obendrauf
-    fig_power_pos.add_trace(
-        go.Scatter(
-            x=dispatch.index,
-            y=net_power,
-            mode="lines",
-            name="Net Power [kW]",
-            line=dict(width=4, color="rgb(106, 117, 126)"),
-        )
-    )
-
-
-
-    # ---------- Plot 3: SoC ----------
-    fig_soc = go.Figure()
-    fig_soc.add_trace(
-        go.Scatter(
-            x=dispatch.index,
-            y=soc_percent,
-            mode="lines",
-            name="State of Charge [%]",
-            line=dict(width=8, color="rgb(228,0,69)"),
-        )
-    )
-
-
-    # ========= Plot 4: Cashflows (Bars) + kumulative Summe (Linie) =========
-    fig_cash = make_subplots(
-        rows=1,
-        cols=1,
-        specs=[[{"secondary_y": False}]],
-    )
-
-    cf_df = None
-    if prices_by_market is not None:
-        # Δt aus Index ableiten (h)
-        if len(dispatch.index) >= 2:
-            dt_seconds = (dispatch.index[1] - dispatch.index[0]).total_seconds()
-            dt = dt_seconds / 3600.0
-        else:
-            dt = 1.0  # Fallback
-
-        cf_df = pd.DataFrame(index=dispatch.index)
-
-        # Cashflows pro Markt berechnen
-        for col in market_cols:
-            inner = col[2:-3]  # "p_da_kw" -> "da"
-            mk_code = inner.upper()  # "DA", "ID", ...
-            pretty_name = f"{mk_code} Cashflow [€/step]"
-
-            if mk_code not in prices_by_market:
-                continue
-
-            p_series = dispatch[col]  # kW
-            price_series = prices_by_market[mk_code]  # €/kWh
-
-            # auf gemeinsamen Index ausrichten
-            p_series, price_series = p_series.align(price_series, join="inner")
-
-            cf = price_series * p_series * dt  # €/step
-            cf_df[pretty_name] = cf
-
-        # Gesamt-Cashflow & kumulative Summe
-        if not cf_df.empty:
-            cf_df["Total Cashflow [€/step]"] = cf_df.sum(axis=1)
-            cf_df["Cumulative Profit [€]"] = cf_df["Total Cashflow [€/step]"].cumsum()
-
-            # Bars: Markt-Cashflows
-            cash_cols = [
-                c for c in cf_df.columns
-                if c.endswith("Cashflow [€/step]") and not c.startswith("Total")
-            ]
-            for col in cash_cols:
-                mk_code = col.split()[0]  # "DA", "ID", ...
-                base_color = _rgb(mk_code)
-
-                #fig_cash.add_trace(
-                #    go.Bar(
-                #        x=cf_df.index,
-                #        y=cf_df[col],
-                #        name=col,
-                #        marker_color=base_color,
-                #    ),
-                #    row=1,
-                #    col=1,
-                #    secondary_y=True,  # linke Achse
-                #)
-
-            # Linie: kumulativer Profit (rechte Achse)
-            fig_cash.add_trace(
-                go.Scatter(
-                    x=cf_df.index,
-                    y=cf_df["Cumulative Profit [€]"],
-                    mode="lines",
-                    name="Cumulative Profit [€]",
-                    line=dict(width=8, color="rgb(228,0,69)"),
-                ),
-                row=1,
-                col=1,
-                secondary_y=False,  # rechte Achse
-            )
-
-
-    # ---------- Layout ----------
-
-    fig_prices.update_yaxes(title_text=None, range=[0, 200], showgrid=True, gridcolor="black", gridwidth=1,)
-    fig_prices.update_xaxes(title_text=None)
-    _style_for_ppt(fig_prices, subtitle=None)
-
-    fig_power_pos.update_yaxes(title_text=None, range=[-500, 500], showgrid=True, gridcolor="black", gridwidth=1,)
-    fig_power_pos.update_xaxes(title_text=None)
-    _style_for_ppt(fig_power_pos, subtitle=None)
-
-    fig_soc.update_yaxes(title_text=None, range=[0, 100], showgrid=True, gridcolor="black", gridwidth=1,)
-    fig_soc.update_xaxes(title_text=None)
-    _style_for_ppt(fig_soc, subtitle=None)
-
-    fig_cash.update_xaxes(title_text=None)
-    fig_cash.update_yaxes(title_text="", range=[0, 400], showgrid=True, gridcolor="black", gridwidth=1, secondary_y=False)
-    #fig_cash.update_yaxes(title_text=None,range=[-30, 30], showgrid=False, secondary_y=True)
-    fig_cash.update_xaxes(title_text=None)
-    _style_for_ppt(fig_cash, subtitle=None)
-
-    return {
-        "prices": fig_prices,
-        "power_positions": fig_power_pos,
-        "soc": fig_soc,
-        "cash": fig_cash,
-    }
