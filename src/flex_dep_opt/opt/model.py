@@ -5,6 +5,7 @@ import pandas as pd
 import pyomo.environ as pyo
 
 from ..domain.vehicle import Vehicle
+from ..domain.site import Site
 
 
 def fleet_commercialization(
@@ -18,6 +19,9 @@ def fleet_commercialization(
     market_activity_mask: Dict[str, pd.Series],
     committed_positions: Dict[str, pd.Series],
     mobility_bounds: pd.DataFrame,
+    allow_imbalance: bool = False,
+    imbalance_prices_pos: pd.Series | None = None,
+    imbalance_prices_neg: pd.Series | None = None,
 ) -> pyo.ConcreteModel:
     """
     Flex-band based fleet commercialization model.
@@ -66,8 +70,11 @@ def fleet_commercialization(
     missing_cols = [c for c in required_cols if c not in mobility_bounds.columns]
     if missing_cols:
         raise ValueError(f"mobility_bounds missing columns: {missing_cols}")
-    if not mobility_bounds.index.equals(time_index):
-        raise ValueError("mobility_bounds must be aligned to the model time index (do this in workflow/io).")
+    if len(mobility_bounds) != len(time_index) + 1:
+        raise ValueError(
+            "mobility_bounds must have exactly N+1 rows (states) "
+            "for N decision steps"
+        )
 
     P_lower_ser = mobility_bounds["Power_lower_kW"]
     P_upper_ser = mobility_bounds["Power_upper_kW"]
@@ -104,10 +111,8 @@ def fleet_commercialization(
     # Flex bands (power + energy)
     m.P_lower = pyo.Param(m.T, initialize=lambda mdl, t: float(P_lower_ser.iloc[int(t)]))
     m.P_upper = pyo.Param(m.T, initialize=lambda mdl, t: float(P_upper_ser.iloc[int(t)]))
-    E_lower_ext = pd.concat([E_lower_ser, E_lower_ser.iloc[[-1]]], ignore_index=True)
-    E_upper_ext = pd.concat([E_upper_ser, E_upper_ser.iloc[[-1]]], ignore_index=True)
-    m.E_lower = pyo.Param(m.S, initialize=lambda mdl, s: float(E_lower_ext.iloc[int(s)]))
-    m.E_upper = pyo.Param(m.S, initialize=lambda mdl, s: float(E_upper_ext.iloc[int(s)]))
+    m.E_lower = pyo.Param(m.S, initialize=lambda mdl, s: float(E_lower_ser.iloc[int(s)]))
+    m.E_upper = pyo.Param(m.S, initialize=lambda mdl, s: float(E_upper_ser.iloc[int(s)]))
 
     # Tight per-timestep import/export maxima (Big-M values)
     m.P_ch_max_t = pyo.Param(m.T, initialize=lambda mdl, t: float(P_ch_max_ser.iloc[int(t)]))
@@ -154,10 +159,21 @@ def fleet_commercialization(
     # Initial condition
     m.energy_init = pyo.Constraint(expr=m.E[0] == m.E0)
 
-    m.p_market = pyo.Var(
-        m.MARKETS, m.T,
-        bounds=lambda mdl, mk, t: (-mdl.p_market_max, mdl.p_market_max),
-    )
+    m.p_market = pyo.Var(m.MARKETS, m.T,bounds=lambda mdl, mk, t: (-mdl.p_market_max, mdl.p_market_max),)
+
+    if allow_imbalance:
+        m.p_imb_pos = pyo.Var(m.T, within=pyo.NonNegativeReals)
+        m.p_imb_neg = pyo.Var(m.T, within=pyo.NonNegativeReals)
+
+        # prices (EUR/kWh) aligned to time_index (decisions)
+        if imbalance_prices_pos is None or imbalance_prices_neg is None:
+            raise ValueError("allow_imbalance=True requires imbalance price series")
+
+        if not imbalance_prices_pos.index.equals(time_index) or not imbalance_prices_neg.index.equals(time_index):
+            raise ValueError("imbalance price series must align to model time index")
+
+        m.price_imb_pos = pyo.Param(m.T, initialize=lambda mdl, t: float(imbalance_prices_pos.iloc[int(t)]))
+        m.price_imb_neg = pyo.Param(m.T, initialize=lambda mdl, t: float(imbalance_prices_neg.iloc[int(t)]))
 
     # ----------------------------
     # 7) Physical constraints (bands + efficiencies)
@@ -227,10 +243,12 @@ def fleet_commercialization(
 
     if virtual_arbitrage:
         # LP: allow offsetting between markets; only total must match physical net power
-        m.market_balance = pyo.Constraint(
-            m.T,
-            rule=lambda mdl, t: sum(mdl.p_market[mk, t] for mk in mdl.MARKETS) == mdl.p_net[t]
-        )  # Enforces sum of market positions equals physical net power
+        def balance_rule(mdl, t):
+            base = sum(mdl.p_market[mk, t] for mk in mdl.MARKETS)
+            if allow_imbalance:
+                return base + mdl.p_imb_pos[t] - mdl.p_imb_neg[t] == mdl.p_net[t]
+            return base == mdl.p_net[t]
+        m.market_balance = pyo.Constraint(m.T, rule=balance_rule)
 
     else:
         # MILP: prevent simultaneous import and export within a timestep (no virtual arbitrage)
@@ -254,10 +272,12 @@ def fleet_commercialization(
             return sum(mdl.p_market_neg[mk, t] for mk in mdl.MARKETS)
 
         # Couple markets to physical net power
-        m.market_balance = pyo.Constraint(
-            m.T,
-            rule=lambda mdl, t: sum(mdl.p_market[mk, t] for mk in mdl.MARKETS) == mdl.p_net[t]
-        )  # Enforces sum of signed market positions equals physical net power
+        def balance_rule(mdl, t):
+            base = sum(mdl.p_market[mk, t] for mk in mdl.MARKETS)
+            if allow_imbalance:
+                return base + mdl.p_imb_pos[t] - mdl.p_imb_neg[t] == mdl.p_net[t]
+            return base == mdl.p_net[t]
+        m.market_balance = pyo.Constraint(m.T, rule=balance_rule)
 
         # Enforce "either export or import" using tight Big-M from bands
         m.export_mode_limit = pyo.Constraint(
@@ -295,7 +315,15 @@ def fleet_commercialization(
             for t in mdl.T
         )  # Degradation proportional to throughput (kWh)
 
-        return revenue - deg_cost
+        imb = 0.0
+        if allow_imbalance:
+            imb = sum(
+                mdl.price_imb_pos[t] * mdl.p_imb_pos[t] * mdl.dt
+                - mdl.price_imb_neg[t] * mdl.p_imb_neg[t] * mdl.dt
+                for t in mdl.T
+            )
+
+        return revenue + imb - deg_cost
 
     m.obj = pyo.Objective(rule=obj_expr, sense=pyo.maximize)
 

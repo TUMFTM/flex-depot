@@ -144,4 +144,11 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index) -> pd.DataFrame:
         df["P_lower_kW"] = [pyo.value(model.P_lower[t]) for t in T_list]
         df["P_upper_kW"] = [pyo.value(model.P_upper[t]) for t in T_list]
 
+    # -------------------------
+    # Imbalance reBAP
+    # -------------------------
+    if hasattr(model, "p_imb_pos"):
+        df["p_imb_pos_kW"] = [pyo.value(model.p_imb_pos[t]) for t in model.T]
+        df["p_imb_neg_kW"] = [pyo.value(model.p_imb_neg[t]) for t in model.T]
+
     return df

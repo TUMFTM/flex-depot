@@ -13,6 +13,10 @@ from flex_dep_opt.opt.model import fleet_commercialization
 from flex_dep_opt.opt.solve import solve_model, extract_dispatch
 from flex_dep_opt.market.trading_rules import build_market_activity_mask_for_time
 
+import logging
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
 
 def run_mpc(cfg: dict):
     """
@@ -35,6 +39,8 @@ def run_mpc(cfg: dict):
     trading_cfg = opt_conf["trading"]
     mpc_cfg = opt_conf["mpc"]
     mob_cfg = opt_conf.get("mobility", {})
+    imb_cfg = opt_conf.get("imbalance", {})
+    imb_enabled = imb_cfg.get("enabled", False)
 
     # ============================================================
     # 2) Load mobility bounds (flex bands)
@@ -100,6 +106,9 @@ def run_mpc(cfg: dict):
     if mobility_bounds_full is not None:
         mobility_bounds_full = mobility_bounds_full.loc[full_index]
 
+    imb_pos_full = prices_by_market.pop("IMB_POS", None)
+    imb_neg_full = prices_by_market.pop("IMB_NEG", None)
+
     # ============================================================
     # 6) Model options
     # ============================================================
@@ -150,8 +159,9 @@ def run_mpc(cfg: dict):
             # --------------------------------------------------------
             # 10.1) Define rolling optimization window
             # --------------------------------------------------------
-            window_end = min(i + da_horizon_steps, len(full_index))
-            window_idx = full_index[i:window_end]
+            window_end = min(i + da_horizon_steps, len(full_index) - 1)  # leave room for +1 state
+            window_idx = full_index[i:window_end]  # decisions (N)
+            window_state_idx = full_index[i:window_end + 1]  # states (N+1)
             if len(window_idx) == 0:
                 break
 
@@ -166,11 +176,15 @@ def run_mpc(cfg: dict):
             window_mobility_bounds = (
                 align_and_validate_mobility_bounds(
                     bounds=mobility_bounds_full,
-                    time_index=window_idx,
+                    time_index=window_state_idx,
                 )
                 if mobility_bounds_full is not None
                 else None
             )
+
+            window_imb_pos = imb_pos_full.loc[window_idx] if (imb_enabled and imb_pos_full is not None) else None
+            window_imb_neg = imb_neg_full.loc[window_idx] if (imb_enabled and imb_neg_full is not None) else None
+
 
             # --------------------------------------------------------
             # 10.3) Build market activity masks (GATE CLOSURES only)
@@ -227,6 +241,7 @@ def run_mpc(cfg: dict):
                     for mk in committed_positions
                 },
                 mobility_bounds=window_mobility_bounds,
+                allow_imbalance=False
             )
 
             # Set initial energy state for this MPC window
@@ -245,19 +260,50 @@ def run_mpc(cfg: dict):
             # --------------------------------------------------------
             try:
                 solve_model(model)
-                solved = True
-            except RuntimeError as e:
-                solved = False
-                logger.error(
-                    f"MPC infeasible at current_time={current_time}: {e}"
+                used_rebap = False
+            except RuntimeError as e1:
+                if not imb_enabled:
+                    raise
+                model = fleet_commercialization(
+                    vehicle=Vehicle(**opt_cfg["vehicle"]),
+                    site=Site(**opt_cfg["site"]),
+                    prices_by_market=window_prices,
+                    timestep_hours=step_hours,
+                    virtual_arbitrage=virtual_arbitrage,
+                    degradation_cost_eur_per_kwh=c_deg,
+                    market_activity_mask=decision_masks,
+                    committed_positions={
+                        mk: committed_positions[mk].loc[window_idx]
+                        for mk in committed_positions
+                    },
+                    mobility_bounds=window_mobility_bounds,
+                    allow_imbalance=True,
+                    imbalance_prices_pos=window_imb_pos,
+                    imbalance_prices_neg=window_imb_neg
                 )
-                break
+
+                # Set initial energy state for this MPC window
+                if window_mobility_bounds is not None:
+                    lb0 = window_mobility_bounds["Capacity_lower_kWh"].iloc[0]
+                    ub0 = window_mobility_bounds["Capacity_upper_kWh"].iloc[0]
+                    E0 = E_state if i > 0 else 0.5 * (lb0 + ub0)
+                    if not (lb0 - 1e-6 <= E0 <= ub0 + 1e-6):
+                        logger.warning(f"E0 out of bounds at {current_time}: E0={E0}, lb={lb0}, ub={ub0} (clamping)")
+                    model.E0.set_value(float(min(max(E0, lb0), ub0)))
+                else:
+                    model.E0.set_value(float(E_state))
+
+                # Solve model incl. reBAP
+                solve_model(model)
+                used_rebap = True
+
 
             # --------------------------------------------------------
             # 10.6) Extract first-step dispatch
             # --------------------------------------------------------
             dispatch_window = extract_dispatch(model, window_idx)
             first_row = dispatch_window.iloc[0].copy()
+            first_row["used_rebap"] = used_rebap
             first_row.name = window_idx[0]
             rows.append(first_row)
 

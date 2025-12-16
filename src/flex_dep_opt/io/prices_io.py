@@ -12,9 +12,11 @@ def read_prices_csv(path: str, tz: str = "Europe/Berlin") -> pd.Series:
     if "time" not in df or "price" not in df:
         raise ValueError("CSV must contain columns 'time' and 'price'")
 
-    ts = pd.to_datetime(df["time"], errors="coerce").dt.tz_localize(tz, nonexistent="shift_forward", ambiguous="NaT")
-    s = pd.Series(df["price"].astype(float).values, index=ts)
-    s = s.sort_index()
+    ts = pd.to_datetime(df["time"], errors="coerce", utc=True).dt.tz_convert(tz)
+    s = pd.Series(df["price"].astype(float).values, index=ts).sort_index()
+    s = s[~s.index.isna()]
+    if s.isna().any():
+        raise ValueError(f"prices contain NaNs: {path}")
     return s
 
 def write_prices_csv(prices: pd.Series, path: str) -> str:
@@ -33,4 +35,12 @@ def build_prices_from_settings(settings):
     if settings["optimization"]["markets"]["intraday"]["enabled"]:
         idp = IntradayPrices.from_csv(settings["optimization"]["markets"]["intraday"]["source"])
         prices_by_market["ID"] = idp.prices_eur_per_kwh
+
+    # Optional: imbalance / reBAP (pos/neg)
+    imb_cfg = settings["optimization"].get("imbalance", {})
+    if imb_cfg.get("enabled", False):
+        pos = read_prices_csv(imb_cfg["source_pos"])
+        neg = read_prices_csv(imb_cfg["source_neg"])
+        prices_by_market["IMB_POS"] = pos
+        prices_by_market["IMB_NEG"] = neg
     return prices_by_market
