@@ -206,3 +206,4 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 /src/flex_dep_opt/viz/plots_presentation.py
+/results/
