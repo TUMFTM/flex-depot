@@ -2,7 +2,6 @@ import argparse
 import yaml
 
 from flex_dep_opt.workflows.mpc_workflow import run_mpc
-from flex_dep_opt.workflows.optimize_workflow import run_optimize
 from flex_dep_opt.workflows.plot_workflow import run_plot_mpc
 
 
