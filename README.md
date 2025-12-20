@@ -133,13 +133,13 @@ set simulation and MPC parameters (time window, horizons, gate-closure rules, et
 
 ### 4) Run MPC
 ```bash
-python -m flex_dep_opt mpc --config src/flex_dep_opt/config/settings.yaml
+python -m flex_dep_opt mpc --config src/flex_dep_opt/config/settings_example.yaml
 ```
 This creates `results/dispatch_mpc.csv` and `results/commit_mpc.csv`.
 
 ### 5) Plot results
 ```bash
-python -m flex_dep_opt plot-results-mpc --config src/flex_dep_opt/config/settings.yaml
+python -m flex_dep_opt plot-results-mpc --config src/flex_dep_opt/config/settings_example.yaml
 ```
 This writes an interactive HTML plot (default: `results/dispatch_mpc_plot.html`).
 

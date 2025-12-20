@@ -15,16 +15,16 @@ def main():
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_opt = sub.add_parser("optimize")
-    p_opt.add_argument("--config", default="settings.yaml")
+    p_opt.add_argument("--config", default="settings_example.yaml")
 
     p_mpc = sub.add_parser("mpc")
-    p_mpc.add_argument("--config", default="settings.yaml")
+    p_mpc.add_argument("--config", default="settings_example.yaml")
 
     p_plot = sub.add_parser("plot-results")
-    p_plot.add_argument("--config", default="settings.yaml")
+    p_plot.add_argument("--config", default="settings_example.yaml")
 
     p_plot_mpc = sub.add_parser("plot-results-mpc")
-    p_plot_mpc.add_argument("--config", default="settings.yaml")
+    p_plot_mpc.add_argument("--config", default="settings_example.yaml")
 
     args = parser.parse_args()
 

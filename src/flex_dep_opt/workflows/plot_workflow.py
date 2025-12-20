@@ -1,7 +1,6 @@
 from pathlib import Path
 import pandas as pd
 import webbrowser
-import plotly.io as pio
 import os
 
 from flex_dep_opt.viz.plots import plot_market_cashflows_plotly,plot_mpc_dispatch_plotly
@@ -20,8 +19,8 @@ def run_plot_mpc(cfg: dict):
     start = pd.to_datetime(sim["start"]).tz_localize("Europe/Berlin")
     end = pd.to_datetime(sim["end"]).tz_localize("Europe/Berlin")
 
-    # --- Load dispatch_mpc.csv (robust) ---
-    df = pd.read_csv(plot_cfg["dispatch_mpc"])
+    # --- Load dispatch.csv (robust) ---
+    df = pd.read_csv(plot_cfg["dispatch"])
     idx = pd.to_datetime(df["time"], utc=True).dt.tz_convert("Europe/Berlin")
     dispatch = df.drop(columns=["time"])
     dispatch.index = idx

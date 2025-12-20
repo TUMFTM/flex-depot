@@ -8,11 +8,11 @@ optimization:
   markets:
     dayahead:
       enabled: true
-      source: "data/prices/epex_prices_DA.csv"
+      source: "data/prices/prices_DA_example.csv"
       tx_fee_eur_per_mwh: 2.0                   # €/MWh
     intraday:
       enabled: true
-      source: "data/prices/example_prices_ID.csv"
+      source: "data/prices/prices_IDC_example.csv"
       tx_fee_eur_per_mwh: 3.0                   # €/MWh
 
   virtual_arbitrage: false
@@ -36,13 +36,13 @@ optimization:
 
   mobility:
     enabled: true
-    bounds_file: "data/mobility/fleet_3_vb_bounds_15min.csv"
+    bounds_file: "data/mobility/vb_bounds_example.csv"
 
   imbalance:
     enabled: true
     only_on_infeasible: true
-    source_pos: "data/prices/reBAP_prices_pos.csv"
-    source_neg: "data/prices/reBAP_prices_neg.csv"
+    source_pos: "data/prices/prices_reBAPpos_example.csv"
+    source_neg: "data/prices/prices_reBAPneg_example.csv"
     imbalance_volume_penalty_eur_per_kwh: 1000
 
 optimize:
@@ -54,10 +54,9 @@ optimize:
     grid_connection_limit: 10000
 
 plot:
-  dispatch: "results/dispatch.csv"
-  dispatch_mpc: "results/dispatch_mpc.csv"
-  out: "results/dispatch_plot.html"
-  cashflow_out: "results/cashflows_plot.html"
+  dispatch: "results/dispatch_mpc.csv"
+  out: "results/dispatch_example.html"
+  cashflow_out: "results/cashflows_example.html"
   open: true
 
 
