@@ -296,9 +296,6 @@ def run_mpc(cfg: dict):
             # 10.6) Extract first-step dispatch
             # --------------------------------------------------------
             dispatch_window = extract_dispatch(model, window_idx)
-            if i == 0 and used_rebap:
-                dispatch_window.to_csv("results/debug_pass2_window.csv")
-
             first_row = dispatch_window.iloc[0].copy()
             first_row["used_rebap"] = used_rebap
             first_row.name = window_idx[0]
@@ -360,7 +357,7 @@ def run_mpc(cfg: dict):
         if rows:
             result = pd.DataFrame(rows)
             result.index.name = "time"
-            result.reset_index().to_csv("results/dispatch_mpc.csv", index=False)
+            result.reset_index().to_csv("results/dispatch.csv", index=False)
 
         if commit_rows:
             commit_df = pd.DataFrame(commit_rows)
@@ -368,4 +365,4 @@ def run_mpc(cfg: dict):
                 "results/commit_mpc.csv", index=False
             )
 
-        print("MPC finished → results/dispatch_mpc.csv")
+        print("MPC finished → results/dispatch.csv")

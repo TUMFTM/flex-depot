@@ -51,7 +51,7 @@ def run_plot_mpc(cfg: dict):
         title=plot_cfg.get("title", "MPC Flexband Dispatch and Market Positions"),
     )
 
-    out = Path(plot_cfg.get("mpc_out", "results/dispatch_mpc_plot.html"))
+    out = Path(plot_cfg.get("out", "results/dispatch.html"))
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.write_html(out, include_plotlyjs="cdn")
 

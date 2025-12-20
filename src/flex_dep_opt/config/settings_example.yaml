@@ -1,6 +1,6 @@
 simulation:
   start: "2025-10-01 00:00"
-  end: "2025-10-13 23:45"
+  end: "2025-10-6 23:45"
   timestep_hours: 0.25
 
 optimization:
@@ -54,9 +54,9 @@ optimize:
     grid_connection_limit: 10000
 
 plot:
-  dispatch: "results/dispatch_mpc.csv"
-  out: "results/dispatch_example.html"
-  cashflow_out: "results/cashflows_example.html"
+  dispatch: "results/dispatch.csv"
+  out: "results/dispatch.html"
+  cashflow_out: "results/cashflows.html"
   open: true
 
 
