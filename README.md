@@ -1,159 +1,160 @@
-# flex-depot
+## Overview
 
-## Asymmetric Horizon Model Predictive Control for HDV-Flexibility Trading at Logistics Depot
+`flex-depot` is a Python project for optimizing battery/EV fleet flexibility at a logistics depot. It combines
+price series (day-ahead, intraday, optional imbalance), mobility flex bands, and market trading rules into a
+single rolling-horizon optimization (MPC). The core of the project is a Pyomo model that decides market
+positions and physical charging/discharging while respecting fleet power/energy bounds and gate-closure rules.
 
-This document explains how the MPC system jointly optimizes **Day-Ahead
-(DA)** and **Intraday (ID)** markets using a single optimization model
-with different effective horizons. It is intended as a clear onboarding
-reference for developers and operators.
+Key capabilities:
+- Unified optimization for DA/ID (and optional imbalance) markets.
+- Rolling-horizon MPC that commits market positions when gate closure is reached.
+- CSV-based I/O for prices, mobility bounds, and results.
+- Plotly-based visualization of dispatch, prices, and cashflows.
 
-------------------------------------------------------------------------
+## Repository Structure
 
-## 1. Motivation
+```
+.
+├── README.md
+├── LICENSE
+├── pyproject.toml
+├── requirements.txt
+├── run_mpc.bat
+├── data/
+│   ├── mobility/
+│   │   └── fleet_3_vb_bounds_15min.csv
+│   └── prices/
+│       ├── epex_prices_DA.csv
+│       ├── example_prices_DA.csv
+│       ├── example_prices_ID.csv
+│       ├── reBAP_prices_pos.csv
+│       └── reBAP_prices_neg.csv
+├── results/                   # output directory (created by runs)
+└── src/
+    ├── __init__.py
+    └── flex_dep_opt/
+        ├── __init__.py
+        ├── __main__.py
+        ├── cli.py
+        ├── core.py
+        ├── config/
+        │   ├── __init__.py
+        │   ├── load_settings.py
+        │   └── settings.yaml
+        ├── domain/
+        │   ├── __init__.py
+        │   ├── site.py
+        │   └── vehicle.py
+        ├── io/
+        │   ├── __init__.py
+        │   ├── mobility_io.py
+        │   ├── prices_io.py
+        │   └── results.io.py
+        ├── market/
+        │   ├── __init__.py
+        │   ├── dayahead.py
+        │   ├── intraday.py
+        │   └── trading_rules.py
+        ├── opt/
+        │   ├── __init__.py
+        │   ├── model.py
+        │   └── solve.py
+        ├── viz/
+        │   ├── __init__.py
+        │   └── plots.py
+        └── workflows/
+            ├── __init__.py
+            ├── mpc_workflow.py
+            └── plot_workflow.py
+```
 
-Battery trading must simultaneously respect two different electricity
-markets:
+## Module Guide
 
-  Market               Horizon         Gate Closure (GC)   Products
-  -------------------- --------------- ------------------- ----------
-  **Day-Ahead (DA)**   Full next day   D-1 12:00           15-min
-  **Intraday (ID)**    Short-term      T -- 30 min         15-min
+### `flex_dep_opt.cli`
+Command-line entry point. Provides subcommands to run MPC and plotting workflows from a config file.
+It loads YAML settings and dispatches to the workflow modules.
 
-Running two separate optimizations (DA first, then ID) leads to
-inconsistencies and duplicated logic.
+### `flex_dep_opt.config`
+Configuration helpers and the default `settings.yaml`. This YAML file defines simulation windows,
+market sources, optimization options (e.g., degradation, gate closures), and output paths.
 
-**Our MPC handles both markets simultaneously in one unified model.**
+### `flex_dep_opt.domain`
+Lightweight domain models:
+- `Vehicle`: efficiency parameters used in the optimization model.
+- `Site`: grid connection limit for the depot.
 
-------------------------------------------------------------------------
+### `flex_dep_opt.io`
+CSV I/O and validation utilities:
+- `mobility_io.py`: reads and validates mobility flex bands (power/energy bounds).
+- `prices_io.py`: loads price series and builds the per-market price dictionary from settings.
+- `results.io.py`: writes dispatch summaries to CSV.
 
-## 2. Concept: Asymmetric Horizon MPC
+### `flex_dep_opt.market`
+Market abstractions and trading rules:
+- `dayahead.py` / `intraday.py`: typed containers for price series with validation.
+- `trading_rules.py`: builds activity masks to respect gate closures in MPC.
 
-The MPC uses **one common 15-minute time index** but applies different
-effective horizons:
+### `flex_dep_opt.opt`
+Optimization core:
+- `model.py`: the Pyomo model (fleet commercialization) with constraints for power, energy,
+  efficiencies, and market positions.
+- `solve.py`: Gurobi-only solver integration and result extraction helpers.
 
-    ┌─────────────────────────────┬─────────────────────────────┐
-    │     DA Optimization Window  │   Entire DA Delivery Day    │
-    └─────────────────────────────┴─────────────────────────────┘
-    <---------------------- ~48 hours -------------------------->
+### `flex_dep_opt.workflows`
+End-to-end workflows:
+- `mpc_workflow.py`: rolling-horizon MPC loop that builds windows, solves the model,
+  commits trades at gate closure, and exports results.
+- `plot_workflow.py`: loads results and prices, then generates Plotly HTML reports.
 
-    ┌─────────┬─────────────────────────┬────────────────────────┐
-    │  now    │   ID Optimization       │   ID Delivery Window   │
-    └─────────┴─────────────────────────┴────────────────────────┘
-              <------ ~12 hours ------->
+### `flex_dep_opt.viz`
+Plotting utilities:
+- `plots.py`: Plotly-based visualizations for dispatch, prices, and market cashflows.
 
-Key points:
+## How to Run
 
--   Same Pyomo model for battery + markets\
--   Same 15-minute timestep\
--   DA visible & optimized across full \~48h\
--   ID only visible in next \~12h\
--   Gate closure rules remain independent\
--   Physical battery must fulfill committed DA trades next day\
--   ID cannot overwrite DA after its gate closure
+### 1) Set up a virtual environment
+```bash
+python -m venv .venv
+source .venv/bin/activate  # on Windows: .venv\Scripts\activate
+```
 
-------------------------------------------------------------------------
+### 2) Install dependencies
+This repo does not pin dependencies, but the code uses at least:
+`pandas`, `pyomo`, `plotly`, `pyyaml`, `tqdm`, and `gurobipy` (Gurobi).
+Install them in your environment, for example:
+```bash
+pip install -e .
+pip install pandas pyomo plotly pyyaml tqdm gurobipy
+```
 
-## 3. Architecture Overview
+### 3) Configure inputs
+Edit `src/flex_dep_opt/config/settings.yaml` to point to your price files and mobility bounds, and to
+set simulation and MPC parameters (time window, horizons, gate-closure rules, etc.).
 
-### One Model
+### 4) Run MPC
+```bash
+python -m flex_dep_opt mpc --config src/flex_dep_opt/config/settings.yaml
+```
+This creates `results/dispatch_mpc.csv` and `results/commit_mpc.csv`.
 
--   Single Pyomo model instance
--   Shared variables:
-    -   Battery: `SoC`, `p_batt_pos`, `p_batt_neg`
-    -   Markets: `p_market_opt`, `p_market_committed`
+### 5) Plot results
+```bash
+python -m flex_dep_opt plot-results-mpc --config src/flex_dep_opt/config/settings.yaml
+```
+This writes an interactive HTML plot (default: `results/dispatch_mpc_plot.html`).
 
-### One Unified Time Index
+### Windows helper
+A convenience script is available:
+```bat
+run_mpc.bat
+```
+It activates a local `.venv`, runs MPC, and generates plots.
 
--   15-minute resolution\
--   Length ≈ DA horizon (36--48 hours)
+## Outputs
+- `results/dispatch_mpc.csv`: dispatch time series (net power, charging, market positions, SoC, etc.).
+- `results/commit_mpc.csv`: gate-closure commitments over time.
+- `results/*.html`: Plotly dashboards (if plotting is enabled).
 
-### Two Market Masks
-
--   `mask_DA_active[t]`
--   `mask_ID_active[t]` (includes ID horizon limit)
-
-### Prices
-
--   DA prices are loaded for full horizon\
--   ID prices limited to short horizon\
--   Both aligned to unified timestep
-
-------------------------------------------------------------------------
-
-## 4. Gate Closure & Commit Logic
-
-### Day-Ahead (DA)
-
--   Market open until **D-1 12:00**
--   When GC is crossed between `current_time` and `next_time`:
-
-
-    p_market_committed_DA[t] = p_market_opt[t]
-
--   After commit, DA positions are **fixed**\
--   ID is never allowed to override DA commitments
-
-### Intraday (ID)
-
--   GC: **T -- 30 minutes**
--   Slot-wise commit when GC is reached:
-
-
-    p_market_committed_ID[t] = p_market_opt[t]
-
--   Each 15-minute product becomes frozen independently
-
-------------------------------------------------------------------------
-
-## 5. What the MPC Does in Each Loop
-
-Every 15 minutes:
-
-1.  **Build the 48h DA-scope window**\
-2.  Apply DA and ID masks\
-3.  Insert committed positions (DA + ID)\
-4.  Optimize all remaining free variables\
-5.  Commit new DA or ID slots whose GC has passed\
-6.  Export:
-    -   `dispatch_mpc.csv` (realized SoC, flows, activities)
-    -   `commit_mpc.csv` (all market commitments)
-
-------------------------------------------------------------------------
-
-## 6. Key Properties of the System
-
--   DA commitments propagate into all future MPC iterations\
--   ID trades are short-term and cannot modify DA products\
--   Battery SoC trajectory covers the entire 48h horizon\
--   Resulting dispatch is physically and market-accurate\
--   No double models, no DA-first-then-ID structure\
--   Fully aligned with real European market mechanisms
-
-------------------------------------------------------------------------
-
-## 7. Files of Interest
-
--   `model.py` --- Pyomo model definition\
--   `mpc_workflow.py` --- Rolling MPC loop, window construction, commit
-    logic\
--   `trading_rules.py` --- Gate closure and market masks\
--   `settings.yaml` --- Configuration (DA/ID horizons, fees, prices)
-
-------------------------------------------------------------------------
-
-## 8. Summary
-
-This asymmetric MPC architecture mirrors real-world trading for battery/EV assets:
-
--   **Unified model**
--   **Multiple markets**
--   **Independent gate closures**
--   **Different visibility horizons**
--   **Single rolling 48h optimization window**
-
-------------------------------------------------------------------------
-
-## 9. Price generator
--   **Dayahead prices from EPEX**: `python.exe -m flex_dep_opt import-epex-DA SRCDIRECTORY/SRCFILE.csv --out data/epex_prices_DA.csv`
--   **Intraday prices from DA**: `python.exe -m flex_dep_opt generate-prices-ID`
--   **reBAP prices from Netztransparenz.de**:  `python.exe -m flex_dep_opt import-reBAP SRCDIRECTORY/SRCFILE.csv`
+## Notes
+- The solver integration in `flex_dep_opt.opt.solve` requires Gurobi.
+- Price files are expected to include `time` and `price` columns with timezone-aware timestamps.
