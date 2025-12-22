@@ -3,7 +3,7 @@ from tqdm.auto import tqdm
 
 from flex_dep_opt.domain.vehicle import Vehicle
 from flex_dep_opt.domain.site import Site
-from flex_dep_opt.io.prices_io import build_prices_from_settings
+from flex_dep_opt.io.prices_io import build_prices_from_settings, build_fees_from_settings
 from flex_dep_opt.io.mobility_io import (
     read_mobility_bounds_csv,
     align_and_validate_mobility_bounds,
@@ -92,9 +92,10 @@ def run_mpc(cfg: dict):
     da_horizon_steps = int(da_horizon_hours / step_hours)
 
     # ============================================================
-    # 5) Load prices and simulation time index
+    # 5) Load prices, fees and simulation time index
     # ============================================================
     prices_by_market = build_prices_from_settings(cfg)
+    fees_by_market = build_fees_from_settings(cfg)
 
     start = pd.to_datetime(sim_cfg["start"]).tz_localize("Europe/Berlin")
     end = pd.to_datetime(sim_cfg["end"]).tz_localize("Europe/Berlin")
@@ -216,6 +217,7 @@ def run_mpc(cfg: dict):
                 vehicle=Vehicle(**opt_cfg["vehicle"]),
                 site=Site(**opt_cfg["site"]),
                 prices_by_market=window_prices,
+                fee_eur_per_kwh_by_market=fees_by_market,
                 timestep_hours=step_hours,
                 virtual_arbitrage=virtual_arbitrage,
                 degradation_cost_eur_per_kwh=c_deg,
@@ -263,6 +265,7 @@ def run_mpc(cfg: dict):
                         vehicle=Vehicle(**opt_cfg["vehicle"]),
                         site=Site(**opt_cfg["site"]),
                         prices_by_market=window_prices,
+                        fee_eur_per_kwh_by_market=fees_by_market,
                         timestep_hours=step_hours,
                         virtual_arbitrage=virtual_arbitrage,
                         degradation_cost_eur_per_kwh=c_deg,
@@ -305,6 +308,7 @@ def run_mpc(cfg: dict):
             # 10.7) Commit market positions at gate closure (TRADING masks only)
             # --------------------------------------------------------
             next_time = current_time + pd.Timedelta(hours=step_hours)
+
 
             trading_masks_next = build_market_activity_mask_for_time(
                 current_time=next_time,

@@ -1,7 +1,7 @@
 simulation:
-  start: "2025-10-01 00:00"
-  end: "2025-10-6 23:45"
-  timestep_hours: 0.25
+  start: "2025-10-01 00:00"                                 # simulation start
+  end: "2025-10-6 23:45"                                    # simulation end
+  timestep_hours: 0.25                                      # simulation timestep
 
 optimization:
   mode: joint
@@ -9,11 +9,12 @@ optimization:
     dayahead:
       enabled: true
       source: "data/prices/prices_DA_example.csv"
-      tx_fee_eur_per_mwh: 2.0                   # €/MWh
+      fee_eur_per_mwh: 0.0                                 # €/MWh (clearing fee + exchange fee + broker fee + ...)
     intraday:
       enabled: true
       source: "data/prices/prices_IDC_example.csv"
-      tx_fee_eur_per_mwh: 3.0                   # €/MWh
+      fee_eur_per_mwh: 0.0                                 # €/MWh (clearing fee + exchange fee + broker fee + ...)
+
 
   virtual_arbitrage: false
 

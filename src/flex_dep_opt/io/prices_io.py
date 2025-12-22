@@ -44,3 +44,18 @@ def build_prices_from_settings(settings):
         prices_by_market["IMB_POS"] = pos
         prices_by_market["IMB_NEG"] = neg
     return prices_by_market
+
+def build_fees_from_settings(settings):
+    fees_by_market = {}
+    mk_cfg = settings["optimization"]["markets"]
+
+    if mk_cfg["dayahead"]["enabled"]:
+        fees_by_market["DA"] = (
+            float(mk_cfg["dayahead"].get("fee_eur_per_mwh", 0.0)) / 1000.0
+        )
+
+    if mk_cfg["intraday"]["enabled"]:
+        fees_by_market["ID"] = (
+            float(mk_cfg["intraday"].get("fee_eur_per_mwh", 0.0)) / 1000.0
+        )
+    return fees_by_market

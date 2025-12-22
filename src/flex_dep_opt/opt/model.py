@@ -12,6 +12,7 @@ def fleet_commercialization(
     vehicle: Vehicle,
     site: Site,
     prices_by_market: Dict[str, pd.Series],
+    fee_eur_per_kwh_by_market: Dict[str, float] | None = None,
     *,
     timestep_hours: float | None = None,
     virtual_arbitrage: bool = True,
@@ -104,10 +105,9 @@ def fleet_commercialization(
     # ----------------------------
     # 5) Parameters
     # ----------------------------
-    m.price = pyo.Param(
-        m.MARKETS, m.T,
-        initialize=lambda mdl, mk, t: float(prices_by_market[mk].iloc[int(t)])
-    )
+    # Marketprices & fees
+    m.price = pyo.Param(m.MARKETS, m.T,initialize=lambda mdl, mk, t: float(prices_by_market[mk].iloc[int(t)]))
+    m.fee = pyo.Param(m.MARKETS,initialize=lambda mdl, mk: float(fee_eur_per_kwh_by_market.get(mk, 0.0)),within=pyo.NonNegativeReals,)
 
     # Flex bands (power + energy)
     m.P_lower = pyo.Param(m.T, initialize=lambda mdl, t: float(P_lower_ser.iloc[int(t)]))
@@ -252,6 +252,12 @@ def fleet_commercialization(
             return base == mdl.p_net[t]
         m.market_balance = pyo.Constraint(m.T, rule=balance_rule)
 
+        # Absolute market volume for fee calculation (LP-safe)
+        m.p_market_abs = pyo.Var(m.MARKETS, m.T, within=pyo.NonNegativeReals)
+        m.p_market_abs_pos = pyo.Constraint(m.MARKETS, m.T,rule=lambda mdl, mk, t: mdl.p_market_abs[mk, t] >= mdl.p_market[mk, t])
+        m.p_market_abs_neg = pyo.Constraint(m.MARKETS, m.T,rule=lambda mdl, mk, t: mdl.p_market_abs[mk, t] >= -mdl.p_market[mk, t])
+        m.p_market_vol = pyo.Expression(m.MARKETS, m.T, rule=lambda mdl, mk, t: mdl.p_market_abs[mk, t])
+
     else:
         # MILP: prevent simultaneous import and export within a timestep (no virtual arbitrage)
         m.u_state = pyo.Var(m.T, within=pyo.Binary)  # 1=export mode, 0=import mode
@@ -259,6 +265,7 @@ def fleet_commercialization(
         # Split market power into positive (sell/export) and negative (buy/import) parts per market
         m.p_market_pos = pyo.Var(m.MARKETS, m.T, within=pyo.NonNegativeReals)  # Sell component [kW]
         m.p_market_neg = pyo.Var(m.MARKETS, m.T, within=pyo.NonNegativeReals)  # Buy component [kW]
+        m.p_market_vol = pyo.Expression(m.MARKETS, m.T,rule=lambda mdl, mk, t: mdl.p_market_pos[mk, t] + mdl.p_market_neg[mk, t])
 
         # Define signed market position from pos/neg parts
         m.p_market_def = pyo.Constraint(
@@ -307,33 +314,40 @@ def fleet_commercialization(
     # 9) Objective: market revenue - degradation
     # ----------------------------
     def obj_expr(mdl):
+        # Revenue term
         revenue = sum(
             mdl.price[mk, t] * mdl.p_market[mk, t] * mdl.dt
             for mk in mdl.MARKETS for t in mdl.T
         )
 
+        # Market fee cost term
+        fee_cost = sum(
+            mdl.fee[mk] * mdl.p_market_vol[mk, t] * mdl.dt
+            for mk in mdl.MARKETS for t in mdl.T
+        )
+
+        # Degradation cost term
         deg_cost = mdl.c_deg * sum(
             (mdl.p_ch[t] + mdl.p_dis[t]) * mdl.dt
             for t in mdl.T
         )
 
+        # Imbalance cash & penalty term
         imb_cash = 0.0
         imb_vol_pen = 0.0
-
         if allow_imbalance:
             imb_cash = sum(
                 mdl.price_imb_pos[t] * mdl.p_imb_pos[t] * mdl.dt
                 - mdl.price_imb_neg[t] * mdl.p_imb_neg[t] * mdl.dt
                 for t in mdl.T
             )
-
             # Penalize absolute imbalance volume (kWh) to prevent schedule-vs-physical arbitrage
             imb_vol_pen = mdl.c_imb_vol * sum(
                 (mdl.p_imb_pos[t] + mdl.p_imb_neg[t]) * mdl.dt
                 for t in mdl.T
             )
 
-        return revenue + imb_cash - deg_cost - imb_vol_pen
+        return revenue + imb_cash - fee_cost - deg_cost - imb_vol_pen
 
     m.obj = pyo.Objective(rule=obj_expr, sense=pyo.maximize)
 
