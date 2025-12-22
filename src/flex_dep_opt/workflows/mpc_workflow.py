@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("gurobipy").setLevel(logging.WARNING)
 logging.getLogger("pyomo").setLevel(logging.WARNING)
+logging.getLogger("pyomo.core").setLevel(logging.ERROR)
 
 
 def run_mpc(cfg: dict):
@@ -255,12 +256,13 @@ def run_mpc(cfg: dict):
                 used_rebap = False
 
             except RuntimeError as e1:
-                # tqdm.write(f"PASS1 infeasible: {e1}")
-                logger.error(f"PASS1 infeasible: {e1}")
-
                 if not imb_enabled:
+                    tqdm.write("ERROR - PASS1 infeasible and imbalance disabled → abort")
+                    logger.error(f"PASS1 infeasible at {current_time} and imbalance disabled. Details: {e1}")
                     solved = False
                 else:
+                    tqdm.write("PASS1 infeasible → Imbalance activated (PASS2)")
+                    logger.info(f"PASS1 infeasible at {current_time} → trying PASS2 (imbalance). Details: {e1}")
                     model2 = fleet_commercialization(
                         vehicle=Vehicle(**opt_cfg["vehicle"]),
                         site=Site(**opt_cfg["site"]),
@@ -288,7 +290,8 @@ def run_mpc(cfg: dict):
                         model = model2  # IMPORTANT
 
                     except RuntimeError as e2:
-                        logger.error(f"PASS2 also infeasible: {e2}")
+                        tqdm.write("ERROR - PASS2 also infeasible → aborting")
+                        logger.error(f"PASS2 also infeasible at {current_time}. Details: {e2}")
                         solved = False
 
             if not solved:
