@@ -3,6 +3,7 @@ import yaml
 
 from flex_dep_opt.workflows.mpc_workflow import run_mpc
 from flex_dep_opt.workflows.plot_workflow import run_plot_mpc
+from flex_dep_opt.workflows.plot_workflow_paper import run_plot_mpc_paper
 
 
 def load_settings(path: str):
@@ -14,25 +15,16 @@ def main():
     parser = argparse.ArgumentParser(prog="flex-dep-opt")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p_opt = sub.add_parser("optimize")
-    p_opt.add_argument("--config", default="settings_example.yaml")
-
     p_mpc = sub.add_parser("mpc")
     p_mpc.add_argument("--config", default="settings_example.yaml")
-
-    p_plot = sub.add_parser("plot-results")
-    p_plot.add_argument("--config", default="settings_example.yaml")
 
     p_plot_mpc = sub.add_parser("plot-results-mpc")
     p_plot_mpc.add_argument("--config", default="settings_example.yaml")
 
-    args = parser.parse_args()
+    p_plot_mpc = sub.add_parser("plot-results-mpc-paper")
+    p_plot_mpc.add_argument("--config", default="settings_example.yaml")
 
-    # run optimize
-    if args.cmd == "optimize":
-        cfg = load_settings(args.config)
-        run_optimize(cfg)
-        return
+    args = parser.parse_args()
 
     # run mpc (Rolling Horizon)
     if args.cmd == "mpc":
@@ -44,4 +36,10 @@ def main():
     if args.cmd == "plot-results-mpc":
         cfg = load_settings(args.config)
         run_plot_mpc(cfg)
+        return
+
+    # run paper plot
+    if args.cmd == "plot-results-mpc-paper":
+        cfg = load_settings(args.config)
+        run_plot_mpc_paper(cfg)
         return
