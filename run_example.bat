@@ -15,3 +15,4 @@ for /d %%D in (results\*) do rmdir /s /q "%%D"
 
 python -m flex_dep_opt mpc --config "%CONFIG%"
 python -m flex_dep_opt plot-results-mpc --config "%CONFIG%"
+python -m flex_dep_opt plot-results-mpc-paper --config "%CONFIG%"
