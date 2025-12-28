@@ -15,13 +15,6 @@ optimization:
       source: "data/prices/prices_IDC_example.csv"
       fee_eur_per_mwh: 0.03                                 # €/MWh (clearing fee + exchange fee + broker fee + ...)
 
-
-  virtual_arbitrage: false
-
-  degradation:
-    enabled: true
-    cost_eur_per_mwh_throughput: 20.0
-
   trading:
     mode: "realistic"   # "none", "realistic"
     dayahead:
@@ -30,21 +23,28 @@ optimization:
     intraday:
       offset_minutes_before_delivery: 5       # trading until T-30min
 
-  mpc:
-    enabled: true
-    da_horizon_hours: 48
-    id_horizon_hours: 1
-
-  mobility:
-    enabled: true
-    bounds_file: "data/mobility/vb_bounds_example.csv"
-
   imbalance:
     enabled: true
     only_on_infeasible: true
     source_pos: "data/prices/prices_reBAPpos_example.csv"
     source_neg: "data/prices/prices_reBAPneg_example.csv"
     imbalance_volume_penalty_eur_per_kwh: 1000
+
+  virtual_arbitrage: false
+
+  degradation:
+    enabled: true
+    cost_eur_per_mwh_throughput: 20.0
+
+  mpc:
+    enabled: true
+    da_horizon_hours: 48
+    id_horizon_hours: 1
+    terminal_condition: True
+
+  mobility:
+    enabled: true
+    bounds_file: "data/mobility/vb_bounds_example.csv"
 
 optimize:
   out: "results/dispatch.csv"

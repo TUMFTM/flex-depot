@@ -134,6 +134,19 @@ def fleet_commercialization(
     # Initial energy state (set by MPC workflow)
     m.E0 = pyo.Param(initialize=0.0, mutable=True)
 
+    # --- Terminal target (set by MPC workflow, optional) ---
+    m.Eterm = pyo.Param(initialize=0.0, mutable=True)
+    # Weight for soft terminal objective (0 => disabled)
+    m.w_term = pyo.Param(initialize=0.0, mutable=True, within=pyo.NonNegativeReals)
+    # Absolute deviation from terminal target at end of horizon
+    m.e_term_dev = pyo.Var(within=pyo.NonNegativeReals)
+    last_s = N  # last state index (since m.S = 0..N)
+    m.term_dev_pos = pyo.Constraint(expr=m.E[last_s] - m.Eterm <= m.e_term_dev)
+    m.term_dev_neg = pyo.Constraint(expr=m.Eterm - m.E[last_s] <= m.e_term_dev)
+    # Optional HARD terminal constraint (disabled by default; MPC can activate it)
+    m.energy_term_hard = pyo.Constraint(expr=m.E[last_s] == m.Eterm)
+    m.energy_term_hard.deactivate()
+
     # Committed positions (set by MPC workflow; must be aligned)
     for mk in markets:
         if mk not in market_activity_mask:
@@ -347,7 +360,7 @@ def fleet_commercialization(
                 for t in mdl.T
             )
 
-        return revenue + imb_cash - fee_cost - deg_cost - imb_vol_pen
+        return revenue + imb_cash - fee_cost - deg_cost - imb_vol_pen - mdl.w_term * mdl.e_term_dev
 
     m.obj = pyo.Objective(rule=obj_expr, sense=pyo.maximize)
 
