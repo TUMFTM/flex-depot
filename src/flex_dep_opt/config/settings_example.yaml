@@ -40,7 +40,8 @@ optimization:
     enabled: true
     da_horizon_hours: 48
     id_horizon_hours: 1
-    terminal_condition: True
+    terminal_condition: true
+    terminal_weight_eur_per_kwh: 50
 
   mobility:
     enabled: true

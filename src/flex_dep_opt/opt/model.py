@@ -138,14 +138,7 @@ def fleet_commercialization(
     m.Eterm = pyo.Param(initialize=0.0, mutable=True)
     # Weight for soft terminal objective (0 => disabled)
     m.w_term = pyo.Param(initialize=0.0, mutable=True, within=pyo.NonNegativeReals)
-    # Absolute deviation from terminal target at end of horizon
-    m.e_term_dev = pyo.Var(within=pyo.NonNegativeReals)
-    last_s = N  # last state index (since m.S = 0..N)
-    m.term_dev_pos = pyo.Constraint(expr=m.E[last_s] - m.Eterm <= m.e_term_dev)
-    m.term_dev_neg = pyo.Constraint(expr=m.Eterm - m.E[last_s] <= m.e_term_dev)
-    # Optional HARD terminal constraint (disabled by default; MPC can activate it)
-    m.energy_term_hard = pyo.Constraint(expr=m.E[last_s] == m.Eterm)
-    m.energy_term_hard.deactivate()
+
 
     # Committed positions (set by MPC workflow; must be aligned)
     for mk in markets:
@@ -190,6 +183,9 @@ def fleet_commercialization(
         m.price_imb_pos = pyo.Param(m.T, initialize=lambda mdl, t: float(imbalance_prices_pos.iloc[int(t)]))
         m.price_imb_neg = pyo.Param(m.T, initialize=lambda mdl, t: float(imbalance_prices_neg.iloc[int(t)]))
 
+    # Absolute deviation from terminal target at end of horizon
+    m.e_term_dev = pyo.Var(within=pyo.NonNegativeReals)
+
     # ----------------------------
     # 7) Physical constraints (bands + efficiencies)
     # ----------------------------
@@ -231,6 +227,14 @@ def fleet_commercialization(
             - (1.0 / mdl.eta_d) * mdl.p_dis[t] * mdl.dt
 
     m.energy_state = pyo.Constraint(m.T, rule=energy_state_rule)
+
+    # Terminal condition
+    last_s = N  # last state index (since m.S = 0..N)
+    m.term_dev_pos = pyo.Constraint(expr=m.E[last_s] - m.Eterm <= m.e_term_dev)
+    m.term_dev_neg = pyo.Constraint(expr=m.Eterm - m.E[last_s] <= m.e_term_dev)
+    # Optional HARD terminal constraint (disabled by default; MPC can activate it)
+    m.energy_term_hard = pyo.Constraint(expr=m.E[last_s] == m.Eterm)
+    m.energy_term_hard.deactivate()
 
     # Fleet energy band (lower bound)
     m.E_lb = pyo.Constraint(

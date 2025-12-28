@@ -43,6 +43,8 @@ def run_mpc(cfg: dict):
     mob_cfg = opt_conf.get("mobility", {})
     imb_cfg = opt_conf.get("imbalance", {})
     imb_enabled = imb_cfg.get("enabled", False)
+    terminal_enabled = bool(mpc_cfg.get("terminal_condition", False))
+    terminal_weight = float(mpc_cfg.get("terminal_weight_eur_per_kwh", 50.0))
 
     # ============================================================
     # 2) Load mobility bounds (flex bands)
@@ -106,8 +108,12 @@ def run_mpc(cfg: dict):
 
     full_index = prices_by_market[next(iter(prices_by_market))].index
 
+    # Full state index (N+1): add the terminal state timestamp
+    dt = pd.Timedelta(hours=step_hours)
+    full_state_index = full_index.append(pd.DatetimeIndex([full_index[-1] + dt]))
+
     if mobility_bounds_full is not None:
-        mobility_bounds_full = mobility_bounds_full.loc[full_index]
+        mobility_bounds_full = mobility_bounds_full.loc[full_state_index]
 
     imb_pos_full = prices_by_market.pop("IMB_POS", None)
     imb_neg_full = prices_by_market.pop("IMB_NEG", None)
@@ -168,9 +174,12 @@ def run_mpc(cfg: dict):
             # --------------------------------------------------------
             # 10.1) Define rolling optimization window
             # --------------------------------------------------------
-            window_end = min(i + da_horizon_steps, len(full_index) - 1)  # leave room for +1 state
-            window_idx = full_index[i:window_end]  # decisions (N)
-            window_state_idx = full_index[i:window_end + 1]  # states (N+1)
+            N_total = len(full_index)  # number of decision steps in the full simulation
+
+            window_end = min(i + da_horizon_steps, N_total)  # EXCLUSIVE end for decisions
+            window_idx = full_index[i:window_end]  # decisions (>=1 element until i==N_total)
+            window_state_idx = full_state_index[i:window_end + 1]  # states = decisions + 1
+
             if len(window_idx) == 0:
                 break
 
@@ -243,6 +252,39 @@ def run_mpc(cfg: dict):
                 else:
                     _model.E0.set_value(float(E_state))
 
+            # Helper to set terminal condition
+            def _set_terminal_terms(_model):
+                # Default: terminal influence off
+                _model.w_term.set_value(0.0)
+                _model.energy_term_hard.deactivate()
+
+                if not terminal_enabled:
+                    return
+                if window_mobility_bounds is None:
+                    return
+
+                # Global goal: final state time of the whole simulation
+                goal_time = full_state_index[-1]
+
+                # Only apply if the goal is inside the current prediction horizon (state index)
+                if goal_time not in window_state_idx:
+                    return
+
+                # Compute Eterm at goal_time as midpoint of bounds
+                lb = float(window_mobility_bounds.loc[goal_time, "Capacity_lower_kWh"])
+                ub = float(window_mobility_bounds.loc[goal_time, "Capacity_upper_kWh"])
+                Eterm = 0.5 * (lb + ub)
+                _model.Eterm.set_value(Eterm)
+
+                # Ramp weight: stronger when closer to the end
+                remaining_steps = N_total - i  # decisions remaining incl. current step
+                frac = min(1.0, da_horizon_steps / max(1, remaining_steps))
+                _model.w_term.set_value(terminal_weight * frac)
+
+                # Hard constraint only in the last real step (when only 1 decision step remains)
+                if remaining_steps == 1:
+                    _model.energy_term_hard.activate()
+
             # --------------------------------------------------------
             # 10.5) Solve optimization problem (Two-pass)
             # --------------------------------------------------------
@@ -251,6 +293,7 @@ def run_mpc(cfg: dict):
 
             try:
                 _set_E0(model)
+                _set_terminal_terms(model)
                 solve_model(model)
                 solved = True
                 used_rebap = False
@@ -284,6 +327,7 @@ def run_mpc(cfg: dict):
 
                     try:
                         _set_E0(model2)
+                        _set_terminal_terms(model2)
                         solve_model(model2)
                         solved = True
                         used_rebap = True
