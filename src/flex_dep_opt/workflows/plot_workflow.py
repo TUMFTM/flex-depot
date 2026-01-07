@@ -4,7 +4,7 @@ import webbrowser
 import os
 
 from flex_dep_opt.viz.plots import plot_market_cashflows_plotly,plot_mpc_dispatch_plotly
-from flex_dep_opt.io.prices_io import build_prices_from_settings
+from flex_dep_opt.io.prices_io import build_prices_from_settings, build_fees_from_settings
 
 
 def run_plot_mpc(cfg: dict):
@@ -40,39 +40,45 @@ def run_plot_mpc(cfg: dict):
     else:
         print(f"INFO: commit_mpc file not found: {commit_path} (plot without commit hover)")
 
+    # --- Prices ---
     prices_by_market = build_prices_from_settings(cfg)
     for mkt, s in prices_by_market.items():
         prices_by_market[mkt] = s.loc[start:end]
 
+    # --- Fees ---
+    fees_by_market = build_fees_from_settings(cfg)
+
+    # --- Output paths ---
+    # Dispatch
+    out = Path(plot_cfg.get("out", "results/dispatch.html"))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    # Cashflow
+    out_cf = Path(plot_cfg["cashflow_out"])
+    out_cf.parent.mkdir(parents=True, exist_ok=True)
+
+    # --- Create dispatch figure (html) ---
     fig = plot_mpc_dispatch_plotly(
         dispatch=dispatch,
         prices_by_market=prices_by_market,
         commit_df=commit_df,
         title=plot_cfg.get("title", "MPC Flexband Dispatch and Market Positions"),
     )
-
-    out = Path(plot_cfg.get("out", "results/dispatch.html"))
-    out.parent.mkdir(parents=True, exist_ok=True)
     fig.write_html(out, include_plotlyjs="cdn")
-
     print(f"MPC Plot saved → {out.resolve()}")
-
     if plot_cfg.get("open", False):
         webbrowser.open(out.resolve().as_uri())
 
-    # Cashflow-Plot kannst du bei MPC genauso verwenden, wenn du willst:
-    if "cashflow_out" in plot_cfg:
-        out_cf = Path(plot_cfg["cashflow_out"])
-        out_cf.parent.mkdir(parents=True, exist_ok=True)
-        fig_cf = plot_market_cashflows_plotly(
-            dispatch=dispatch,
-            prices_by_market=prices_by_market,
-            timestep_hours=sim["timestep_hours"],
-        )
-        fig_cf.write_html(out_cf, include_plotlyjs="cdn")
-
-        print(f"CF Plot (MPC) saved → {out_cf.resolve()}")
-        if plot_cfg.get("open", False):
-            webbrowser.open(out_cf.resolve().as_uri())
+    # --- Create cashflow figure (html) ---
+    fig_cf = plot_market_cashflows_plotly(
+        dispatch=dispatch,
+        commit=commit_df,
+        prices_by_market=prices_by_market,
+        fee_eur_per_kwh_by_market=fees_by_market,
+        timestep_hours=sim["timestep_hours"],
+    )
+    fig_cf.write_html(out_cf, include_plotlyjs="cdn")
+    print(f"CF Plot (MPC) saved → {out_cf.resolve()}")
+    if plot_cfg.get("open", False):
+        webbrowser.open(out_cf.resolve().as_uri())
 
 

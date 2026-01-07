@@ -32,11 +32,19 @@ def _rgba(market: str, alpha: float) -> str:
 
 def plot_market_cashflows_plotly(
     dispatch: pd.DataFrame,
+    commit: pd.DataFrame,
     prices_by_market: dict[str, pd.Series],
+    fee_eur_per_kwh_by_market: dict[str, float],
     *,
     timestep_hours: float,
-    title: str = "Market Cashflows per Timestep",
+    title: str = "Market Cashflows",
 ) -> go.Figure:
+    """
+    HTML Layout (3 Zeilen):
+      Row 1 (full width): Market cashflows per timestep (stacked bars)
+      Row 2 (full width): Cumulative profit (line)
+      Row 3 (3 columns): Energy sunburst | Cashflow sunburst | KPI table
+    """
 
     if not isinstance(dispatch.index, pd.DatetimeIndex):
         raise ValueError("Dispatch index must be a DatetimeIndex")
@@ -63,69 +71,156 @@ def plot_market_cashflows_plotly(
         p = dispatch[col]
         price = prices_by_market[mk]
         p, price = p.align(price, join="inner")
+        if p.empty:
+            continue
 
         cf_df[f"{mk} Cashflow [€/step]"] = price * p * dt
+
+    if cf_df.empty:
+        raise ValueError("No cashflows could be computed (check market columns and prices_by_market).")
 
     cf_df["Total Cashflow [€/step]"] = cf_df.sum(axis=1)
     cf_df["Cumulative Profit [€]"] = cf_df["Total Cashflow [€/step]"].cumsum()
 
     # =========================================================
-    # 2) Aggregate volumes for sunburst  (robust index alignment)
+    # 2) Aggregates for sunbursts + KPIs
     # =========================================================
-    energy_data = []
-    cash_data = []
+    # sunburst raw lists (mk, side, value>=0)
+    energy_data: list[tuple[str, str, float]] = []
+    cash_data: list[tuple[str, str, float]] = []
+
+    # for KPI fees + table
+    energy_by_mk: dict[str, tuple[float, float]] = {}  # mk -> (buy_kwh, sell_kwh)
+    cash_by_mk: dict[str, tuple[float, float]] = {}    # mk -> (buy_eur, sell_eur)
 
     for col in market_cols:
         mk = col[2:-3].upper()
         if mk not in prices_by_market:
             continue
 
-        # align p and price to avoid boolean indexing mismatch
         p = dispatch[col]
         price = prices_by_market[mk]
         p, price = p.align(price, join="inner")
-
-        # if after align nothing left, skip
         if p.empty:
             continue
 
-        energy_kwh = p * dt  # signed kWh/step (since p is kW)
-        cash_eur = price * p * dt  # signed €/step
+        energy_kwh = p * dt
+        cash_eur = price * p * dt
 
         buy_mask = p < 0
         sell_mask = p > 0
 
-        if buy_mask.any():
-            energy_data.append((mk, "Buy", float((-energy_kwh[buy_mask]).sum())))
-            cash_data.append((mk, "Buy", float((-cash_eur[buy_mask]).sum())))
+        buy_e = float((-energy_kwh[buy_mask]).sum()) if buy_mask.any() else 0.0
+        sell_e = float((energy_kwh[sell_mask]).sum()) if sell_mask.any() else 0.0
+        buy_c = float((-cash_eur[buy_mask]).sum()) if buy_mask.any() else 0.0
+        sell_c = float((cash_eur[sell_mask]).sum()) if sell_mask.any() else 0.0
 
-        if sell_mask.any():
-            energy_data.append((mk, "Sell", float((energy_kwh[sell_mask]).sum())))
-            cash_data.append((mk, "Sell", float((cash_eur[sell_mask]).sum())))
+        energy_by_mk[mk] = (buy_e, sell_e)
+        cash_by_mk[mk] = (buy_c, sell_c)
+
+        if buy_e > 0:
+            energy_data.append((mk, "Buy", buy_e))
+        if sell_e > 0:
+            energy_data.append((mk, "Sell", sell_e))
+
+        if buy_c > 0:
+            cash_data.append((mk, "Buy", buy_c))
+        if sell_c > 0:
+            cash_data.append((mk, "Sell", sell_c))
 
     # =========================================================
-    # 3) Figure layout (3 rows!)
+    # 3) KPI computation
+    # =========================================================
+    gross_profit_eur = float(cf_df["Total Cashflow [€/step]"].sum())
+
+    buy_kwh = float(sum(v[0] for v in energy_by_mk.values()))
+    sell_kwh = float(sum(v[1] for v in energy_by_mk.values()))
+    net_kwh = sell_kwh - buy_kwh
+
+    # fees only for DA/ID
+    def _mk_fee(mk: str) -> float:
+        if mk not in energy_by_mk:
+            return 0.0
+        buy_e, sell_e = energy_by_mk[mk]
+        return float(fee_eur_per_kwh_by_market.get(mk, 0.0)) * float(buy_e + sell_e)
+
+    fees_eur = _mk_fee("DA") + _mk_fee("ID")
+    trading_profit_eur = gross_profit_eur + fees_eur  # matches your paper logic
+
+    trade_steps = 0
+    if commit is not None and not commit.empty:
+        # same logic as plots_paper.py
+        if ("committed_new" in commit.columns) and ("commit_now" in commit.columns):
+            trade_steps = int(commit[(commit["committed_new"] != 0.0) & (commit["commit_now"] == True)].shape[0])
+
+    # =========================================================
+    # 4) Sunburst builder (same hierarchy idea as before)
+    # =========================================================
+    def _build_sunburst(data: list[tuple[str, str, float]]):
+        """
+        data: list of (mk, side, value) with side in {"Buy","Sell"} and value >= 0
+        Returns labels, parents, values, colors for a 2-level sunburst:
+          Total -> MK -> MK Side
+        """
+        total = sum(v for _, _, v in data)
+        labels = ["Total"]
+        parents = [""]
+        values = [total]
+        colors = ["rgba(200,200,200,0.0)"]  # root almost invisible
+
+        markets = sorted({mk for mk, _, _ in data})
+        for mk in markets:
+            mk_total = sum(v for m, _, v in data if m == mk)
+            if mk_total <= 0:
+                continue
+
+            labels.append(mk)
+            parents.append("Total")
+            values.append(mk_total)
+            colors.append(_rgba(mk, 0.7))
+
+            for side in ["Buy", "Sell"]:
+                side_total = sum(v for m, s, v in data if m == mk and s == side)
+                if side_total <= 0:
+                    continue
+
+                labels.append(f"{mk} {side}")
+                parents.append(mk)
+                values.append(side_total)
+
+                alpha = 1.0 if side == "Sell" else 0.3
+                colors.append(_rgba(mk, alpha))
+
+        return labels, parents, values, colors
+
+    e_labels, e_parents, e_values, e_colors = _build_sunburst(energy_data)
+    c_labels, c_parents, c_values, c_colors = _build_sunburst(cash_data)
+
+    # =========================================================
+    # 5) Figure layout (3 rows, 3 cols; rows 1/2 span all cols)
     # =========================================================
     fig = make_subplots(
         rows=3,
-        cols=2,
+        cols=3,
         shared_xaxes=True,
-        vertical_spacing=0.06,
+        vertical_spacing=0.07,
+        horizontal_spacing=0.06,
         specs=[
-            [{"colspan": 2}, None],            # Row 1: Bars
-            [{"type": "sunburst"}, {"type": "sunburst"}],  # Row 2
-            [{"colspan": 2}, None],            # Row 3: Cumulative
+            [{"colspan": 3}, None, None],                 # Row 1: Bars
+            [{"colspan": 3}, None, None],                 # Row 2: Cumulative line
+            [{"type": "sunburst"}, {"type": "sunburst"}, {"type": "table"}],  # Row 3: 3 columns
         ],
         subplot_titles=(
             "Market Cashflows per Timestep",
+            "Cumulative Profit",
             "Energy volumes by market (kWh)",
             "Cashflow volumes by market (€)",
-            "Cumulative Profit",
+            "KPIs",
         ),
     )
 
     # ---------------------------------------------------------
-    # Row 1: Bars
+    # Row 1: Bars (per market cashflow)
     # ---------------------------------------------------------
     for col in cf_df.columns:
         if not col.endswith("Cashflow [€/step]") or col.startswith("Total"):
@@ -134,10 +229,7 @@ def plot_market_cashflows_plotly(
         mk = col.split()[0]
         values = cf_df[col]
 
-        colors = [
-            _rgba(mk, 1.0) if v > 0 else _rgba(mk, 0.3)
-            for v in values
-        ]
+        colors = [_rgba(mk, 1.0) if v > 0 else _rgba(mk, 0.3) for v in values]
 
         fig.add_trace(
             go.Bar(
@@ -150,84 +242,8 @@ def plot_market_cashflows_plotly(
             col=1,
         )
 
-        # ---------------------------------------------------------
-        # Row 2: Sunbursts  (build hierarchy + colors)
-        # ---------------------------------------------------------
-
-        def _build_sunburst(data: list[tuple[str, str, float]], *, kind: str):
-            """
-            data: list of (mk, side, value) with side in {"Buy","Sell"} and value >= 0
-            Returns labels, parents, values, colors for a 2-level sunburst:
-            Total -> MK -> MK Side
-            """
-            # Root
-            labels = ["Total"]
-            parents = [""]
-            values = [sum(v for _, _, v in data)]
-            colors = ["rgba(200,200,200,0.0)"]  # root invisible-ish
-
-            # Markets
-            markets = sorted({mk for mk, _, _ in data})
-            for mk in markets:
-                mk_total = sum(v for m, _, v in data if m == mk)
-                if mk_total <= 0:
-                    continue
-
-                labels.append(mk)
-                parents.append("Total")
-                values.append(mk_total)
-                colors.append(_rgba(mk, 0.7))  # market ring slightly transparent
-
-                # Sides (Buy/Sell)
-                for side in ["Buy", "Sell"]:
-                    side_total = sum(v for m, s, v in data if m == mk and s == side)
-                    if side_total <= 0:
-                        continue
-
-                    labels.append(f"{mk} {side}")
-                    parents.append(mk)
-                    values.append(side_total)
-
-                    # alpha logic like in dispatch plot:
-                    # Sell -> 1.0, Buy -> 0.3
-                    alpha = 1.0 if side == "Sell" else 0.3
-                    colors.append(_rgba(mk, alpha))
-
-            return labels, parents, values, colors
-
-        # Build sunburst inputs
-        e_labels, e_parents, e_values, e_colors = _build_sunburst(energy_data, kind="energy")
-        c_labels, c_parents, c_values, c_colors = _build_sunburst(cash_data, kind="cash")
-
-        # Add traces
-        fig.add_trace(
-            go.Sunburst(
-                labels=e_labels,
-                parents=e_parents,
-                values=e_values,
-                marker=dict(colors=e_colors),
-                branchvalues="total",
-                name="Energy",
-                hovertemplate="%{label}<br>%{value:.2f}<extra></extra>",
-            ),
-            row=2, col=1,
-        )
-
-        fig.add_trace(
-            go.Sunburst(
-                labels=c_labels,
-                parents=c_parents,
-                values=c_values,
-                marker=dict(colors=c_colors),
-                branchvalues="total",
-                name="Cashflow",
-                hovertemplate="%{label}<br>%{value:.2f}<extra></extra>",
-            ),
-            row=2, col=2,
-        )
-
     # ---------------------------------------------------------
-    # Row 3: Cumulative profit
+    # Row 2: Cumulative profit (line)
     # ---------------------------------------------------------
     fig.add_trace(
         go.Scatter(
@@ -237,30 +253,96 @@ def plot_market_cashflows_plotly(
             name="Cumulative Profit [€]",
             line=dict(width=3, color="rgb(162,173,0)"),
         ),
+        row=2,
+        col=1,
+    )
+
+    # ---------------------------------------------------------
+    # Row 3: Sunbursts + KPI table
+    # ---------------------------------------------------------
+    fig.add_trace(
+        go.Sunburst(
+            labels=e_labels,
+            parents=e_parents,
+            values=e_values,
+            marker=dict(colors=e_colors),
+            branchvalues="total",
+            name="Energy",
+            hovertemplate="%{label}<br>%{value:.2f}<extra></extra>",
+        ),
         row=3,
         col=1,
     )
 
+    fig.add_trace(
+        go.Sunburst(
+            labels=c_labels,
+            parents=c_parents,
+            values=c_values,
+            marker=dict(colors=c_colors),
+            branchvalues="total",
+            name="Cashflow",
+            hovertemplate="%{label}<br>%{value:.2f}<extra></extra>",
+        ),
+        row=3,
+        col=2,
+    )
+
+    kpi_rows = [
+        ("Gross Profit", f"{gross_profit_eur:.1f} €"),
+        ("      Trading Profit", f"{trading_profit_eur:.1f} €"),
+        ("      Trading Fees", f"{fees_eur:.1f} €"),
+        ("Number of Trades", f"{trade_steps:d}"),
+        ("Net Volume", f"{net_kwh:.1f} kWh"),
+        ("      Sell Volume", f"{sell_kwh:.1f} kWh"),
+        ("      Buy Volume", f"{buy_kwh:.1f} kWh"),
+    ]
+
+    fig.add_trace(
+        go.Table(
+            header=dict(
+                values=["KPI", "Value"],
+                align=["left", "right"],
+                fill_color="rgba(0,0,0,0.03)",
+                line_color="rgba(0,0,0,0.15)",
+                font=dict(size=12),
+            ),
+            cells=dict(
+                values=[[r[0] for r in kpi_rows], [r[1] for r in kpi_rows]],
+                align=["left", "right"],
+                line_color="rgba(0,0,0,0.15)",
+                height=24,
+                font=dict(size=12),
+            ),
+        ),
+        row=3,
+        col=3,
+    )
+
     # =========================================================
-    # Layout
+    # Layout tweaks
     # =========================================================
     fig.update_layout(
         title=title,
         template="plotly_white",
-        height=1100,
+        height=1150,
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=1.03,
+            y=1.02,
             xanchor="right",
             x=1,
         ),
         margin=dict(l=60, r=60, t=80, b=60),
         barmode="relative",
+        hovermode="x unified",
     )
 
     fig.update_yaxes(title_text="Cashflow [€/step]", row=1, col=1)
-    fig.update_yaxes(title_text="Cumulative Profit [€]", row=3, col=1)
+    fig.update_yaxes(title_text="Cumulative Profit [€]", row=2, col=1)
+
+    # Sunbursts: etwas weniger “Plotly padding” (optional)
+    fig.update_traces(insidetextorientation="radial", selector=dict(type="sunburst"))
 
     return fig
 
