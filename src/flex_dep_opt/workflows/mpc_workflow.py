@@ -4,9 +4,9 @@ from tqdm.auto import tqdm
 from flex_dep_opt.domain.vehicle import Vehicle
 from flex_dep_opt.domain.site import Site
 from flex_dep_opt.io.prices_io import build_prices_from_settings, build_fees_from_settings
-from flex_dep_opt.io.mobility_io import (
-    read_mobility_bounds_csv,
-    align_and_validate_mobility_bounds,
+from flex_dep_opt.io.flexibility_io import (
+    read_flexibility_bounds_csv,
+    align_and_validate_flexibility_bounds,
 )
 from flex_dep_opt.opt.model import fleet_commercialization
 from flex_dep_opt.opt.solve import solve_model, extract_dispatch
@@ -51,7 +51,7 @@ def run_mpc(cfg: dict):
     # ============================================================
     mobility_bounds_full = None
     if mob_cfg.get("enabled", False):
-        mobility_bounds_full = read_mobility_bounds_csv(mob_cfg["bounds_file"])
+        mobility_bounds_full = read_flexibility_bounds_csv(mob_cfg["bounds_file"])
 
     # ============================================================
     # 3) Helper: compute market gate closure timestamp
@@ -189,7 +189,7 @@ def run_mpc(cfg: dict):
             window_prices = {mk: prices_by_market[mk].loc[window_idx] for mk in prices_by_market}
 
             window_mobility_bounds = (
-                align_and_validate_mobility_bounds(
+                align_and_validate_flexibility_bounds(
                     bounds=mobility_bounds_full,
                     time_index=window_state_idx,
                 )
