@@ -8,7 +8,7 @@ from ..domain.vehicle import Vehicle
 from ..domain.site import Site
 
 
-def fleet_commercialization(
+def flexibility_commercialization(
     vehicle: Vehicle,
     site: Site,
     prices_by_market: Dict[str, pd.Series],

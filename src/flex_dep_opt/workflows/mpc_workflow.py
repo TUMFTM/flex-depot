@@ -8,7 +8,7 @@ from flex_dep_opt.io.flexibility_io import (
     read_flexibility_bounds_csv,
     align_and_validate_flexibility_bounds,
 )
-from flex_dep_opt.opt.model import fleet_commercialization
+from flex_dep_opt.opt.model import flexibility_commercialization
 from flex_dep_opt.opt.solve import solve_model, extract_dispatch
 from flex_dep_opt.market.trading_rules import build_market_activity_mask_for_time
 
@@ -223,7 +223,7 @@ def run_mpc(cfg: dict):
             # --------------------------------------------------------
             # 10.4) Build and parameterize optimization model
             # --------------------------------------------------------
-            model = fleet_commercialization(
+            model = flexibility_commercialization(
                 vehicle=Vehicle(**opt_cfg["vehicle"]),
                 site=Site(**opt_cfg["site"]),
                 prices_by_market=window_prices,
@@ -306,7 +306,7 @@ def run_mpc(cfg: dict):
                 else:
                     tqdm.write("PASS1 infeasible → Imbalance activated (PASS2)")
                     logger.info(f"PASS1 infeasible at {current_time} → trying PASS2 (imbalance). Details: {e1}")
-                    model2 = fleet_commercialization(
+                    model2 = flexibility_commercialization(
                         vehicle=Vehicle(**opt_cfg["vehicle"]),
                         site=Site(**opt_cfg["site"]),
                         prices_by_market=window_prices,
