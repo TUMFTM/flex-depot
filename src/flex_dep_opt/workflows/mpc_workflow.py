@@ -40,18 +40,16 @@ def run_mpc(cfg: dict):
     opt_conf = cfg["optimization"]
     trading_cfg = opt_conf["trading"]
     mpc_cfg = opt_conf["mpc"]
-    mob_cfg = opt_conf.get("mobility", {})
+    flex_cfg = opt_conf.get("flexibility", {})
     imb_cfg = opt_conf.get("imbalance", {})
     imb_enabled = imb_cfg.get("enabled", False)
     terminal_enabled = bool(mpc_cfg.get("terminal_condition", False))
     terminal_weight = float(mpc_cfg.get("terminal_weight_eur_per_kwh", 50.0))
 
     # ============================================================
-    # 2) Load mobility bounds (flex bands)
+    # 2) Load flexibility bounds (flex bands)
     # ============================================================
-    mobility_bounds_full = None
-    if mob_cfg.get("enabled", False):
-        mobility_bounds_full = read_flexibility_bounds_csv(mob_cfg["bounds_file"])
+    flexibility_bounds_full = read_flexibility_bounds_csv(flex_cfg["bounds_file"])
 
     # ============================================================
     # 3) Helper: compute market gate closure timestamp
@@ -112,8 +110,8 @@ def run_mpc(cfg: dict):
     dt = pd.Timedelta(hours=step_hours)
     full_state_index = full_index.append(pd.DatetimeIndex([full_index[-1] + dt]))
 
-    if mobility_bounds_full is not None:
-        mobility_bounds_full = mobility_bounds_full.loc[full_state_index]
+    if flexibility_bounds_full is not None:
+        flexibility_bounds_full = flexibility_bounds_full.loc[full_state_index]
 
     imb_pos_full = prices_by_market.pop("IMB_POS", None)
     imb_neg_full = prices_by_market.pop("IMB_NEG", None)
@@ -123,11 +121,11 @@ def run_mpc(cfg: dict):
     # ============================================================
     virtual_arbitrage = opt_conf.get("virtual_arbitrage", False)
 
-    # Degradation cost (€/kWh throughput)
-    deg_cfg = opt_conf.get("degradation", {})
-    c_deg = (
-        float(deg_cfg["cost_eur_per_mwh_throughput"]) / 1000.0
-        if deg_cfg.get("enabled", False)
+    # Cycling cost (€/kWh throughput)
+    cyc_cfg = flex_cfg.get("cycle_regularization", {})
+    c_cyc = (
+        float(cyc_cfg["cost_eur_per_mwh_throughput"]) / 1000.0
+        if cyc_cfg.get("enabled", False)
         else 0.0
     )
 
@@ -142,10 +140,10 @@ def run_mpc(cfg: dict):
     # ============================================================
     # 8) Initialize energy state (band-consistent)
     # ============================================================
-    if mobility_bounds_full is not None:
+    if flexibility_bounds_full is not None:
         E_state = 0.5 * (
-            mobility_bounds_full["Capacity_lower_kWh"].iloc[0]
-            + mobility_bounds_full["Capacity_upper_kWh"].iloc[0]
+            flexibility_bounds_full["Capacity_lower_kWh"].iloc[0]
+            + flexibility_bounds_full["Capacity_upper_kWh"].iloc[0]
         )
     else:
         E_state = 0.0
@@ -184,16 +182,16 @@ def run_mpc(cfg: dict):
                 break
 
             # --------------------------------------------------------
-            # 10.2) Slice prices and mobility bounds
+            # 10.2) Slice prices and flexibility bounds
             # --------------------------------------------------------
             window_prices = {mk: prices_by_market[mk].loc[window_idx] for mk in prices_by_market}
 
-            window_mobility_bounds = (
+            window_flexibility_bounds = (
                 align_and_validate_flexibility_bounds(
-                    bounds=mobility_bounds_full,
+                    bounds=flexibility_bounds_full,
                     time_index=window_state_idx,
                 )
-                if mobility_bounds_full is not None
+                if flexibility_bounds_full is not None
                 else None
             )
 
@@ -230,19 +228,19 @@ def run_mpc(cfg: dict):
                 fee_eur_per_kwh_by_market=fees_by_market,
                 timestep_hours=step_hours,
                 virtual_arbitrage=virtual_arbitrage,
-                degradation_cost_eur_per_kwh=c_deg,
+                cycling_cost_eur_per_kwh=c_cyc,
                 market_activity_mask=decision_masks,
                 committed_positions={mk: committed_positions[mk].loc[window_idx] for mk in committed_positions},
-                mobility_bounds=window_mobility_bounds,
+                flexibility_bounds=window_flexibility_bounds,
                 allow_imbalance=False,
                 imbalance_volume_penalty_eur_per_kwh=0.0,
             )
 
             # Helper to set E0 consistently on a given model
             def _set_E0(_model):
-                if window_mobility_bounds is not None:
-                    lb0 = float(window_mobility_bounds["Capacity_lower_kWh"].iloc[0])
-                    ub0 = float(window_mobility_bounds["Capacity_upper_kWh"].iloc[0])
+                if window_flexibility_bounds is not None:
+                    lb0 = float(window_flexibility_bounds["Capacity_lower_kWh"].iloc[0])
+                    ub0 = float(window_flexibility_bounds["Capacity_upper_kWh"].iloc[0])
                     E0 = float(E_state if i > 0 else 0.5 * (lb0 + ub0))
                     if not (lb0 - 1e-6 <= E0 <= ub0 + 1e-6):
                         logger.warning(
@@ -260,7 +258,7 @@ def run_mpc(cfg: dict):
 
                 if not terminal_enabled:
                     return
-                if window_mobility_bounds is None:
+                if window_flexibility_bounds is None:
                     return
 
                 # Global goal: final state time of the whole simulation
@@ -271,8 +269,8 @@ def run_mpc(cfg: dict):
                     return
 
                 # Compute Eterm at goal_time as midpoint of bounds
-                lb = float(window_mobility_bounds.loc[goal_time, "Capacity_lower_kWh"])
-                ub = float(window_mobility_bounds.loc[goal_time, "Capacity_upper_kWh"])
+                lb = float(window_flexibility_bounds.loc[goal_time, "Capacity_lower_kWh"])
+                ub = float(window_flexibility_bounds.loc[goal_time, "Capacity_upper_kWh"])
                 Eterm = 0.5 * (lb + ub)
                 _model.Eterm.set_value(Eterm)
 
@@ -313,10 +311,10 @@ def run_mpc(cfg: dict):
                         fee_eur_per_kwh_by_market=fees_by_market,
                         timestep_hours=step_hours,
                         virtual_arbitrage=virtual_arbitrage,
-                        degradation_cost_eur_per_kwh=c_deg,
+                        cycling_cost_eur_per_kwh=c_cyc,
                         market_activity_mask=decision_masks,
                         committed_positions={mk: committed_positions[mk].loc[window_idx] for mk in committed_positions},
-                        mobility_bounds=window_mobility_bounds,
+                        flexibility_bounds=window_flexibility_bounds,
                         allow_imbalance=True,
                         imbalance_prices_pos=window_imb_pos,
                         imbalance_prices_neg=window_imb_neg,

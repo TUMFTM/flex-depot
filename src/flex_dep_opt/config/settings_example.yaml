@@ -32,20 +32,17 @@ optimization:
 
   virtual_arbitrage: false
 
-  degradation:
-    enabled: true
-    cost_eur_per_mwh_throughput: 20.0
-
   mpc:
-    enabled: true
     da_horizon_hours: 48
     id_horizon_hours: 1
     terminal_condition: true
     terminal_weight_eur_per_kwh: 50
 
-  mobility:
-    enabled: true
+  flexibility:
     bounds_file: "data/mobility/vb_bounds_example.csv"
+    cycle_regularization:
+      enabled: true
+      cost_eur_per_mwh_throughput: 20.0
 
 optimize:
   out: "results/dispatch.csv"

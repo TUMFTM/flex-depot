@@ -10,3 +10,4 @@ from dataclasses import dataclass
 class Vehicle:
     eta_charge: float
     eta_discharge: float
+

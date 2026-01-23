@@ -16,10 +16,10 @@ def flexibility_commercialization(
     *,
     timestep_hours: float | None = None,
     virtual_arbitrage: bool = True,
-    degradation_cost_eur_per_kwh: float = 0.0,
+    cycling_cost_eur_per_kwh: float = 0.0,
     market_activity_mask: Dict[str, pd.Series],
     committed_positions: Dict[str, pd.Series],
-    mobility_bounds: pd.DataFrame,
+    flexibility_bounds: pd.DataFrame,
     allow_imbalance: bool = False,
     imbalance_prices_pos: pd.Series | None = None,
     imbalance_prices_neg: pd.Series | None = None,
@@ -63,25 +63,25 @@ def flexibility_commercialization(
         timestep_hours = (time_index[1] - time_index[0]).total_seconds() / 3600.0
 
     # ----------------------------
-    # 3) Mobility flex bands (assumed clean + aligned by workflow/io)
+    # 3) Flexibility bands (assumed clean + aligned by workflow/io)
     # ----------------------------
     required_cols = [
         "Power_lower_kW", "Power_upper_kW",
         "Capacity_lower_kWh", "Capacity_upper_kWh",
     ]
-    missing_cols = [c for c in required_cols if c not in mobility_bounds.columns]
+    missing_cols = [c for c in required_cols if c not in flexibility_bounds.columns]
     if missing_cols:
-        raise ValueError(f"mobility_bounds missing columns: {missing_cols}")
-    if len(mobility_bounds) != len(time_index) + 1:
+        raise ValueError(f"flexibility_bounds missing columns: {missing_cols}")
+    if len(flexibility_bounds) != len(time_index) + 1:
         raise ValueError(
-            "mobility_bounds must have exactly N+1 rows (states) "
+            "flexibility_bounds must have exactly N+1 rows (states) "
             "for N decision steps"
         )
 
-    P_lower_ser = mobility_bounds["Power_lower_kW"]
-    P_upper_ser = mobility_bounds["Power_upper_kW"]
-    E_lower_ser = mobility_bounds["Capacity_lower_kWh"]
-    E_upper_ser = mobility_bounds["Capacity_upper_kWh"]
+    P_lower_ser = flexibility_bounds["Power_lower_kW"]
+    P_upper_ser = flexibility_bounds["Power_upper_kW"]
+    E_lower_ser = flexibility_bounds["Capacity_lower_kWh"]
+    E_upper_ser = flexibility_bounds["Capacity_upper_kWh"]
 
     # Time-dependent maxima (used as tight Big-M values in MILP constraints)
     P_ch_max_ser = P_upper_ser.clip(lower=0.0)         # max import (>=0)
@@ -122,7 +122,7 @@ def flexibility_commercialization(
     # Efficiency + degradation + imbalance
     m.eta_c = pyo.Param(initialize=float(vehicle.eta_charge))
     m.eta_d = pyo.Param(initialize=float(vehicle.eta_discharge))
-    m.c_deg = pyo.Param(initialize=float(degradation_cost_eur_per_kwh))
+    m.c_deg = pyo.Param(initialize=float(cycling_cost_eur_per_kwh))
     m.c_imb_vol = pyo.Param(initialize=float(imbalance_volume_penalty_eur_per_kwh))
 
     # Global market max (symmetric)
