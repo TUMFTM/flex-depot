@@ -4,7 +4,6 @@ simulation:
   timestep_hours: 0.25                                      # simulation timestep
 
 optimization:
-  mode: joint
   markets:
     dayahead:
       enabled: true                                         # "true", "false"
