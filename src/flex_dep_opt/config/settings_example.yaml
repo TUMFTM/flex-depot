@@ -7,42 +7,42 @@ optimization:
   mode: joint
   markets:
     dayahead:
-      enabled: true
+      enabled: true                                         # "true", "false"
       source: "data/prices/prices_DA_example.csv"
       fee_eur_per_mwh: 0.02                                 # €/MWh (clearing fee + exchange fee + broker fee + ...)
     intraday:
-      enabled: true
+      enabled: true                                         # "true", "false"
       source: "data/prices/prices_IDC_example.csv"
       fee_eur_per_mwh: 0.03                                 # €/MWh (clearing fee + exchange fee + broker fee + ...)
 
   trading:
-    mode: "realistic"   # "none", "realistic"
+    mode: "realistic"                                       # "none", "realistic"
     dayahead:
-      gate_closure_hour: "12:00"                # D-1
-      closes_previous_day: true
+      gate_closure_hour: "12:00"
+      closes_previous_day: true                             # "true" = D-1, "false" = D
     intraday:
-      offset_minutes_before_delivery: 5       # trading until T-30min
+      offset_minutes_before_delivery: 5                     # trading until T-5min
 
   imbalance:
-    enabled: true
-    only_on_infeasible: true
+    enabled: true                                           # "true", "false"
+    only_on_infeasible: true                                # "true", "false"
     source_pos: "data/prices/prices_reBAPpos_example.csv"
     source_neg: "data/prices/prices_reBAPneg_example.csv"
-    imbalance_volume_penalty_eur_per_kwh: 1000
+    imbalance_volume_penalty_eur_per_kwh: 1000              # €/kWh
 
-  virtual_arbitrage: false
+  virtual_arbitrage: false                                  # "true", "false"
 
   mpc:
-    da_horizon_hours: 48
-    id_horizon_hours: 1
-    terminal_condition: true
-    terminal_weight_eur_per_kwh: 50
+    da_horizon_hours: 48                                    # length of DA prediction horizon in hours
+    id_horizon_hours: 1                                     # length of DA prediction horizon in hours
+    terminal_condition: true                                # "true", "false"
+    terminal_weight_eur_per_kwh: 50                         # €/kWh
 
   flexibility:
     bounds_file: "data/mobility/vb_bounds_example.csv"
     cycle_regularization:
       enabled: true
-      cost_eur_per_mwh_throughput: 20.0
+      cost_eur_per_mwh_throughput: 20.0                     # €/MWh
 
 optimize:
   out: "results/dispatch.csv"

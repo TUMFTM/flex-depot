@@ -1,5 +1,5 @@
 # results_io.py
-# Functions for saving optimization results (dispatch, SoC, etc.) to CSV files.
+# Functions for saving optimization results (dispatch, commit, etc.) to CSV files.
 
 import pandas as pd
 from pathlib import Path

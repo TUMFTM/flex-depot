@@ -329,7 +329,7 @@ def run_mpc(cfg: dict):
                         solve_model(model2)
                         solved = True
                         used_rebap = True
-                        model = model2  # IMPORTANT
+                        model = model2
 
                     except RuntimeError as e2:
                         tqdm.write("ERROR - PASS2 also infeasible → aborting")
@@ -382,7 +382,11 @@ def run_mpc(cfg: dict):
                         "commit_now": False,
                     }
 
-                    if now_open and not next_open:
+                    if opt_conf["trading"]["mode"] == "none" and tau == window_idx[0]:
+                        committed_positions[mk].loc[tau] = row["p_opt"]
+                        row["committed_new"] = row["p_opt"]
+                        row["commit_now"] = True
+                    elif now_open and not next_open:
                         committed_positions[mk].loc[tau] = row["p_opt"]
                         row["committed_new"] = row["p_opt"]
                         row["commit_now"] = True
