@@ -12,9 +12,6 @@ MARKET_COLORS: Dict[str, tuple[int, int, int]] = {
     "DA": (0,101,189),
     "ID": (227,114,34),
     "IMB": (120, 80, 160),
-    #"DA": (228,0,69),
-    #"ID": (145,185,0),
-    # später z.B. "FCR": (0, 120, 255),
 }
 
 
@@ -55,8 +52,12 @@ def plot_market_cashflows_plotly(
         c for c in dispatch.columns
         if c.startswith("p_")
         and c.endswith("_kw")
-        and c not in ("p_ch_kw", "p_dis_kw")
+        and c not in ("p_ch_kw", "p_dis_kw", "p_net_kw", "p_imb_pos_kw", "p_imb_neg_kw")
     ]
+
+    # --- Imbalance / reBAP columns (optional) ---
+    has_imb = ("p_imb_pos_kw" in dispatch.columns) and ("p_imb_neg_kw" in dispatch.columns)
+    p_imb_net = (dispatch["p_imb_pos_kw"] - dispatch["p_imb_neg_kw"]) if has_imb else None
 
     # =========================================================
     # 1) Cashflow time series
@@ -75,6 +76,32 @@ def plot_market_cashflows_plotly(
             continue
 
         cf_df[f"{mk} Cashflow [€/step]"] = price * p * dt
+
+    # =========================================================
+    # 1b) Add Imbalance cashflow (optional)
+    # =========================================================
+    if has_imb and ("IMB_POS" in prices_by_market) and ("IMB_NEG" in prices_by_market):
+        # lokale Kopien (damit garantiert nichts am dispatch “klebt”)
+        p_pos = dispatch["p_imb_pos_kw"].astype(float).copy()
+        p_neg = dispatch["p_imb_neg_kw"].astype(float).copy()
+
+        p_pos_mag = p_pos.clip(lower=0.0)  # oder: p_pos.abs()
+        p_neg_mag = p_neg.clip(lower=0.0)  # oder: p_neg.abs()
+
+        pos_price = prices_by_market["IMB_POS"]
+        neg_price = prices_by_market["IMB_NEG"]
+
+        # gemeinsamer Index
+        idx = dispatch.index.intersection(pos_price.index).intersection(neg_price.index)
+        if len(idx) > 0:
+            p_pos_mag = p_pos_mag.reindex(idx).fillna(0.0)
+            p_neg_mag = p_neg_mag.reindex(idx).fillna(0.0)
+            pos_price = pos_price.reindex(idx)
+            neg_price = neg_price.reindex(idx)
+
+            # IMB immer als Kosten (negativ)
+            cf_df["IMB Cashflow [€/step]"] = - (pos_price * p_pos_mag + neg_price * p_neg_mag) * dt
+
 
     if cf_df.empty:
         raise ValueError("No cashflows could be computed (check market columns and prices_by_market).")
@@ -129,6 +156,51 @@ def plot_market_cashflows_plotly(
             cash_data.append((mk, "Sell", sell_c))
 
     # =========================================================
+    # 2b) Add Imbalance aggregates for sunbursts + KPIs (IMB always cost)
+    # =========================================================
+    if has_imb and ("IMB_POS" in prices_by_market) and ("IMB_NEG" in prices_by_market):
+        p_pos = dispatch["p_imb_pos_kw"].astype(float)
+        p_neg = dispatch["p_imb_neg_kw"].astype(float)
+
+        pos_price = prices_by_market["IMB_POS"]
+        neg_price = prices_by_market["IMB_NEG"]
+
+        idx = dispatch.index.intersection(pos_price.index).intersection(neg_price.index)
+        if len(idx) > 0:
+            p_pos = p_pos.reindex(idx).fillna(0.0)
+            p_neg = p_neg.reindex(idx).fillna(0.0)
+            pos_price = pos_price.reindex(idx)
+            neg_price = neg_price.reindex(idx)
+
+            # energy (kWh): direction can still be represented if you want:
+            # net power sign: p_net = p_pos - p_neg
+            p_net = (p_pos - p_neg)
+
+            energy_kwh_net = p_net * dt
+
+            buy_mask = energy_kwh_net < 0
+            sell_mask = energy_kwh_net > 0
+
+            buy_e = float((-energy_kwh_net[buy_mask]).sum()) if buy_mask.any() else 0.0
+            sell_e = float((energy_kwh_net[sell_mask]).sum()) if sell_mask.any() else 0.0
+
+            # cash (€): ALWAYS a penalty (negative), but sunburst expects positive magnitudes
+            imb_cost_eur = float((pos_price * p_pos + neg_price * p_neg).sum() * dt)  # positive magnitude
+
+            # store for KPIs
+            energy_by_mk["IMB"] = (buy_e, sell_e)
+            cash_by_mk["IMB"] = (imb_cost_eur, 0.0)  # treat as Buy(cost), no Sell
+
+            # sunburst raw lists (values >= 0)
+            if buy_e > 0:
+                energy_data.append(("IMB", "Buy", buy_e))
+            if sell_e > 0:
+                energy_data.append(("IMB", "Sell", sell_e))
+
+            if imb_cost_eur > 0:
+                cash_data.append(("IMB", "Cost", imb_cost_eur))  # always Buy (cost)
+
+    # =========================================================
     # 3) KPI computation
     # =========================================================
     gross_profit_eur = float(cf_df["Total Cashflow [€/step]"].sum())
@@ -144,14 +216,22 @@ def plot_market_cashflows_plotly(
         buy_e, sell_e = energy_by_mk[mk]
         return float(fee_eur_per_kwh_by_market.get(mk, 0.0)) * float(buy_e + sell_e)
 
-    fees_eur = _mk_fee("DA") + _mk_fee("ID")
-    trading_profit_eur = gross_profit_eur + fees_eur  # matches your paper logic
+    fees_eur = -(_mk_fee("DA") + _mk_fee("ID"))
 
     trade_steps = 0
     if commit is not None and not commit.empty:
         # same logic as plots_paper.py
         if ("committed_new" in commit.columns) and ("commit_now" in commit.columns):
             trade_steps = int(commit[(commit["committed_new"] != 0.0) & (commit["commit_now"] == True)].shape[0])
+
+    # Imbalance cost
+    imb_cost_eur = 0.0
+    if "IMB Cashflow [€/step]" in cf_df.columns:
+        # cashflow is negative -> cost magnitude is -sum
+        imb_cost_eur = float(cf_df["IMB Cashflow [€/step]"].sum())
+
+    # Trading profit
+    trading_profit_eur = gross_profit_eur - fees_eur - imb_cost_eur
 
     # =========================================================
     # 4) Sunburst builder (same hierarchy idea as before)
@@ -179,7 +259,7 @@ def plot_market_cashflows_plotly(
             values.append(mk_total)
             colors.append(_rgba(mk, 0.7))
 
-            for side in ["Buy", "Sell"]:
+            for side in sorted({s for m, s, _ in data if m == mk}):
                 side_total = sum(v for m, s, v in data if m == mk and s == side)
                 if side_total <= 0:
                     continue
@@ -292,6 +372,7 @@ def plot_market_cashflows_plotly(
         ("Gross Profit", f"{gross_profit_eur:.1f} €"),
         ("      Trading Profit", f"{trading_profit_eur:.1f} €"),
         ("      Trading Fees", f"{fees_eur:.1f} €"),
+        ("      Imbalance Cost", f"{imb_cost_eur:.1f} €"),
         ("Number of Trades", f"{trade_steps:d}"),
         ("Net Volume", f"{net_kwh:.1f} kWh"),
         ("      Sell Volume", f"{sell_kwh:.1f} kWh"),
@@ -367,7 +448,7 @@ def plot_mpc_dispatch_plotly(
     if not isinstance(dispatch.index, pd.DatetimeIndex):
         raise ValueError("Dispatch index must be a DatetimeIndex")
 
-    required = ["p_net_kW", "P_lower_kW", "P_upper_kW", "E_kWh", "E_lower_kWh", "E_upper_kWh"]
+    required = ["p_net_kw", "P_lower_kw", "P_upper_kw", "E_kWh", "E_lower_kWh", "E_upper_kWh"]
     missing = [c for c in required if c not in dispatch.columns]
     if missing:
         raise ValueError(f"Dispatch missing required columns for flexband plotting: {missing}")
@@ -375,13 +456,15 @@ def plot_mpc_dispatch_plotly(
     # Market columns
     market_cols = [
         c for c in dispatch.columns
-        if c.startswith("p_") and c.endswith("_kw")
+        if c.startswith("p_")
+           and c.endswith("_kw")
+           and c not in ("p_ch_kw", "p_dis_kw", "p_net_kw", "p_imb_pos_kw", "p_imb_neg_kw")
     ]
 
     # --- Imbalance / reBAP columns (optional) ---
-    has_imb = ("p_imb_pos_kW" in dispatch.columns) and ("p_imb_neg_kW" in dispatch.columns)
+    has_imb = ("p_imb_pos_kw" in dispatch.columns) and ("p_imb_neg_kw" in dispatch.columns)
     if has_imb:
-        p_imb_net = dispatch["p_imb_pos_kW"] - dispatch["p_imb_neg_kW"]
+        p_imb_net = dispatch["p_imb_pos_kw"] - dispatch["p_imb_neg_kw"]
     else:
         p_imb_net = None
     has_used_flag = "used_rebap" in dispatch.columns
@@ -442,7 +525,7 @@ def plot_mpc_dispatch_plotly(
     # --- Row 2: Power band + p_net ---
     fig.add_trace(
         go.Scatter(
-            x=dispatch.index, y=dispatch["P_upper_kW"],
+            x=dispatch.index, y=dispatch["P_upper_kw"],
             mode="lines", name="P upper [kW]",
             line=dict(width=1, color="rgba(0,0,0,0.5)"),
         ),
@@ -450,7 +533,7 @@ def plot_mpc_dispatch_plotly(
     )
     fig.add_trace(
         go.Scatter(
-            x=dispatch.index, y=dispatch["P_lower_kW"],
+            x=dispatch.index, y=dispatch["P_lower_kw"],
             mode="lines", name="P lower [kW]",
             fill="tonexty",
             line=dict(width=1, color="rgba(0,0,0,0.5)"),
@@ -460,7 +543,7 @@ def plot_mpc_dispatch_plotly(
     )
     fig.add_trace(
         go.Scatter(
-            x=dispatch.index, y=dispatch["p_net_kW"],
+            x=dispatch.index, y=dispatch["p_net_kw"],
             mode="lines", name="p_net [kW]",
             line=dict(width=3, color="rgb(162,173,0)"),
         ),
@@ -534,74 +617,74 @@ def plot_mpc_dispatch_plotly(
             row=4, col=1
         )
 
-        # --- Row 4b: Imbalance (reBAP) net position ---
-        if has_imb:
-            values = p_imb_net
+    # --- Row 4b: Imbalance (reBAP) net position ---
+    if has_imb:
+        values = p_imb_net
 
-            colors = [_rgba("IMB", 1.0 if v > 0 else 0.3) for v in values]
-            labels = ["Sell" if v > 0 else "Buy" if v < 0 else "Neutral" for v in values]
+        colors = [_rgba("IMB", 1.0 if v > 0 else 0.3) for v in values]
+        labels = ["Sell" if v > 0 else "Buy" if v < 0 else "Neutral" for v in values]
 
-            if has_used_flag:
-                used = dispatch["used_rebap"].astype(bool)
-                used_str = used.map(lambda x: "reBAP used" if x else "no reBAP").values
-            else:
-                used_str = ["reBAP unknown"] * len(dispatch)
-
-            custom = pd.DataFrame({
-                "side": labels,
-                "used": used_str,
-                "pos": dispatch["p_imb_pos_kW"].values,
-                "neg": dispatch["p_imb_neg_kW"].values,
-            }).values
-
-            fig.add_trace(
-                go.Bar(
-                    x=dispatch.index,
-                    y=values,
-                    name="IMB (reBAP) Net [kW]",
-                    marker_color=colors,
-                    customdata=custom,
-                    hovertemplate=(
-                        "IMB net: %{y:.1f} kW<br>"
-                        "%{customdata[0]}<br>"
-                        "%{customdata[1]}<br>"
-                        "pos: %{customdata[2]:.1f} kW<br>"
-                        "neg: %{customdata[3]:.1f} kW"
-                        "<extra></extra>"
-                    ),
-                ),
-                row=4, col=1
-            )
-
-            # --- Optional: highlight periods where reBAP was used ---
         if has_used_flag:
-            used = dispatch["used_rebap"].astype(bool).fillna(False)
+            used = dispatch["used_rebap"].astype(bool)
+            used_str = used.map(lambda x: "reBAP used" if x else "no reBAP").values
+        else:
+            used_str = ["reBAP unknown"] * len(dispatch)
 
-            # find contiguous True segments
-            start = None
-            for ts, flag in used.items():
-                if flag and start is None:
-                    start = ts
-                if (not flag) and start is not None:
-                    end = ts
-                    fig.add_vrect(
-                        x0=start, x1=end,
-                        fillcolor="rgba(120,80,160,0.12)",
-                        line_width=0,
-                        layer="below",
-                        row=4, col=1
-                    )
-                    start = None
+        custom = pd.DataFrame({
+            "side": labels,
+            "used": used_str,
+            "pos": dispatch["p_imb_pos_kw"].values,
+            "neg": dispatch["p_imb_neg_kw"].values,
+        }).values
 
-            # handle if ends with True
-            if start is not None:
+        fig.add_trace(
+            go.Bar(
+                x=dispatch.index,
+                y=values,
+                name="IMB (reBAP) Net [kW]",
+                marker_color=colors,
+                customdata=custom,
+                hovertemplate=(
+                    "IMB net: %{y:.1f} kW<br>"
+                    "%{customdata[0]}<br>"
+                    "%{customdata[1]}<br>"
+                    "pos: %{customdata[2]:.1f} kW<br>"
+                    "neg: %{customdata[3]:.1f} kW"
+                    "<extra></extra>"
+                ),
+            ),
+            row=4, col=1
+        )
+
+    # --- Optional: highlight periods where reBAP was used ---
+    if has_used_flag:
+        used = dispatch["used_rebap"].astype(bool).fillna(False)
+
+        # find contiguous True segments
+        start = None
+        for ts, flag in used.items():
+            if flag and start is None:
+                start = ts
+            if (not flag) and start is not None:
+                end = ts
                 fig.add_vrect(
-                    x0=start, x1=dispatch.index[-1],
+                    x0=start, x1=end,
                     fillcolor="rgba(120,80,160,0.12)",
                     line_width=0,
                     layer="below",
-                    row="all", col=1
+                    row=4, col=1
                 )
+                start = None
+
+        # handle if ends with True
+        if start is not None:
+            fig.add_vrect(
+                x0=start, x1=dispatch.index[-1],
+                fillcolor="rgba(120,80,160,0.12)",
+                line_width=0,
+                layer="below",
+                row="all", col=1
+            )
 
     fig.update_yaxes(title_text="Price [€/MWh]", row=1, col=1)
     fig.update_yaxes(title_text="Power [kW]", row=2, col=1)

@@ -101,9 +101,9 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index) -> pd.DataFrame:
     # -------------------------
     # Physical variables (T)
     # -------------------------
-    df["p_net_kW"] = [pyo.value(model.p_net[t]) for t in T_list]
-    df["p_ch_kW"]  = [pyo.value(model.p_ch[t])  for t in T_list]
-    df["p_dis_kW"] = [pyo.value(model.p_dis[t]) for t in T_list]
+    df["p_net_kw"] = [pyo.value(model.p_net[t]) for t in T_list]
+    df["p_ch_kw"]  = [pyo.value(model.p_ch[t])  for t in T_list]
+    df["p_dis_kw"] = [pyo.value(model.p_dis[t]) for t in T_list]
 
     # -------------------------
     # Energy state (S or T)
@@ -141,15 +141,15 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index) -> pd.DataFrame:
         df["E_upper_kWh"] = [pyo.value(model.E_upper[t]) for t in T_list]
 
     if hasattr(model, "P_lower"):
-        df["P_lower_kW"] = [pyo.value(model.P_lower[t]) for t in T_list]
-        df["P_upper_kW"] = [pyo.value(model.P_upper[t]) for t in T_list]
+        df["P_lower_kw"] = [pyo.value(model.P_lower[t]) for t in T_list]
+        df["P_upper_kw"] = [pyo.value(model.P_upper[t]) for t in T_list]
 
     # -------------------------
     # Imbalance reBAP
     # -------------------------
     if hasattr(model, "p_imb_pos"):
-        df["p_imb_pos_kW"] = [pyo.value(model.p_imb_pos[t]) for t in model.T]
-        df["p_imb_neg_kW"] = [pyo.value(model.p_imb_neg[t]) for t in model.T]
+        df["p_imb_pos_kw"] = [pyo.value(model.p_imb_pos[t]) for t in model.T]
+        df["p_imb_neg_kw"] = [pyo.value(model.p_imb_neg[t]) for t in model.T]
 
 
     return df
