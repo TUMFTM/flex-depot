@@ -203,8 +203,6 @@ def plot_market_cashflows_plotly(
     # =========================================================
     # 3) KPI computation
     # =========================================================
-    gross_profit_eur = float(cf_df["Total Cashflow [€/step]"].sum())
-
     buy_kwh = float(sum(v[0] for v in energy_by_mk.values()))
     sell_kwh = float(sum(v[1] for v in energy_by_mk.values()))
     net_kwh = sell_kwh - buy_kwh
@@ -215,7 +213,6 @@ def plot_market_cashflows_plotly(
             return 0.0
         buy_e, sell_e = energy_by_mk[mk]
         return float(fee_eur_per_kwh_by_market.get(mk, 0.0)) * float(buy_e + sell_e)
-
     fees_eur = -(_mk_fee("DA") + _mk_fee("ID"))
 
     trade_steps = 0
@@ -231,6 +228,7 @@ def plot_market_cashflows_plotly(
         imb_cost_eur = float(cf_df["IMB Cashflow [€/step]"].sum())
 
     # Trading profit
+    gross_profit_eur = float(cf_df["Total Cashflow [€/step]"].sum()) + fees_eur
     trading_profit_eur = gross_profit_eur - fees_eur - imb_cost_eur
 
     # =========================================================
