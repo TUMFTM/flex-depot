@@ -1,5 +1,7 @@
 import pandas as pd
 from tqdm.auto import tqdm
+from pathlib import Path
+
 
 from flex_dep_opt.domain.vehicle import Vehicle
 from flex_dep_opt.domain.site import Site
@@ -410,12 +412,15 @@ def run_mpc(cfg: dict):
         if rows:
             result = pd.DataFrame(rows)
             result.index.name = "time"
-            result.reset_index().to_csv(sim_cfg["out_dispatch"], index=False)
+            # Resolve output path and force .csv
+            out_dispatch = Path(sim_cfg["out_dispatch"]).with_suffix(".csv")
+            out_dispatch.parent.mkdir(parents=True, exist_ok=True)
+            result.reset_index().to_csv(out_dispatch, index=False)
 
         if commit_rows:
             commit_df = pd.DataFrame(commit_rows)
-            commit_df.sort_values(["delivery_time", "current_time"]).to_csv(
-                sim_cfg["out_commit"], index=False
-            )
+            out_commit = Path(sim_cfg["out_commit"]).with_suffix(".csv")
+            out_commit.parent.mkdir(parents=True, exist_ok=True)
+            commit_df.sort_values(["delivery_time", "current_time"]).to_csv(out_commit, index=False)
 
         print("MPC finished → results/dispatch.csv & resuluts/commit.csv")

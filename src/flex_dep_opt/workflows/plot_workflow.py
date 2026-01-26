@@ -18,8 +18,8 @@ def run_plot_mpc(cfg: dict):
     end = pd.to_datetime(sim["end"]).tz_localize("Europe/Berlin")
 
     # --- Resolve input paths (CSV) ---
-    dispatch_csv = Path(sim["out_dispatch"])
-    commit_csv = Path(sim["out_commit"])
+    dispatch_csv = Path(sim["out_dispatch"]).with_suffix(".csv")
+    commit_csv = Path(sim["out_commit"]).with_suffix(".csv")
 
     # --- Load dispatch.csv (robust) ---
     df = pd.read_csv(dispatch_csv)
@@ -46,13 +46,21 @@ def run_plot_mpc(cfg: dict):
     fees_by_market = build_fees_from_settings(cfg)
 
     # --- Output directory: same folder as the input CSVs ---
-    # Prefer dispatch.csv folder; fall back to commit.csv folder if needed
-    out_dir = dispatch_csv.parent if dispatch_csv.parent != Path("") else commit_csv.parent
+    # --- Base paths (from config, no suffix) ---
+    dispatch_base = Path(sim["out_dispatch"])
+    commit_base = Path(sim["out_commit"])
+
+    # --- CSV paths (already used for reading) ---
+    dispatch_csv = dispatch_base.with_suffix(".csv")
+    commit_csv = commit_base.with_suffix(".csv")
+
+    # --- Output directory ---
+    out_dir = dispatch_csv.parent
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # --- Output paths (HTML) in same folder as CSVs ---
-    out = out_dir / "dispatch.html"
-    out_cf = out_dir / "cashflow.html"
+    # --- HTML output paths (same base name!) ---
+    dispatch_html = dispatch_base.with_suffix(".html")
+    commit_html = commit_base.with_suffix(".html")
 
     # --- Create dispatch figure (html) ---
     fig = plot_mpc_dispatch_plotly(
@@ -61,10 +69,9 @@ def run_plot_mpc(cfg: dict):
         commit_df=commit_df,
         title="MPC Flexband Dispatch and Market Positions",
     )
-    fig.write_html(out, include_plotlyjs="cdn")
-    print(f"MPC Plot saved → {out.resolve()}")
-
-    webbrowser.open(out.resolve().as_uri())
+    fig.write_html(dispatch_html, include_plotlyjs="cdn")
+    print(f"MPC Plot saved → {dispatch_html.resolve()}")
+    webbrowser.open(dispatch_html.resolve().as_uri())
 
     # --- Create cashflow figure (html) ---
     fig_cf = plot_market_cashflows_plotly(
@@ -74,9 +81,7 @@ def run_plot_mpc(cfg: dict):
         fee_eur_per_kwh_by_market=fees_by_market,
         timestep_hours=sim["timestep_hours"],
     )
-    fig_cf.write_html(out_cf, include_plotlyjs="cdn")
-    print(f"CF Plot (MPC) saved → {out_cf.resolve()}")
-
-    webbrowser.open(out_cf.resolve().as_uri())
-
+    fig_cf.write_html(commit_html, include_plotlyjs="cdn")
+    print(f"CF Plot (MPC) saved → {commit_html.resolve()}")
+    webbrowser.open(commit_html.resolve().as_uri())
 
