@@ -203,8 +203,8 @@ def plot_market_cashflows_plotly(
     # =========================================================
     # 3) KPI computation
     # =========================================================
-    buy_kwh = float(sum(v[0] for v in energy_by_mk.values()))
-    sell_kwh = float(sum(v[1] for v in energy_by_mk.values()))
+    buy_kwh = float(sum(v[0] for mk, v in energy_by_mk.items() if mk != "IMB"))
+    sell_kwh = float(sum(v[1] for mk, v in energy_by_mk.items() if mk != "IMB"))
     net_kwh = sell_kwh - buy_kwh
 
     # fees only for DA/ID

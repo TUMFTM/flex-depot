@@ -1,6 +1,6 @@
 simulation:
   start: "2025-10-01 00:00"                                 # simulation start
-  end: "2025-10-5 23:45"                                    # simulation end
+  end: "2025-10-05 23:45"                                    # simulation end
   timestep_hours: 0.25                                      # simulation timestep
 
 optimization:
@@ -46,8 +46,8 @@ optimization:
 optimize:
   out: "results/dispatch.csv"
   vehicle:
-    eta_charge: 0.95
-    eta_discharge: 0.95
+    eta_charge: 1.0
+    eta_discharge: 1.0
   site:
     grid_connection_limit: 10000
 
