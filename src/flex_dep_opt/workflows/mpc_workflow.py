@@ -124,7 +124,7 @@ def run_mpc(cfg: dict):
     # Cycling cost (€/kWh throughput)
     cyc_cfg = flex_cfg.get("cycle_regularization", {})
     c_cyc = (
-        float(cyc_cfg["cost_eur_per_mwh_throughput"]) / 1000.0
+        float(cyc_cfg["cost_eur_per_kwh_throughput"])
         if cyc_cfg.get("enabled", False)
         else 0.0
     )
