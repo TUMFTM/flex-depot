@@ -75,7 +75,7 @@ def plot_market_cashflows_plotly(
         if p.empty:
             continue
 
-        cf_df[f"{mk} Cashflow [€/step]"] = price * p * dt
+        cf_df[f"{mk} Cashflow [€/step]"] = (-price * p) * dt
 
     # =========================================================
     # 1b) Add Imbalance cashflow (optional)
@@ -132,15 +132,15 @@ def plot_market_cashflows_plotly(
             continue
 
         energy_kwh = p * dt
-        cash_eur = price * p * dt
+        cash_eur = (-price * p) * dt
 
-        buy_mask = p < 0
-        sell_mask = p > 0
+        buy_mask = p > 0
+        sell_mask = p < 0
 
-        buy_e = float((-energy_kwh[buy_mask]).sum()) if buy_mask.any() else 0.0
-        sell_e = float((energy_kwh[sell_mask]).sum()) if sell_mask.any() else 0.0
-        buy_c = float((-cash_eur[buy_mask]).sum()) if buy_mask.any() else 0.0
-        sell_c = float((cash_eur[sell_mask]).sum()) if sell_mask.any() else 0.0
+        buy_e = float((energy_kwh[buy_mask]).sum()) if buy_mask.any() else 0.0
+        sell_e = float((-energy_kwh[sell_mask]).sum()) if sell_mask.any() else 0.0
+        buy_c = float((-cash_eur[buy_mask]).sum()) if buy_mask.any() else 0.0  # positive cost magnitude
+        sell_c = float((cash_eur[sell_mask]).sum()) if sell_mask.any() else 0.0  # positive revenue magnitude
 
         energy_by_mk[mk] = (buy_e, sell_e)
         cash_by_mk[mk] = (buy_c, sell_c)
@@ -178,11 +178,11 @@ def plot_market_cashflows_plotly(
 
             energy_kwh_net = p_net * dt
 
-            buy_mask = energy_kwh_net < 0
-            sell_mask = energy_kwh_net > 0
+            buy_mask = energy_kwh_net > 0
+            sell_mask = energy_kwh_net < 0
 
-            buy_e = float((-energy_kwh_net[buy_mask]).sum()) if buy_mask.any() else 0.0
-            sell_e = float((energy_kwh_net[sell_mask]).sum()) if sell_mask.any() else 0.0
+            buy_e = float((energy_kwh_net[buy_mask]).sum()) if buy_mask.any() else 0.0
+            sell_e = float((-energy_kwh_net[sell_mask]).sum()) if sell_mask.any() else 0.0
 
             # cash (€): ALWAYS a penalty (negative), but sunburst expects positive magnitudes
             imb_cost_eur = float((pos_price * p_pos + neg_price * p_neg).sum() * dt)  # positive magnitude
@@ -225,7 +225,7 @@ def plot_market_cashflows_plotly(
     imb_cost_eur = 0.0
     if "IMB Cashflow [€/step]" in cf_df.columns:
         # cashflow is negative -> cost magnitude is -sum
-        imb_cost_eur = float(cf_df["IMB Cashflow [€/step]"].sum())
+        imb_cost_eur = -float(cf_df["IMB Cashflow [€/step]"].sum())
 
     # Trading profit
     gross_profit_eur = float(cf_df["Total Cashflow [€/step]"].sum()) + fees_eur
@@ -582,8 +582,8 @@ def plot_mpc_dispatch_plotly(
         mk_code = inner.upper()
         values = dispatch[col]
 
-        colors = [_rgba(mk_code, 1.0 if v > 0 else 0.3) for v in values]
-        labels = ["Sell" if v > 0 else "Buy" if v < 0 else "Neutral" for v in values]
+        colors = [_rgba(mk_code, 1.0 if v < 0 else 0.3) for v in values]  # optional: highlight Sell
+        labels = ["Buy" if v > 0 else "Sell" if v < 0 else "Neutral" for v in values]
 
         # Build commit time strings aligned to dispatch.index (delivery_time axis)
         commit_times = None
@@ -620,7 +620,7 @@ def plot_mpc_dispatch_plotly(
         values = p_imb_net
 
         colors = [_rgba("IMB", 1.0 if v > 0 else 0.3) for v in values]
-        labels = ["Sell" if v > 0 else "Buy" if v < 0 else "Neutral" for v in values]
+        labels = ["Buy" if v > 0 else "Sell" if v < 0 else "Neutral" for v in values]
 
         if has_used_flag:
             used = dispatch["used_rebap"].astype(bool)

@@ -10,7 +10,7 @@ optimization:
       source: "data/prices/prices_DA_example.csv"
       fee_eur_per_mwh: 0.02                                 # €/MWh (clearing fee + exchange fee + broker fee + ...)
     intraday:
-      enabled: true                                         # "true", "false"
+      enabled: false                                         # "true", "false"
       source: "data/prices/prices_IDC_example.csv"
       fee_eur_per_mwh: 0.03                                 # €/MWh (clearing fee + exchange fee + broker fee + ...)
 

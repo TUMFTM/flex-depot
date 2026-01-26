@@ -161,7 +161,7 @@ def flexibility_commercialization(
     # ----------------------------
     m.p_ch = pyo.Var(m.T, within=pyo.NonNegativeReals)   # Charging power (import magnitude) [kW]
     m.p_dis = pyo.Var(m.T, within=pyo.NonNegativeReals)  # Discharging power (export magnitude) [kW]
-    m.p_net = pyo.Var(m.T, within=pyo.Reals)             # Net grid power (+export / -import) [kW]
+    m.p_net = pyo.Var(m.T, within=pyo.Reals)             # Net grid power (+import / -export) [kW]
     m.E = pyo.Var(m.S, within=pyo.Reals)                 # Aggregated energy state [kWh] (can be negative)
 
     # Initial condition
@@ -193,8 +193,8 @@ def flexibility_commercialization(
     # Define net power from charge/discharge decisions
     m.p_net_def = pyo.Constraint(
         m.T,
-        rule=lambda mdl, t: mdl.p_net[t] == mdl.p_dis[t] - mdl.p_ch[t]
-    )  # Enforces p_net = export - import
+        rule=lambda mdl, t: mdl.p_net[t] == mdl.p_ch[t] - mdl.p_dis[t]
+    )  # Enforces p_net = import - export
 
     # Fleet power band (lower bound)
     m.p_net_lb = pyo.Constraint(
@@ -280,22 +280,22 @@ def flexibility_commercialization(
         m.u_state = pyo.Var(m.T, within=pyo.Binary)  # 1=export mode, 0=import mode
 
         # Split market power into positive (sell/export) and negative (buy/import) parts per market
-        m.p_market_pos = pyo.Var(m.MARKETS, m.T, within=pyo.NonNegativeReals)  # Sell component [kW]
-        m.p_market_neg = pyo.Var(m.MARKETS, m.T, within=pyo.NonNegativeReals)  # Buy component [kW]
+        m.p_market_pos = pyo.Var(m.MARKETS, m.T, within=pyo.NonNegativeReals)  # Buy/import [kW]
+        m.p_market_neg = pyo.Var(m.MARKETS, m.T, within=pyo.NonNegativeReals)   # Sell/export [kW]
         m.p_market_vol = pyo.Expression(m.MARKETS, m.T,rule=lambda mdl, mk, t: mdl.p_market_pos[mk, t] + mdl.p_market_neg[mk, t])
 
-        # Define signed market position from pos/neg parts
+        # Signed market position: p_market = buy - sell
         m.p_market_def = pyo.Constraint(
             m.MARKETS, m.T,
             rule=lambda mdl, mk, t: mdl.p_market[mk, t] == mdl.p_market_pos[mk, t] - mdl.p_market_neg[mk, t]
-        )  # Enforces p_market = sell - buy
+        )
 
         # Total market export/import
         def total_export(mdl, t):
-            return sum(mdl.p_market_pos[mk, t] for mk in mdl.MARKETS)
+            return sum(mdl.p_market_neg[mk, t] for mk in mdl.MARKETS)
 
         def total_import(mdl, t):
-            return sum(mdl.p_market_neg[mk, t] for mk in mdl.MARKETS)
+            return sum(mdl.p_market_pos[mk, t] for mk in mdl.MARKETS)
 
         # Couple markets to physical net power
         def balance_rule(mdl, t):
@@ -331,9 +331,9 @@ def flexibility_commercialization(
     # 9) Objective: market revenue - degradation
     # ----------------------------
     def obj_expr(mdl):
-        # Revenue term
-        revenue = sum(
-            mdl.price[mk, t] * mdl.p_market[mk, t] * mdl.dt
+        # Cashflow term
+        energy_cashflow = sum(
+            - mdl.price[mk, t] * mdl.p_market[mk, t] * mdl.dt
             for mk in mdl.MARKETS for t in mdl.T
         )
 
@@ -354,8 +354,8 @@ def flexibility_commercialization(
         imb_vol_pen = 0.0
         if allow_imbalance:
             imb_cash = sum(
-                mdl.price_imb_pos[t] * mdl.p_imb_pos[t] * mdl.dt
-                - mdl.price_imb_neg[t] * mdl.p_imb_neg[t] * mdl.dt
+                - mdl.price_imb_pos[t] * mdl.p_imb_pos[t] * mdl.dt
+                + mdl.price_imb_neg[t] * mdl.p_imb_neg[t] * mdl.dt
                 for t in mdl.T
             )
             # Penalize absolute imbalance volume (kWh) to prevent schedule-vs-physical arbitrage
@@ -364,7 +364,7 @@ def flexibility_commercialization(
                 for t in mdl.T
             )
 
-        return revenue + imb_cash - fee_cost - deg_cost - imb_vol_pen - mdl.w_term * mdl.e_term_dev
+        return energy_cashflow + imb_cash - fee_cost - deg_cost - imb_vol_pen - mdl.w_term * mdl.e_term_dev
 
     m.obj = pyo.Objective(rule=obj_expr, sense=pyo.maximize)
 

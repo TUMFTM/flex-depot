@@ -210,3 +210,5 @@ __marimo__/
 /src/flex_dep_opt/viz/plots_paper.py
 /run_plots_paper.bat
 /src/flex_dep_opt/workflows/plot_workflow_paper.py
+/data/mobility/fleet_1_vb_bounds_15min.csv
+/data/mobility/fleet_1_vb_bounds_15min_50kW.csv
