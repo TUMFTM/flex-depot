@@ -2,11 +2,13 @@ simulation:
   start: "2025-10-01 00:00"                                 # simulation start
   end: "2025-10-05 23:45"                                   # simulation end
   timestep_hours: 0.25                                      # simulation timestep
+  out_dispatch: "results/dispatch.csv"
+  out_commit: "results/commit.csv"
 
 optimization:
   markets:
     dayahead:
-      enabled: false                                         # "true", "false"
+      enabled: true                                         # "true", "false"
       source: "data/prices/prices_DA_example.csv"
       fee_eur_per_kwh: 0.005                                # €/kWh (clearing fee + exchange fee + broker fee + ...)
     intraday:
@@ -44,17 +46,11 @@ optimization:
       cost_eur_per_kwh_throughput: 0.02                     # €/kWh
 
 optimize:
-  out: "results/dispatch.csv"
   vehicle:
     eta_charge: 1.0
     eta_discharge: 1.0
   site:
     grid_connection_limit: 10000
 
-plot:
-  dispatch: "results/dispatch.csv"
-  out: "results/dispatch.html"
-  cashflow_out: "results/cashflows.html"
-  open: true
 
 

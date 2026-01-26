@@ -410,12 +410,12 @@ def run_mpc(cfg: dict):
         if rows:
             result = pd.DataFrame(rows)
             result.index.name = "time"
-            result.reset_index().to_csv("results/dispatch.csv", index=False)
+            result.reset_index().to_csv(sim_cfg["out_dispatch"], index=False)
 
         if commit_rows:
             commit_df = pd.DataFrame(commit_rows)
             commit_df.sort_values(["delivery_time", "current_time"]).to_csv(
-                "results/commit_mpc.csv", index=False
+                sim_cfg["out_commit"], index=False
             )
 
-        print("MPC finished → results/dispatch.csv")
+        print("MPC finished → results/dispatch.csv & resuluts/commit.csv")
