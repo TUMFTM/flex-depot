@@ -2,9 +2,7 @@ import pandas as pd
 from tqdm.auto import tqdm
 from pathlib import Path
 
-
-from flex_dep_opt.domain.vehicle import Vehicle
-from flex_dep_opt.domain.site import Site
+from flex_dep_opt.domain.depot import Depot
 from flex_dep_opt.io.prices_io import build_prices_from_settings, build_fees_from_settings
 from flex_dep_opt.io.flexibility_io import (
     read_flexibility_bounds_csv,
@@ -38,12 +36,12 @@ def run_mpc(cfg: dict):
     # 1) Read configuration blocks
     # ============================================================
     sim_cfg = cfg["simulation"]
-    opt_cfg = cfg["optimize"]
-    opt_conf = cfg["optimization"]
-    trading_cfg = opt_conf["trading"]
-    mpc_cfg = opt_conf["mpc"]
-    flex_cfg = opt_conf.get("flexibility", {})
-    imb_cfg = opt_conf.get("imbalance", {})
+    opt_cfg = cfg["optimization"]
+    trading_cfg = opt_cfg["trading"]
+    mpc_cfg = opt_cfg["mpc"]
+    flex_cfg = opt_cfg.get("flexibility", {})
+    dep_cfg = opt_cfg["depot"]
+    imb_cfg = opt_cfg.get("imbalance", {})
     imb_enabled = imb_cfg.get("enabled", False)
     terminal_enabled = bool(mpc_cfg.get("terminal_condition", False))
     terminal_weight = float(mpc_cfg.get("terminal_weight_eur_per_kwh", 50.0))
@@ -121,7 +119,7 @@ def run_mpc(cfg: dict):
     # ============================================================
     # 6) Model options
     # ============================================================
-    virtual_arbitrage = opt_conf.get("virtual_arbitrage", False)
+    virtual_arbitrage = opt_cfg.get("virtual_arbitrage", False)
 
     # Cycling cost (€/kWh throughput)
     cyc_cfg = flex_cfg.get("cycle_regularization", {})
@@ -206,7 +204,7 @@ def run_mpc(cfg: dict):
             trading_masks = build_market_activity_mask_for_time(
                 current_time=current_time,
                 delivery_times=window_idx,
-                optimization_cfg=opt_conf,
+                optimization_cfg=opt_cfg,
             )
 
             # --------------------------------------------------------
@@ -224,8 +222,7 @@ def run_mpc(cfg: dict):
             # 10.4) Build and parameterize optimization model
             # --------------------------------------------------------
             model = flexibility_commercialization(
-                vehicle=Vehicle(**opt_cfg["vehicle"]),
-                site=Site(**opt_cfg["site"]),
+                depot=Depot(**dep_cfg),
                 prices_by_market=window_prices,
                 fee_eur_per_kwh_by_market=fees_by_market,
                 timestep_hours=step_hours,
@@ -307,8 +304,7 @@ def run_mpc(cfg: dict):
                     tqdm.write("PASS1 infeasible → Imbalance activated (PASS2)")
                     logger.info(f"PASS1 infeasible at {current_time} → trying PASS2 (imbalance). Details: {e1}")
                     model2 = flexibility_commercialization(
-                        vehicle=Vehicle(**opt_cfg["vehicle"]),
-                        site=Site(**opt_cfg["site"]),
+                        depot=Depot(**dep_cfg),
                         prices_by_market=window_prices,
                         fee_eur_per_kwh_by_market=fees_by_market,
                         timestep_hours=step_hours,
@@ -360,7 +356,7 @@ def run_mpc(cfg: dict):
             trading_masks_next = build_market_activity_mask_for_time(
                 current_time=next_time,
                 delivery_times=window_idx,
-                optimization_cfg=opt_conf,
+                optimization_cfg=opt_cfg,
             )
 
             for mk in committed_positions:
@@ -384,7 +380,7 @@ def run_mpc(cfg: dict):
                         "commit_now": False,
                     }
 
-                    if opt_conf["trading"]["mode"] == "none" and tau == window_idx[0]:
+                    if opt_cfg["trading"]["mode"] == "none" and tau == window_idx[0]:
                         committed_positions[mk].loc[tau] = row["p_opt"]
                         row["committed_new"] = row["p_opt"]
                         row["commit_now"] = True

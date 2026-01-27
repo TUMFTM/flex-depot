@@ -45,12 +45,10 @@ optimization:
       enabled: true
       cost_eur_per_kwh_throughput: 0.02                     # €/kWh
 
-optimize:
-  vehicle:
-    eta_charge: 1.0
-    eta_discharge: 1.0
-  site:
-    grid_connection_limit: 10000
+  depot:
+    eta_grid2depot : 1.0                                    # efficiency import
+    eta_depot2grid : 1.0                                    # efficiency export
+    grid_connection_limit: 10000                            # grid connection limit in kWp
 
 
 

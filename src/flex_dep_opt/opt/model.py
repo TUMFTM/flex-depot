@@ -4,13 +4,11 @@ from typing import Dict, Iterable
 import pandas as pd
 import pyomo.environ as pyo
 
-from ..domain.vehicle import Vehicle
-from ..domain.site import Site
+from ..domain.depot import Depot
 
 
 def flexibility_commercialization(
-    vehicle: Vehicle,
-    site: Site,
+    depot: Depot,
     prices_by_market: Dict[str, pd.Series],
     fee_eur_per_kwh_by_market: Dict[str, float] | None = None,
     *,
@@ -120,8 +118,8 @@ def flexibility_commercialization(
     m.P_dis_max_t = pyo.Param(m.T, initialize=lambda mdl, t: float(P_dis_max_ser.iloc[int(t)]))
 
     # Efficiency + degradation + imbalance
-    m.eta_c = pyo.Param(initialize=float(vehicle.eta_charge))
-    m.eta_d = pyo.Param(initialize=float(vehicle.eta_discharge))
+    m.eta_c = pyo.Param(initialize=float(depot.eta_grid2depot))
+    m.eta_d = pyo.Param(initialize=float(depot.eta_depot2grid))
     m.c_deg = pyo.Param(initialize=float(cycling_cost_eur_per_kwh))
     m.c_imb_vol = pyo.Param(initialize=float(imbalance_volume_penalty_eur_per_kwh))
 
@@ -129,7 +127,7 @@ def flexibility_commercialization(
     m.p_market_max = pyo.Param(initialize=float(p_market_max_value))
 
     # Optional symmetric grid connection limit (symmetric import/export)
-    m.grid_limit = pyo.Param(initialize=float(site.grid_connection_limit))
+    m.grid_limit = pyo.Param(initialize=float(depot.grid_connection_limit))
 
     # Initial energy state (set by MPC workflow)
     m.E0 = pyo.Param(initialize=0.0, mutable=True)
@@ -208,16 +206,16 @@ def flexibility_commercialization(
         rule=lambda mdl, t: mdl.p_net[t] <= mdl.P_upper[t]
     )  # Enforces p_net not above fleet upper power band
 
-    # Optional symmetric grid connection limit (additional site constraint)
+    # Optional symmetric grid connection limit (additional depot constraint)
     m.grid_ub = pyo.Constraint(
         m.T,
         rule=lambda mdl, t: mdl.p_net[t] <= mdl.grid_limit
-    )  # Enforces net export limited by site grid connection
+    )  # Enforces net export limited by depot grid connection
 
     m.grid_lb = pyo.Constraint(
         m.T,
         rule=lambda mdl, t: mdl.p_net[t] >= -mdl.grid_limit
-    )  # Enforces net import limited by site grid connection
+    )  # Enforces net import limited by depot grid connection
 
     # Energy state dynamics with efficiencies
     def energy_state_rule(mdl, t):
