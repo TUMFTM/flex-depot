@@ -266,10 +266,11 @@ def compute_kpis(
 
     imb_cost_eur = 0.0
     if "IMB Cashflow [€/step]" in cf_df.columns:
-        imb_cost_eur = -float(cf_df["IMB Cashflow [€/step]"].sum())
+        imb_cost_eur = float(cf_df["IMB Cashflow [€/step]"].sum())
 
-    gross_profit_eur = float(cf_df["Total Cashflow [€/step]"].sum()) + fees_eur
-    trading_profit_eur = gross_profit_eur - fees_eur - imb_cost_eur
+    gross_profit_eur = float(cf_df["Total Cashflow [€/step]"].sum()) + fees_eur                             # (market CF + IMB CF (neg)) + fees (neg)
+    trading_profit_eur = float(cf_df["Total Cashflow [€/step]"].sum()) - imb_cost_eur                       # (market CF + IMB CF (neg)) - IMB CF (neg) = market CF
+
 
     return {
         "gross_profit_eur": gross_profit_eur,
