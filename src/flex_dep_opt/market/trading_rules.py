@@ -1,129 +1,177 @@
 from __future__ import annotations
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
+
 import pandas as pd
 
 
+# =============================================================================
+# Gate-closure helpers (single source of truth)
+# =============================================================================
+def _parse_hhmm(value: str, default: Tuple[int, int] = (12, 0)) -> Tuple[int, int]:
+    """
+    Parse a 'HH:MM' string to integers.
+
+    Falls back to `default` if parsing fails (keeps simulations robust).
+    """
+    try:
+        hh_str, mm_str = value.split(":")
+        return int(hh_str), int(mm_str)
+    except Exception:
+        return default
+
+
+def gate_closure_timestamp(
+    market: str,
+    delivery_time: pd.Timestamp,
+    optimization_cfg: dict,
+) -> pd.Timestamp:
+    """
+    Compute the market gate-closure timestamp for a given delivery time.
+
+    Notes
+    -----
+    - This function is the *single source of truth* for gate-closure calculations.
+    - It is used by:
+        (i) market activity masks (tradability),
+        (ii) MPC commit logging / diagnostics.
+
+    Parameters
+    ----------
+    market:
+        Market identifier, e.g. "DA" or "ID".
+    delivery_time:
+        Delivery timestamp (tz-aware or tz-naive). The returned timestamp will
+        follow the timezone-awareness of `delivery_time`.
+    optimization_cfg:
+        Optimization configuration containing `optimization_cfg["trading"]`.
+
+    Returns
+    -------
+    pd.Timestamp
+        Gate-closure timestamp for the given market and delivery time.
+
+    Raises
+    ------
+    ValueError
+        If `market` is unknown.
+    """
+    trading_cfg = optimization_cfg.get("trading", {})
+
+    if market == "DA":
+        da_cfg = trading_cfg.get("dayahead", {})
+        gc_hour_str = da_cfg.get("gate_closure_hour", "12:00")
+        closes_prev = bool(da_cfg.get("closes_previous_day", True))
+
+        gc_h, gc_m = _parse_hhmm(gc_hour_str, default=(12, 0))
+
+        base_date = (
+            delivery_time.normalize() - pd.Timedelta(days=1)
+            if closes_prev
+            else delivery_time.normalize()
+        )
+        # `normalize()` preserves tz-awareness; adding Timedelta keeps tz-awareness
+        return base_date + pd.Timedelta(hours=gc_h, minutes=gc_m)
+
+    if market == "ID":
+        id_cfg = trading_cfg.get("intraday", {})
+        offset_min = int(id_cfg.get("offset_minutes_before_delivery", 30))
+        return delivery_time - pd.Timedelta(minutes=offset_min)
+
+    raise ValueError(f"Unknown market: {market}")
+
+
+# =============================================================================
+# Market selection helpers
+# =============================================================================
+def _enabled_markets_from_cfg(optimization_cfg: dict) -> List[str]:
+    """
+    Return enabled markets as a list of market codes ("DA", "ID", ...).
+
+    The expected structure is:
+        optimization_cfg["markets"]["dayahead"]["enabled"]
+        optimization_cfg["markets"]["intraday"]["enabled"]
+    """
+    market_cfg = optimization_cfg["markets"]
+
+    enabled: List[str] = []
+    if market_cfg.get("dayahead", {}).get("enabled", False):
+        enabled.append("DA")
+    if market_cfg.get("intraday", {}).get("enabled", False):
+        enabled.append("ID")
+    return enabled
+
+
+# =============================================================================
+# Public API
+# =============================================================================
 def build_market_activity_mask_for_time(
     current_time: pd.Timestamp,
     delivery_times: pd.DatetimeIndex,
     optimization_cfg: dict,
 ) -> Dict[str, pd.Series]:
     """
-    Marktaktivitätsmasken für EINEN MPC-Schritt.
+    Build market activity masks for ONE MPC step.
 
-    Logik:
-      - mode == "none":
-          alle aktivierten Märkte sind für alle delivery_times handelbar.
+    The masks indicate whether trading is allowed *at current_time* for each
+    delivery time τ in `delivery_times`. The mask is computed per enabled market.
 
-      - mode == "realistic":
-          Day-Ahead (DA):
-            Für Lieferzeitpunkt τ:
-              gate_closure = (τ.date - 1 Tag falls closes_previous_day)
-                              + gate_closure_hour
-            Handel erlaubt, wenn:
-              current_time < gate_closure
+    Trading modes
+    -------------
+    - mode == "none":
+        All enabled markets are tradable for all delivery times (mask=True).
 
-          Intraday (ID):
-            Für Lieferzeitpunkt τ:
-              gate_closure = τ - offset_minutes_before_delivery
-            Handel erlaubt, wenn:
-              current_time <= gate_closure
+    - mode == "realistic":
+        Enforces gate closures:
+
+        Day-Ahead (DA):
+            tradable if current_time < gate_closure_timestamp("DA", τ, cfg)
+
+        Intraday (ID):
+            tradable if current_time <= gate_closure_timestamp("ID", τ, cfg)
+            (inclusive gate closure, matching previous behavior)
+
+    Returns
+    -------
+    Dict[str, pd.Series]
+        One boolean series per enabled market, indexed by `delivery_times`.
+        If no markets are enabled, returns an empty dict.
     """
-
     trading_cfg = optimization_cfg.get("trading", {})
     mode = trading_cfg.get("mode", "none")
 
-    market_cfg = optimization_cfg["markets"]
-
-    enabled_markets = []
-    if market_cfg["dayahead"]["enabled"]:
-        enabled_markets.append("DA")
-    if market_cfg["intraday"]["enabled"]:
-        enabled_markets.append("ID")
-
+    enabled_markets = _enabled_markets_from_cfg(optimization_cfg)
     mask_by_market: Dict[str, pd.Series] = {}
 
-    # --- Mode "none": alles offen -------------------------------------------
+    # -------------------------------------------------------------------------
+    # Mode "none": everything open (baseline / debugging)
+    # -------------------------------------------------------------------------
     if mode == "none":
         for mk in enabled_markets:
             mask_by_market[mk] = pd.Series(True, index=delivery_times)
         return mask_by_market
 
-    # --- Mode "realistic": nutze Trading-Settings ---------------------
+    # -------------------------------------------------------------------------
+    # Mode "realistic": enforce gate closures via gate_closure_timestamp()
+    # -------------------------------------------------------------------------
     if mode == "realistic":
+        for mk in enabled_markets:
+            # Compute gate-closure timestamps for each τ
+            gcs = pd.Series(
+                [gate_closure_timestamp(mk, tau, optimization_cfg) for tau in delivery_times],
+                index=delivery_times,
+            )
 
-        # Day-Ahead
-        if "DA" in enabled_markets:
-            da_cfg = trading_cfg.get("dayahead", {})
-            gc_hour_str = da_cfg.get("gate_closure_hour", "12:00")
-            closes_prev = da_cfg.get("closes_previous_day", True)
-
-            # Stunden/Minuten aus "HH:MM" parsen
-            try:
-                hh_str, mm_str = gc_hour_str.split(":")
-                gc_h = int(hh_str)
-                gc_m = int(mm_str)
-            except Exception:
-                gc_h, gc_m = 12, 0  # Fallback
-
-            da_mask_vals = []
-            for tau in delivery_times:
-                # Basisdatum = Lieferdatum oder Vortag
-                if closes_prev:
-                    gc_date = (tau.normalize() - pd.Timedelta(days=1))
-                else:
-                    gc_date = tau.normalize()
-
-                # gc_date hat gleiche TZ wie τ (wenn τ tz-aware ist)
-                gc_ts = gc_date + pd.Timedelta(hours=gc_h, minutes=gc_m)
-
-                # Handel erlaubt, solange current_time vor GC liegt
-                da_mask_vals.append(current_time < gc_ts)
-
-            mask_by_market["DA"] = pd.Series(da_mask_vals, index=delivery_times)
-
-        # Intraday
-        if "ID" in enabled_markets:
-            id_cfg = trading_cfg.get("intraday", {})
-            offset_min = int(id_cfg.get("offset_minutes_before_delivery", 30))
-
-            id_mask_vals = []
-            for tau in delivery_times:
-                gc_ts = tau - pd.Timedelta(minutes=offset_min)
-                # Handel erlaubt bis inkl. Gate Closure
-                id_mask_vals.append(current_time <= gc_ts)
-
-            mask_by_market["ID"] = pd.Series(id_mask_vals, index=delivery_times)
+            # Apply market-specific "open" condition (keep historical semantics)
+            if mk == "DA":
+                mask_by_market[mk] = current_time < gcs
+            elif mk == "ID":
+                mask_by_market[mk] = current_time <= gcs
+            else:
+                # If you add more markets later, enforce explicit semantics here
+                raise ValueError(f"Missing activity rule for market={mk}")
 
         return mask_by_market
 
+    # Unknown mode: return empty masks (explicit and safe)
     return mask_by_market
 
-
-def build_market_activity_mask(
-    time_index: pd.DatetimeIndex,
-    optimization_cfg: dict,
-) -> Dict[str, pd.Series]:
-    """
-    Alte Version für Single-Shot-Optimierung:
-    - trading.mode == "none"  -> überall True
-    - trading.mode == "realistic" -> aktuell noch keine Einschränkung (nur für PF)
-    """
-    trading_cfg = optimization_cfg.get("trading", {})
-    mode = trading_cfg.get("mode", "none")
-
-    market_cfg = optimization_cfg["markets"]
-    enabled_markets = []
-
-    if market_cfg["dayahead"]["enabled"]:
-        enabled_markets.append("DA")
-    if market_cfg["intraday"]["enabled"]:
-        enabled_markets.append("ID")
-
-    mask_by_market: Dict[str, pd.Series] = {}
-
-    # Heutiges Verhalten: alles offen
-    for mk in enabled_markets:
-        mask_by_market[mk] = pd.Series(True, index=time_index)
-
-    return mask_by_market

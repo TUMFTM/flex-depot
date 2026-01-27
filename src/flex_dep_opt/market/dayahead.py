@@ -1,21 +1,28 @@
-# dayahead.py
-# Defines the DayAheadPrices class, a validated container for hourly day-ahead
-# electricity prices. It ensures timezone-aware timestamps, consistent units
-# (EUR/kWh), and provides helper methods to load data from CSV, summarize,
-# and access key statistics.
-
 from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal
+
 import pandas as pd
 
 Unit = Literal["eur_per_kwh", "eur_per_mwh"]
 
+
+# =============================================================================
+# Day-Ahead price container
+# =============================================================================
 @dataclass
 class DayAheadPrices:
-    """Container for day-ahead prices with a tz-aware hourly DatetimeIndex.
+    """
+    Container for day-ahead prices (typically 15-min resolution).
+    -------------------
+    - Parsing, validation, and normalization are centralized in `io/prices_io.py`.
+    - This class is therefore a lightweight container that enforces only basic
+      invariants (index type, tz-awareness) and provides convenience methods.
 
-    Internally we store prices in EUR/kWh to keep optimization units simple.
+    Units
+    -----
+    - Internally stored in EUR/kWh.
     """
     prices_eur_per_kwh: pd.Series
 
@@ -23,64 +30,29 @@ class DayAheadPrices:
         if not isinstance(self.prices_eur_per_kwh.index, pd.DatetimeIndex):
             raise ValueError("prices must have a DatetimeIndex")
         if self.prices_eur_per_kwh.index.tz is None:
-            raise ValueError("prices index must be timezone-aware (e.g., Europe/Berlin)")
-        if self.prices_eur_per_kwh.isna().any():
-            raise ValueError("prices contain NaNs")
-        # Ensure chronological order
+            raise ValueError("prices index must be timezone-aware")
+
+        # Keep deterministic ordering; deeper validation happens in prices_io
         self.prices_eur_per_kwh = self.prices_eur_per_kwh.sort_index()
 
     @classmethod
-    def from_series(
-        cls,
-        s: pd.Series,
-        unit: Unit = "eur_per_kwh",
-    ) -> "DayAheadPrices":
-        """Create from a Series. Converts to EUR/kWh if needed."""
+    def from_series(cls, s: pd.Series, unit: Unit = "eur_per_kwh") -> "DayAheadPrices":
+        """
+        Build from a Series and convert units if needed.
+
+        Note: Numeric/NaN/duplicate validation is expected to be handled upstream
+        (prices_io) for data loaded from files.
+        """
         if unit == "eur_per_mwh":
-            s = s / 1000.0  # 1 MWh = 1000 kWh
+            s = s / 1000.0
         elif unit != "eur_per_kwh":
             raise ValueError(f"unknown unit: {unit}")
-        return cls(prices_eur_per_kwh=s)
-
-    @classmethod
-    def from_csv(
-            cls,
-            path: str,
-            time_col: str = "time",
-            price_col: str = "price",
-            *,
-            unit: Unit = "eur_per_kwh",
-            tz: str = "Europe/Berlin",
-            parse_utc: bool = False,
-    ) -> "DayAheadPrices":
-        """Load from CSV with columns [time_col, price_col].
-
-        - Robust gegen Strings mit Offset (z.B. '2025-10-01 00:00:00+02:00')
-        - Normalisiert alles in eine einheitliche Ziel-TZ (tz).
-        """
-        df = pd.read_csv(path)
-        if time_col not in df or price_col not in df:
-            raise ValueError(f"CSV must have columns '{time_col}' and '{price_col}'")
-
-        # 1) Immer als UTC parsen – das verträgt sowohl naive als auch offset-aware Strings
-        ts = pd.to_datetime(df[time_col], errors="coerce", utc=True)
-
-        # 2) In gewünschte Ziel-TZ umrechnen
-        ts = ts.dt.tz_convert(tz)
-
-        # 3) Preis-Spalte
-        prices = df[price_col].astype(float)
-
-        # 4) Series bauen + NaT-Zeilen droppen
-        s = pd.Series(prices.values, index=ts)
-        s = s[~s.index.isna()]
-
-        return cls.from_series(s, unit=unit)
+        return cls(prices_eur_per_kwh=s.astype(float))
 
     # Convenience helpers
     @property
     def hours(self) -> int:
-        return len(self.prices_eur_per_kwh)
+        return int(len(self.prices_eur_per_kwh))
 
     @property
     def start(self) -> pd.Timestamp:
@@ -96,7 +68,7 @@ class DayAheadPrices:
     def summary(self) -> dict:
         s = self.prices_eur_per_kwh
         return {
-            "hours": len(s),
+            "hours": int(len(s)),
             "start": self.start.isoformat(),
             "end": self.end.isoformat(),
             "min": float(s.min()),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable
+from typing import Dict, Iterable, Optional
+
 import pandas as pd
 import pyomo.environ as pyo
 
@@ -10,7 +11,7 @@ from ..domain.depot import Depot
 def flexibility_commercialization(
     depot: Depot,
     prices_by_market: Dict[str, pd.Series],
-    fee_eur_per_kwh_by_market: Dict[str, float] | None = None,
+    fee_eur_per_kwh_by_market: Optional[Dict[str, float]] = None,
     *,
     timestep_hours: float | None = None,
     virtual_arbitrage: bool = True,
@@ -24,347 +25,313 @@ def flexibility_commercialization(
     imbalance_volume_penalty_eur_per_kwh: float = 0.0,
 ) -> pyo.ConcreteModel:
     """
-    Flex-band based fleet commercialization model.
+    Flex-band based multi-market commercialization model (Pyomo).
 
-    Key modeling choices:
-    - Aggregated energy state E[t] (kWh) can be negative (band model).
-    - Aggregated net grid power p_net[t] is constrained by fleet bands (and optionally grid limit).
-    - Physical charging/discharging variables (p_ch, p_dis) remain to model efficiencies and degradation.
-    - Market positions are optimized per market and linked to physical net power.
-    - MILP mode (virtual_arbitrage=False) prevents simultaneous import/export within a timestep.
+    This function intentionally assumes that all time series (prices, masks,
+    committed positions, flexibility bounds) are already validated and aligned
+    by the IO / workflow layer. The model therefore focuses purely on the
+    mathematical formulation, with minimal guardrails.
+
+    Modeling conventions
+    --------------------
+    - Decisions live on T = 0..N-1 (power + market positions), aligned to a
+      decision time index of length N.
+    - Energy states live on S = 0..N (N+1 points), aligned to flexibility bounds.
+    - Net power is defined as:
+        p_net[t] = p_ch[t] - p_dis[t]
+      with p_ch, p_dis >= 0 to represent efficiencies and cycling costs.
+
+    Market coupling
+    ---------------
+    - Market positions are optimized per market and summed to match p_net.
+    - Gate closures are enforced by fixing closed positions to committed values.
+    - If virtual_arbitrage=False, a MILP prevents simultaneous import/export
+      within a timestep using a binary mode variable and tight Big-M bounds.
+
+    Units
+    -----
+    - Power: kW
+    - Energy: kWh
+    - Prices/fees: EUR/kWh
+    - Objective: EUR (over the horizon)
     """
 
-    # ----------------------------
-    # 1) Basic time axis alignment
-    # ----------------------------
+    # ============================================================
+    # 1) Time axis and derived constants (assumed aligned upstream)
+    # ============================================================
     markets: Iterable[str] = list(prices_by_market.keys())
-    if not markets:
-        raise ValueError("prices_by_market must contain at least one market")
-
     ref = prices_by_market[next(iter(markets))].sort_index()
     time_index = ref.index
-    if not isinstance(time_index, pd.DatetimeIndex):
-        raise ValueError("Price series must have a DatetimeIndex")
+    N = len(time_index)
 
-    for mk, s in prices_by_market.items():
-        s_sorted = s.sort_index()
-        if not s_sorted.index.equals(time_index):
-            raise ValueError(f"Price index mismatch for market {mk}")
-        prices_by_market[mk] = s_sorted
-
-    # ----------------------------
-    # 2) Timestep
-    # ----------------------------
     if timestep_hours is None:
-        if len(time_index) < 2:
-            raise ValueError("Need at least two timestamps to infer timestep")
         timestep_hours = (time_index[1] - time_index[0]).total_seconds() / 3600.0
 
-    # ----------------------------
-    # 3) Flexibility bands (assumed clean + aligned by workflow/io)
-    # ----------------------------
-    required_cols = [
-        "Power_lower_kW", "Power_upper_kW",
-        "Capacity_lower_kWh", "Capacity_upper_kWh",
-    ]
-    missing_cols = [c for c in required_cols if c not in flexibility_bounds.columns]
-    if missing_cols:
-        raise ValueError(f"flexibility_bounds missing columns: {missing_cols}")
-    if len(flexibility_bounds) != len(time_index) + 1:
-        raise ValueError(
-            "flexibility_bounds must have exactly N+1 rows (states) "
-            "for N decision steps"
-        )
+    fee_eur_per_kwh_by_market = fee_eur_per_kwh_by_market or {}
 
+    # Flexibility bands (states: N+1 rows)
     P_lower_ser = flexibility_bounds["Power_lower_kW"]
     P_upper_ser = flexibility_bounds["Power_upper_kW"]
     E_lower_ser = flexibility_bounds["Capacity_lower_kWh"]
     E_upper_ser = flexibility_bounds["Capacity_upper_kWh"]
 
-    # Time-dependent maxima (used as tight Big-M values in MILP constraints)
+    # Tight per-timestep import/export maxima (Big-M values in MILP constraints)
     P_ch_max_ser = P_upper_ser.clip(lower=0.0)         # max import (>=0)
     P_dis_max_ser = (-P_lower_ser).clip(lower=0.0)     # max export (>=0)
 
-    # Global market position bound derived from fleet power bands (safe and tight)
+    # Global symmetric bound for market positions derived from fleet power bands
     p_market_max_value = float(max(P_upper_ser.max(), (-P_lower_ser).max()))
 
-    # ----------------------------
-    # 4) Pyomo model structure
-    # ----------------------------
+    # ============================================================
+    # 2) Pyomo model structure (Sets / Params)
+    # ============================================================
     m = pyo.ConcreteModel()
 
-    N = len(time_index)  # number of decision steps
-    m.T = pyo.RangeSet(0, N - 1)  # decisions (power, markets)
-    m.S = pyo.RangeSet(0, N)  # states (energy) incl. terminal
+    m.T = pyo.RangeSet(0, N - 1)  # decisions
+    m.S = pyo.RangeSet(0, N)      # states (N+1)
 
     m.MARKETS = pyo.Set(initialize=list(markets))
     m.dt = pyo.Param(initialize=float(timestep_hours))
 
-    # ----------------------------
-    # 5) Parameters
-    # ----------------------------
-    # Marketprices & fees
-    m.price = pyo.Param(m.MARKETS, m.T,initialize=lambda mdl, mk, t: float(prices_by_market[mk].iloc[int(t)]))
-    m.fee = pyo.Param(m.MARKETS,initialize=lambda mdl, mk: float(fee_eur_per_kwh_by_market.get(mk, 0.0)),within=pyo.NonNegativeReals,)
+    # --- Market prices & fees (EUR/kWh) ---
+    m.price = pyo.Param(
+        m.MARKETS,
+        m.T,
+        initialize=lambda mdl, mk, t: float(prices_by_market[mk].iloc[int(t)]),
+    )
+    m.fee = pyo.Param(
+        m.MARKETS,
+        initialize=lambda mdl, mk: float(fee_eur_per_kwh_by_market.get(mk, 0.0)),
+        within=pyo.NonNegativeReals,
+    )
 
-    # Flex bands (power + energy)
+    # --- Flexibility bands ---
     m.P_lower = pyo.Param(m.T, initialize=lambda mdl, t: float(P_lower_ser.iloc[int(t)]))
     m.P_upper = pyo.Param(m.T, initialize=lambda mdl, t: float(P_upper_ser.iloc[int(t)]))
     m.E_lower = pyo.Param(m.S, initialize=lambda mdl, s: float(E_lower_ser.iloc[int(s)]))
     m.E_upper = pyo.Param(m.S, initialize=lambda mdl, s: float(E_upper_ser.iloc[int(s)]))
 
-    # Tight per-timestep import/export maxima (Big-M values)
+    # Tight Big-M bounds per timestep (for MILP mode)
     m.P_ch_max_t = pyo.Param(m.T, initialize=lambda mdl, t: float(P_ch_max_ser.iloc[int(t)]))
     m.P_dis_max_t = pyo.Param(m.T, initialize=lambda mdl, t: float(P_dis_max_ser.iloc[int(t)]))
 
-    # Efficiency + degradation + imbalance
+    # --- Depot parameters ---
     m.eta_c = pyo.Param(initialize=float(depot.eta_grid2depot))
     m.eta_d = pyo.Param(initialize=float(depot.eta_depot2grid))
+    m.grid_limit = pyo.Param(initialize=float(depot.grid_connection_limit))
+
+    # --- Cost coefficients ---
     m.c_deg = pyo.Param(initialize=float(cycling_cost_eur_per_kwh))
     m.c_imb_vol = pyo.Param(initialize=float(imbalance_volume_penalty_eur_per_kwh))
 
-    # Global market max (symmetric)
+    # Global symmetric bound for market power
     m.p_market_max = pyo.Param(initialize=float(p_market_max_value))
-
-    # Optional symmetric grid connection limit (symmetric import/export)
-    m.grid_limit = pyo.Param(initialize=float(depot.grid_connection_limit))
 
     # Initial energy state (set by MPC workflow)
     m.E0 = pyo.Param(initialize=0.0, mutable=True)
 
-    # --- Terminal target (set by MPC workflow, optional) ---
+    # Terminal target and weight (set by MPC workflow)
     m.Eterm = pyo.Param(initialize=0.0, mutable=True)
-    # Weight for soft terminal objective (0 => disabled)
     m.w_term = pyo.Param(initialize=0.0, mutable=True, within=pyo.NonNegativeReals)
 
-
-    # Committed positions (set by MPC workflow; must be aligned)
-    for mk in markets:
-        if mk not in market_activity_mask:
-            raise ValueError(f"market_activity_mask missing market: {mk}")
-        if mk not in committed_positions:
-            raise ValueError(f"committed_positions missing market: {mk}")
-        if not committed_positions[mk].index.equals(time_index):
-            raise ValueError(f"committed_positions[{mk}] must be aligned to model time index")
-        if not market_activity_mask[mk].index.equals(time_index):
-            raise ValueError(f"market_activity_mask[{mk}] must be aligned to model time index")
-
+    # Committed market positions (fixed schedule after gate closure)
     m.p_market_committed = pyo.Param(
-        m.MARKETS, m.T,
-        initialize=lambda mdl, mk, t: float(committed_positions[mk].iloc[int(t)])
+        m.MARKETS,
+        m.T,
+        initialize=lambda mdl, mk, t: float(committed_positions[mk].iloc[int(t)]),
     )
 
-    # ----------------------------
-    # 6) Decision variables
-    # ----------------------------
-    m.p_ch = pyo.Var(m.T, within=pyo.NonNegativeReals)   # Charging power (import magnitude) [kW]
-    m.p_dis = pyo.Var(m.T, within=pyo.NonNegativeReals)  # Discharging power (export magnitude) [kW]
-    m.p_net = pyo.Var(m.T, within=pyo.Reals)             # Net grid power (+import / -export) [kW]
-    m.E = pyo.Var(m.S, within=pyo.Reals)                 # Aggregated energy state [kWh] (can be negative)
+    # ============================================================
+    # 3) Decision variables
+    # ============================================================
+    m.p_ch = pyo.Var(m.T, within=pyo.NonNegativeReals)   # import magnitude [kW]
+    m.p_dis = pyo.Var(m.T, within=pyo.NonNegativeReals)  # export magnitude [kW]
+    m.p_net = pyo.Var(m.T, within=pyo.Reals)             # net power (+import / -export) [kW]
+    m.E = pyo.Var(m.S, within=pyo.Reals)                 # energy state [kWh] (band model)
 
-    # Initial condition
-    m.energy_init = pyo.Constraint(expr=m.E[0] == m.E0)
+    # Market positions (signed): +import (buy), -export (sell)
+    m.p_market = pyo.Var(
+        m.MARKETS,
+        m.T,
+        bounds=lambda mdl, mk, t: (-mdl.p_market_max, mdl.p_market_max),
+    )
 
-    m.p_market = pyo.Var(m.MARKETS, m.T,bounds=lambda mdl, mk, t: (-mdl.p_market_max, mdl.p_market_max),)
-
+    # Optional imbalance variables
     if allow_imbalance:
         m.p_imb_pos = pyo.Var(m.T, within=pyo.NonNegativeReals)
         m.p_imb_neg = pyo.Var(m.T, within=pyo.NonNegativeReals)
 
-        # prices (EUR/kWh) aligned to time_index (decisions)
-        if imbalance_prices_pos is None or imbalance_prices_neg is None:
-            raise ValueError("allow_imbalance=True requires imbalance price series")
-
-        if not imbalance_prices_pos.index.equals(time_index) or not imbalance_prices_neg.index.equals(time_index):
-            raise ValueError("imbalance price series must align to model time index")
-
         m.price_imb_pos = pyo.Param(m.T, initialize=lambda mdl, t: float(imbalance_prices_pos.iloc[int(t)]))
         m.price_imb_neg = pyo.Param(m.T, initialize=lambda mdl, t: float(imbalance_prices_neg.iloc[int(t)]))
 
-    # Absolute deviation from terminal target at end of horizon
+    # Terminal deviation (absolute) for soft terminal objective
     m.e_term_dev = pyo.Var(within=pyo.NonNegativeReals)
 
-    # ----------------------------
-    # 7) Physical constraints (bands + efficiencies)
-    # ----------------------------
+    # ============================================================
+    # 4) Physical constraints (bands + efficiencies)
+    # ============================================================
+    # Initial condition
+    m.energy_init = pyo.Constraint(expr=m.E[0] == m.E0)
 
-    # Define net power from charge/discharge decisions
-    m.p_net_def = pyo.Constraint(
-        m.T,
-        rule=lambda mdl, t: mdl.p_net[t] == mdl.p_ch[t] - mdl.p_dis[t]
-    )  # Enforces p_net = import - export
+    # Net power definition: p_net = p_ch - p_dis
+    m.p_net_def = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] == mdl.p_ch[t] - mdl.p_dis[t])
 
-    # Fleet power band (lower bound)
-    m.p_net_lb = pyo.Constraint(
-        m.T,
-        rule=lambda mdl, t: mdl.p_net[t] >= mdl.P_lower[t]
-    )  # Enforces p_net not below fleet lower power band
+    # Fleet power band constraints
+    m.p_net_lb = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] >= mdl.P_lower[t])
+    m.p_net_ub = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] <= mdl.P_upper[t])
 
-    # Fleet power band (upper bound)
-    m.p_net_ub = pyo.Constraint(
-        m.T,
-        rule=lambda mdl, t: mdl.p_net[t] <= mdl.P_upper[t]
-    )  # Enforces p_net not above fleet upper power band
+    # Symmetric grid connection limit (additional depot constraint)
+    m.grid_ub = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] <= mdl.grid_limit)
+    m.grid_lb = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] >= -mdl.grid_limit)
 
-    # Optional symmetric grid connection limit (additional depot constraint)
-    m.grid_ub = pyo.Constraint(
-        m.T,
-        rule=lambda mdl, t: mdl.p_net[t] <= mdl.grid_limit
-    )  # Enforces net export limited by depot grid connection
-
-    m.grid_lb = pyo.Constraint(
-        m.T,
-        rule=lambda mdl, t: mdl.p_net[t] >= -mdl.grid_limit
-    )  # Enforces net import limited by depot grid connection
-
-    # Energy state dynamics with efficiencies
+    # Energy state transition with efficiencies:
+    # E[t+1] = E[t] + eta_c * p_ch[t] * dt - (1/eta_d) * p_dis[t] * dt
     def energy_state_rule(mdl, t):
-        # t in decision set 0..N-1 updates E[t+1]
-        return mdl.E[t + 1] == mdl.E[t] \
-            + mdl.eta_c * mdl.p_ch[t] * mdl.dt \
+        return (
+            mdl.E[t + 1]
+            == mdl.E[t]
+            + mdl.eta_c * mdl.p_ch[t] * mdl.dt
             - (1.0 / mdl.eta_d) * mdl.p_dis[t] * mdl.dt
+        )
 
     m.energy_state = pyo.Constraint(m.T, rule=energy_state_rule)
 
-    # Terminal condition
-    last_s = N  # last state index (since m.S = 0..N)
+    # Fleet energy band constraints (state index S)
+    m.E_lb = pyo.Constraint(m.S, rule=lambda mdl, s: mdl.E[s] >= mdl.E_lower[s])
+    m.E_ub = pyo.Constraint(m.S, rule=lambda mdl, s: mdl.E[s] <= mdl.E_upper[s])
+
+    # Terminal deviation |E[N] - Eterm| <= e_term_dev
+    last_s = N
     m.term_dev_pos = pyo.Constraint(expr=m.E[last_s] - m.Eterm <= m.e_term_dev)
     m.term_dev_neg = pyo.Constraint(expr=m.Eterm - m.E[last_s] <= m.e_term_dev)
-    # Optional HARD terminal constraint (disabled by default; MPC can activate it)
+
+    # Optional hard terminal constraint (disabled by default; MPC can activate)
     m.energy_term_hard = pyo.Constraint(expr=m.E[last_s] == m.Eterm)
     m.energy_term_hard.deactivate()
 
-    # Fleet energy band (lower bound)
-    m.E_lb = pyo.Constraint(
-        m.S,
-        rule=lambda mdl, s: mdl.E[s] >= mdl.E_lower[s]
-    )  # Enforces energy not below fleet lower energy band
-
-    # Fleet energy band (upper bound)
-    m.E_ub = pyo.Constraint(
-        m.S,
-        rule=lambda mdl, s: mdl.E[s] <= mdl.E_upper[s]
-    )  # Enforces energy not above fleet upper energy band
-
-    # ----------------------------
-    # 8) Market coupling + gate-closure commitments
-    # ----------------------------
-
+    # ============================================================
+    # 5) Market coupling + gate-closure commitments
+    # ============================================================
     # Gate closure: if a slot is closed, fix p_market to committed position
     def market_activity_rule(mdl, mk, t):
         allowed = bool(market_activity_mask[mk].iloc[int(t)])
         if allowed:
             return pyo.Constraint.Skip
         return mdl.p_market[mk, t] == mdl.p_market_committed[mk, t]
-    m.market_activity = pyo.Constraint(m.MARKETS, m.T, rule=market_activity_rule)  # Free when open, fixed when closed
 
+    m.market_activity = pyo.Constraint(m.MARKETS, m.T, rule=market_activity_rule)
+
+    # Balance markets to physical net power
+    def balance_rule(mdl, t):
+        base = sum(mdl.p_market[mk, t] for mk in mdl.MARKETS)
+        if allow_imbalance:
+            return base + mdl.p_imb_pos[t] - mdl.p_imb_neg[t] == mdl.p_net[t]
+        return base == mdl.p_net[t]
+
+    m.market_balance = pyo.Constraint(m.T, rule=balance_rule)
+
+    # ------------------------------------------------------------
+    # Virtual arbitrage handling:
+    # - LP mode: allow offsetting between markets, track absolute volume for fees
+    # - MILP mode: prevent simultaneous import/export using binary mode and Big-M
+    # ------------------------------------------------------------
     if virtual_arbitrage:
-        # LP: allow offsetting between markets; only total must match physical net power
-        def balance_rule(mdl, t):
-            base = sum(mdl.p_market[mk, t] for mk in mdl.MARKETS)
-            if allow_imbalance:
-                return base + mdl.p_imb_pos[t] - mdl.p_imb_neg[t] == mdl.p_net[t]
-            return base == mdl.p_net[t]
-        m.market_balance = pyo.Constraint(m.T, rule=balance_rule)
-
-        # Absolute market volume for fee calculation (LP-safe)
+        # Absolute market volume for fee calculation (LP-safe linearization)
         m.p_market_abs = pyo.Var(m.MARKETS, m.T, within=pyo.NonNegativeReals)
-        m.p_market_abs_pos = pyo.Constraint(m.MARKETS, m.T,rule=lambda mdl, mk, t: mdl.p_market_abs[mk, t] >= mdl.p_market[mk, t])
-        m.p_market_abs_neg = pyo.Constraint(m.MARKETS, m.T,rule=lambda mdl, mk, t: mdl.p_market_abs[mk, t] >= -mdl.p_market[mk, t])
+        m.p_market_abs_pos = pyo.Constraint(
+            m.MARKETS, m.T, rule=lambda mdl, mk, t: mdl.p_market_abs[mk, t] >= mdl.p_market[mk, t]
+        )
+        m.p_market_abs_neg = pyo.Constraint(
+            m.MARKETS, m.T, rule=lambda mdl, mk, t: mdl.p_market_abs[mk, t] >= -mdl.p_market[mk, t]
+        )
         m.p_market_vol = pyo.Expression(m.MARKETS, m.T, rule=lambda mdl, mk, t: mdl.p_market_abs[mk, t])
 
     else:
-        # MILP: prevent simultaneous import and export within a timestep (no virtual arbitrage)
+        # MILP: prevent simultaneous import/export within a timestep
         m.u_state = pyo.Var(m.T, within=pyo.Binary)  # 1=export mode, 0=import mode
 
-        # Split market power into positive (sell/export) and negative (buy/import) parts per market
-        m.p_market_pos = pyo.Var(m.MARKETS, m.T, within=pyo.NonNegativeReals)  # Buy/import [kW]
-        m.p_market_neg = pyo.Var(m.MARKETS, m.T, within=pyo.NonNegativeReals)   # Sell/export [kW]
-        m.p_market_vol = pyo.Expression(m.MARKETS, m.T,rule=lambda mdl, mk, t: mdl.p_market_pos[mk, t] + mdl.p_market_neg[mk, t])
+        # Split signed market position into positive (buy/import) and negative (sell/export) parts
+        m.p_market_pos = pyo.Var(m.MARKETS, m.T, within=pyo.NonNegativeReals)  # buy/import [kW]
+        m.p_market_neg = pyo.Var(m.MARKETS, m.T, within=pyo.NonNegativeReals)  # sell/export [kW]
+        m.p_market_vol = pyo.Expression(
+            m.MARKETS, m.T, rule=lambda mdl, mk, t: mdl.p_market_pos[mk, t] + mdl.p_market_neg[mk, t]
+        )
 
-        # Signed market position: p_market = buy - sell
+        # Define signed market position: p_market = buy - sell
         m.p_market_def = pyo.Constraint(
             m.MARKETS, m.T,
             rule=lambda mdl, mk, t: mdl.p_market[mk, t] == mdl.p_market_pos[mk, t] - mdl.p_market_neg[mk, t]
         )
 
-        # Total market export/import
         def total_export(mdl, t):
             return sum(mdl.p_market_neg[mk, t] for mk in mdl.MARKETS)
 
         def total_import(mdl, t):
             return sum(mdl.p_market_pos[mk, t] for mk in mdl.MARKETS)
 
-        # Couple markets to physical net power
-        def balance_rule(mdl, t):
-            base = sum(mdl.p_market[mk, t] for mk in mdl.MARKETS)
-            if allow_imbalance:
-                return base + mdl.p_imb_pos[t] - mdl.p_imb_neg[t] == mdl.p_net[t]
-            return base == mdl.p_net[t]
-        m.market_balance = pyo.Constraint(m.T, rule=balance_rule)
-
-        # Enforce "either export or import" using tight Big-M from bands
+        # Enforce either export or import using tight Big-M from bands
         m.export_mode_limit = pyo.Constraint(
             m.T,
             rule=lambda mdl, t: total_export(mdl, t) <= mdl.P_dis_max_t[t] * mdl.u_state[t]
-        )  # If u_state=0 => total export must be 0; if u_state=1 => export <= max export band
-
+        )
         m.import_mode_limit = pyo.Constraint(
             m.T,
             rule=lambda mdl, t: total_import(mdl, t) <= mdl.P_ch_max_t[t] * (1.0 - mdl.u_state[t])
-        )  # If u_state=1 => total import must be 0; if u_state=0 => import <= max import band
+        )
 
-        # Also prevent simultaneous physical charging/discharging (avoids efficiency loopholes)
+        # Also prevent simultaneous physical charging/discharging (efficiency loopholes)
         m.p_dis_mode_limit = pyo.Constraint(
             m.T,
             rule=lambda mdl, t: mdl.p_dis[t] <= mdl.P_dis_max_t[t] * mdl.u_state[t]
-        )  # If import mode => discharging must be 0
-
+        )
         m.p_ch_mode_limit = pyo.Constraint(
             m.T,
             rule=lambda mdl, t: mdl.p_ch[t] <= mdl.P_ch_max_t[t] * (1.0 - mdl.u_state[t])
-        )  # If export mode => charging must be 0
+        )
 
-    # ----------------------------
-    # 9) Objective: market revenue - degradation
-    # ----------------------------
+    # ============================================================
+    # 6) Objective: revenue - fees - degradation - imbalance penalty - terminal dev
+    # ============================================================
     def obj_expr(mdl):
-        # Cashflow term
+        # Market cashflow (EUR)
         energy_cashflow = sum(
-            - mdl.price[mk, t] * mdl.p_market[mk, t] * mdl.dt
+            -mdl.price[mk, t] * mdl.p_market[mk, t] * mdl.dt
             for mk in mdl.MARKETS for t in mdl.T
         )
 
-        # Market fee cost term
+        # Transaction fees on absolute volume (EUR)
         fee_cost = sum(
             mdl.fee[mk] * mdl.p_market_vol[mk, t] * mdl.dt
             for mk in mdl.MARKETS for t in mdl.T
         )
 
-        # Degradation cost term
+        # Cycling / degradation cost on throughput (EUR)
         deg_cost = mdl.c_deg * sum(
             (mdl.p_ch[t] + mdl.p_dis[t]) * mdl.dt
             for t in mdl.T
         )
 
-        # Imbalance cash & penalty term
+        # Optional imbalance cashflow and volume penalty
         imb_cash = 0.0
         imb_vol_pen = 0.0
         if allow_imbalance:
             imb_cash = sum(
-                - mdl.price_imb_pos[t] * mdl.p_imb_pos[t] * mdl.dt
+                -mdl.price_imb_pos[t] * mdl.p_imb_pos[t] * mdl.dt
                 + mdl.price_imb_neg[t] * mdl.p_imb_neg[t] * mdl.dt
                 for t in mdl.T
             )
-            # Penalize absolute imbalance volume (kWh) to prevent schedule-vs-physical arbitrage
             imb_vol_pen = mdl.c_imb_vol * sum(
                 (mdl.p_imb_pos[t] + mdl.p_imb_neg[t]) * mdl.dt
                 for t in mdl.T
             )
 
-        return energy_cashflow + imb_cash - fee_cost - deg_cost - imb_vol_pen - mdl.w_term * mdl.e_term_dev
+        # Soft terminal objective (weight set by MPC)
+        term_penalty = mdl.w_term * mdl.e_term_dev
+
+        return energy_cashflow + imb_cash - fee_cost - deg_cost - imb_vol_pen - term_penalty
 
     m.obj = pyo.Objective(rule=obj_expr, sense=pyo.maximize)
 
     return m
+
 

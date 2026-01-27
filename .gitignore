@@ -205,10 +205,11 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
-/src/flex_dep_opt/viz/plots_presentation.py
+/src/flex_dep_opt/post/plots_presentation.py
 /results/
-/src/flex_dep_opt/viz/plots_paper.py
+/src/flex_dep_opt/post/plots_paper.py
 /run_plots_paper.bat
-/src/flex_dep_opt/workflows/plot_workflow_paper.py
+/src/flex_dep_opt/workflows/postprocessing_workflow_paper.py
 /data/flexibility/fleet_1_vb_bounds_15min.csv
 /data/flexibility/fleet_1_vb_bounds_15min_50kW.csv
+/src/flex_dep_opt/post/plots_paper.py

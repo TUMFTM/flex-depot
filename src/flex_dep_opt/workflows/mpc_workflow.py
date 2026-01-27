@@ -1,6 +1,8 @@
+import logging
+from pathlib import Path
+
 import pandas as pd
 from tqdm.auto import tqdm
-from pathlib import Path
 
 from flex_dep_opt.domain.depot import Depot
 from flex_dep_opt.io.prices_io import build_prices_from_settings, build_fees_from_settings
@@ -8,11 +10,14 @@ from flex_dep_opt.io.flexibility_io import (
     read_flexibility_bounds_csv,
     align_and_validate_flexibility_bounds,
 )
+from flex_dep_opt.io.results_io import save_dispatch_to_csv, save_summary_to_csv
 from flex_dep_opt.opt.model import flexibility_commercialization
 from flex_dep_opt.opt.solve import solve_model, extract_dispatch
-from flex_dep_opt.market.trading_rules import build_market_activity_mask_for_time
+from flex_dep_opt.market.trading_rules import (
+    build_market_activity_mask_for_time,
+    gate_closure_timestamp,
+)
 
-import logging
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("gurobipy").setLevel(logging.WARNING)
@@ -20,16 +25,21 @@ logging.getLogger("pyomo").setLevel(logging.WARNING)
 logging.getLogger("pyomo.core").setLevel(logging.ERROR)
 
 
-def run_mpc(cfg: dict):
+def run_mpc(cfg: dict) -> None:
     """
     Rolling-horizon Model Predictive Control (MPC).
 
     At each simulation step:
       - Optimize a forward-looking time window (DA horizon)
-      - Apply only the first decision
+      - Apply only the first decision (receding horizon)
       - Roll the energy state forward
-      - Respect real market gate closures via activity masks
+      - Respect market gate closures via activity masks
       - Permanently commit market positions once gate closure is passed
+
+    Notes
+    -----
+    Gate-closure times are computed in the market layer via `gate_closure_timestamp()`.
+    This ensures mask enforcement and commit logging use the exact same rules.
     """
 
     # ============================================================
@@ -37,12 +47,13 @@ def run_mpc(cfg: dict):
     # ============================================================
     sim_cfg = cfg["simulation"]
     opt_cfg = cfg["optimization"]
-    trading_cfg = opt_cfg["trading"]
     mpc_cfg = opt_cfg["mpc"]
     flex_cfg = opt_cfg.get("flexibility", {})
     dep_cfg = opt_cfg["depot"]
+
     imb_cfg = opt_cfg.get("imbalance", {})
-    imb_enabled = imb_cfg.get("enabled", False)
+    imb_enabled = bool(imb_cfg.get("enabled", False))
+
     terminal_enabled = bool(mpc_cfg.get("terminal_condition", False))
     terminal_weight = float(mpc_cfg.get("terminal_weight_eur_per_kwh", 50.0))
 
@@ -52,40 +63,7 @@ def run_mpc(cfg: dict):
     flexibility_bounds_full = read_flexibility_bounds_csv(flex_cfg["bounds_file"])
 
     # ============================================================
-    # 3) Helper: compute market gate closure timestamp
-    # ============================================================
-    def compute_gate_closure(market: str, delivery_time: pd.Timestamp) -> pd.Timestamp:
-        """
-        Compute the gate-closure timestamp for a given market and delivery time.
-
-        This must be consistent with build_market_activity_mask_for_time().
-        """
-        if market == "ID":
-            id_cfg = trading_cfg.get("intraday", {})
-            offset_min = int(id_cfg.get("offset_minutes_before_delivery", 30))
-            return delivery_time - pd.Timedelta(minutes=offset_min)
-
-        if market == "DA":
-            da_cfg = trading_cfg.get("dayahead", {})
-            gc_hour_str = da_cfg.get("gate_closure_hour", "12:00")
-            closes_prev = da_cfg.get("closes_previous_day", True)
-
-            try:
-                hh, mm = map(int, gc_hour_str.split(":"))
-            except Exception:
-                hh, mm = 12, 0  # robust fallback
-
-            base_date = (
-                delivery_time.normalize() - pd.Timedelta(days=1)
-                if closes_prev
-                else delivery_time.normalize()
-            )
-            return base_date + pd.Timedelta(hours=hh, minutes=mm)
-
-        raise ValueError(f"Unknown market: {market}")
-
-    # ============================================================
-    # 4) Time settings
+    # 3) Time settings
     # ============================================================
     step_hours = float(sim_cfg["timestep_hours"])
     da_horizon_hours = float(mpc_cfg["da_horizon_hours"])
@@ -93,7 +71,7 @@ def run_mpc(cfg: dict):
     da_horizon_steps = int(da_horizon_hours / step_hours)
 
     # ============================================================
-    # 5) Load prices, fees and simulation time index
+    # 4) Load prices, fees and simulation time index
     # ============================================================
     prices_by_market = build_prices_from_settings(cfg)
     fees_by_market = build_fees_from_settings(cfg)
@@ -106,7 +84,7 @@ def run_mpc(cfg: dict):
 
     full_index = prices_by_market[next(iter(prices_by_market))].index
 
-    # Full state index (N+1): add the terminal state timestamp
+    # Full state index (N+1): add terminal state timestamp
     dt = pd.Timedelta(hours=step_hours)
     full_state_index = full_index.append(pd.DatetimeIndex([full_index[-1] + dt]))
 
@@ -117,72 +95,57 @@ def run_mpc(cfg: dict):
     imb_neg_full = prices_by_market.pop("IMB_NEG", None)
 
     # ============================================================
-    # 6) Model options
+    # 5) Model options
     # ============================================================
     virtual_arbitrage = opt_cfg.get("virtual_arbitrage", False)
 
-    # Cycling cost (€/kWh throughput)
     cyc_cfg = flex_cfg.get("cycle_regularization", {})
-    c_cyc = (
-        float(cyc_cfg["cost_eur_per_kwh_throughput"])
-        if cyc_cfg.get("enabled", False)
-        else 0.0
-    )
+    c_cyc = float(cyc_cfg["cost_eur_per_kwh_throughput"]) if cyc_cfg.get("enabled", False) else 0.0
 
     # ============================================================
-    # 7) Initialize committed market positions
+    # 6) Initialize committed market positions
     # ============================================================
-    committed_positions = {
-        mk: pd.Series(0.0, index=full_index)
-        for mk in prices_by_market.keys()
-    }
+    committed_positions = {mk: pd.Series(0.0, index=full_index) for mk in prices_by_market.keys()}
 
     # ============================================================
-    # 8) Initialize energy state (band-consistent)
+    # 7) Initialize energy state (band-consistent)
     # ============================================================
     if flexibility_bounds_full is not None:
         E_state = 0.5 * (
             flexibility_bounds_full["Capacity_lower_kWh"].iloc[0]
-            + flexibility_bounds_full["Capacity_upper_kWh"].iloc[0]
-        )
+            + flexibility_bounds_full["Capacity_upper_kWh"].iloc[0])
     else:
         E_state = 0.0
 
     # ============================================================
-    # 9) Result containers
+    # 8) Result containers
     # ============================================================
     rows = []
     commit_rows = []
 
     # ============================================================
-    # 10) Rolling-horizon MPC loop
+    # 9) Rolling-horizon MPC loop
     # ============================================================
     try:
-        pbar = tqdm(
-            total=len(full_index),
-            desc="MPC",
-            unit="step",
-            dynamic_ncols=True,
-        )
+        pbar = tqdm(total=len(full_index), desc="MPC", unit="step", dynamic_ncols=True)
 
         for i in range(len(full_index)):
             current_time = full_index[i]
             pbar.set_postfix(time=str(current_time), E=f"{E_state:.1f} kWh")
 
             # --------------------------------------------------------
-            # 10.1) Define rolling optimization window
+            # 9.1) Define rolling optimization window
             # --------------------------------------------------------
-            N_total = len(full_index)  # number of decision steps in the full simulation
-
-            window_end = min(i + da_horizon_steps, N_total)  # EXCLUSIVE end for decisions
-            window_idx = full_index[i:window_end]  # decisions (>=1 element until i==N_total)
-            window_state_idx = full_state_index[i:window_end + 1]  # states = decisions + 1
+            N_total = len(full_index)
+            window_end = min(i + da_horizon_steps, N_total)   # exclusive end for decisions
+            window_idx = full_index[i:window_end]             # decision timestamps
+            window_state_idx = full_state_index[i:window_end + 1]  # state timestamps (decisions + 1)
 
             if len(window_idx) == 0:
                 break
 
             # --------------------------------------------------------
-            # 10.2) Slice prices and flexibility bounds
+            # 9.2) Slice prices and flexibility bounds
             # --------------------------------------------------------
             window_prices = {mk: prices_by_market[mk].loc[window_idx] for mk in prices_by_market}
 
@@ -190,16 +153,15 @@ def run_mpc(cfg: dict):
                 align_and_validate_flexibility_bounds(
                     bounds=flexibility_bounds_full,
                     time_index=window_state_idx,
-                )
+                    expected_len=len(window_state_idx),)
                 if flexibility_bounds_full is not None
-                else None
-            )
+                else None)
 
-            window_imb_pos = imb_pos_full.loc[window_idx] if (imb_enabled and imb_pos_full is not None) else None
-            window_imb_neg = imb_neg_full.loc[window_idx] if (imb_enabled and imb_neg_full is not None) else None
+            window_imb_pos = (imb_pos_full.loc[window_idx] if (imb_enabled and imb_pos_full is not None) else None)
+            window_imb_neg = (imb_neg_full.loc[window_idx] if (imb_enabled and imb_neg_full is not None) else None)
 
             # --------------------------------------------------------
-            # 10.3) Build market activity masks (GATE CLOSURES only)
+            # 9.3) Build market activity masks (gate-closures enforced here)
             # --------------------------------------------------------
             trading_masks = build_market_activity_mask_for_time(
                 current_time=current_time,
@@ -208,7 +170,7 @@ def run_mpc(cfg: dict):
             )
 
             # --------------------------------------------------------
-            # 10.3b) Build DECISION masks = trading masks + price foresight
+            # 9.3b) Build DECISION masks = trading masks + price foresight
             # --------------------------------------------------------
             decision_masks = {mk: s.copy() for mk, s in trading_masks.items()}
 
@@ -219,7 +181,7 @@ def run_mpc(cfg: dict):
                 decision_masks["ID"] = id_mask
 
             # --------------------------------------------------------
-            # 10.4) Build and parameterize optimization model
+            # 9.4) Build and parameterize optimization model
             # --------------------------------------------------------
             model = flexibility_commercialization(
                 depot=Depot(**dep_cfg),
@@ -251,39 +213,29 @@ def run_mpc(cfg: dict):
 
             # Helper to set terminal condition
             def _set_terminal_terms(_model):
-                # Default: terminal influence off
                 _model.w_term.set_value(0.0)
                 _model.energy_term_hard.deactivate()
 
-                if not terminal_enabled:
-                    return
-                if window_flexibility_bounds is None:
+                if not terminal_enabled or window_flexibility_bounds is None:
                     return
 
-                # Global goal: final state time of the whole simulation
                 goal_time = full_state_index[-1]
-
-                # Only apply if the goal is inside the current prediction horizon (state index)
                 if goal_time not in window_state_idx:
                     return
 
-                # Compute Eterm at goal_time as midpoint of bounds
                 lb = float(window_flexibility_bounds.loc[goal_time, "Capacity_lower_kWh"])
                 ub = float(window_flexibility_bounds.loc[goal_time, "Capacity_upper_kWh"])
-                Eterm = 0.5 * (lb + ub)
-                _model.Eterm.set_value(Eterm)
+                _model.Eterm.set_value(0.5 * (lb + ub))
 
-                # Ramp weight: stronger when closer to the end
-                remaining_steps = N_total - i  # decisions remaining incl. current step
+                remaining_steps = N_total - i
                 frac = min(1.0, da_horizon_steps / max(1, remaining_steps))
                 _model.w_term.set_value(terminal_weight * frac)
 
-                # Hard constraint only in the last real step (when only 1 decision step remains)
                 if remaining_steps == 1:
                     _model.energy_term_hard.activate()
 
             # --------------------------------------------------------
-            # 10.5) Solve optimization problem (Two-pass)
+            # 9.5) Solve optimization problem (Two-pass)
             # --------------------------------------------------------
             solved = False
             used_rebap = False
@@ -303,6 +255,7 @@ def run_mpc(cfg: dict):
                 else:
                     tqdm.write("PASS1 infeasible → Imbalance activated (PASS2)")
                     logger.info(f"PASS1 infeasible at {current_time} → trying PASS2 (imbalance). Details: {e1}")
+
                     model2 = flexibility_commercialization(
                         depot=Depot(**dep_cfg),
                         prices_by_market=window_prices,
@@ -328,7 +281,6 @@ def run_mpc(cfg: dict):
                         solved = True
                         used_rebap = True
                         model = model2
-
                     except RuntimeError as e2:
                         tqdm.write("ERROR - PASS2 also infeasible → aborting")
                         logger.error(f"PASS2 also infeasible at {current_time}. Details: {e2}")
@@ -339,7 +291,7 @@ def run_mpc(cfg: dict):
                 break
 
             # --------------------------------------------------------
-            # 10.6) Extract first-step dispatch
+            # 9.6) Extract first-step dispatch
             # --------------------------------------------------------
             dispatch_window = extract_dispatch(model, window_idx)
             first_row = dispatch_window.iloc[0].copy()
@@ -348,10 +300,9 @@ def run_mpc(cfg: dict):
             rows.append(first_row)
 
             # --------------------------------------------------------
-            # 10.7) Commit market positions at gate closure (TRADING masks only)
+            # 9.7) Commit market positions at gate closure
             # --------------------------------------------------------
             next_time = current_time + pd.Timedelta(hours=step_hours)
-
 
             trading_masks_next = build_market_activity_mask_for_time(
                 current_time=next_time,
@@ -360,6 +311,10 @@ def run_mpc(cfg: dict):
             )
 
             for mk in committed_positions:
+                # Robustness: only process markets that exist in the masks
+                if mk not in trading_masks or mk not in trading_masks_next:
+                    continue
+
                 p_col = f"p_{mk.lower()}_kw"
                 if p_col not in dispatch_window.columns:
                     continue
@@ -373,17 +328,21 @@ def run_mpc(cfg: dict):
                         "delivery_time": tau,
                         "current_time": current_time,
                         "next_time": next_time,
-                        "gate_closure_time": compute_gate_closure(mk, tau),
+                        # Gate-closure timestamp from market layer (single source of truth)
+                        "gate_closure_time": gate_closure_timestamp(mk, tau, opt_cfg),
                         "p_opt": float(dispatch_window.loc[tau, p_col]),
                         "committed_old": committed_positions[mk].loc[tau],
                         "committed_new": committed_positions[mk].loc[tau],
                         "commit_now": False,
                     }
 
+                    # Mode "none": commit only the immediate first decision (as before)
                     if opt_cfg["trading"]["mode"] == "none" and tau == window_idx[0]:
                         committed_positions[mk].loc[tau] = row["p_opt"]
                         row["committed_new"] = row["p_opt"]
                         row["commit_now"] = True
+
+                    # Realistic trading: commit exactly when the gate closes between now and next step
                     elif now_open and not next_open:
                         committed_positions[mk].loc[tau] = row["p_opt"]
                         row["committed_new"] = row["p_opt"]
@@ -392,31 +351,31 @@ def run_mpc(cfg: dict):
                     commit_rows.append(row)
 
             # --------------------------------------------------------
-            # 10.8) Roll energy state forward
+            # 9.8) Roll energy state forward
             # --------------------------------------------------------
             E_state = float(first_row["E_next_kWh"])
-
             pbar.update(1)
 
         pbar.close()
 
-
     # ============================================================
-    # 11) Export results
+    # 10) Export results
     # ============================================================
     finally:
         if rows:
             result = pd.DataFrame(rows)
             result.index.name = "time"
-            # Resolve output path and force .csv
+
             out_dispatch = Path(sim_cfg["out_dispatch"]).with_suffix(".csv")
             out_dispatch.parent.mkdir(parents=True, exist_ok=True)
-            result.reset_index().to_csv(out_dispatch, index=False)
+            save_dispatch_to_csv(result.reset_index(), out_dispatch)
 
         if commit_rows:
             commit_df = pd.DataFrame(commit_rows)
+
             out_commit = Path(sim_cfg["out_commit"]).with_suffix(".csv")
             out_commit.parent.mkdir(parents=True, exist_ok=True)
-            commit_df.sort_values(["delivery_time", "current_time"]).to_csv(out_commit, index=False)
+            save_dispatch_to_csv(commit_df.sort_values(["delivery_time", "current_time"]), out_commit)
 
-        print("MPC finished → results/dispatch.csv & resuluts/commit.csv")
+        logger.info("MPC finished → results/dispatch.csv & results/commit.csv")
+

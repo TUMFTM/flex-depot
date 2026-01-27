@@ -1,61 +1,133 @@
-# prices_io.py
-# Utility functions for reading and writing day-ahead price data as CSV files.
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Dict, Mapping, Union
 
 import pandas as pd
-from pathlib import Path
-from flex_dep_opt.market.dayahead import DayAheadPrices
-from flex_dep_opt.market.intraday import IntradayPrices
 
-def read_prices_csv(path: str, tz: str = "Europe/Berlin") -> pd.Series:
-    """Read a CSV file containing columns [time, price] into a timezone-aware pandas Series."""
+PathLike = Union[str, Path]
+
+
+# =============================================================================
+# CSV I/O: generic price series (single source of truth for validation)
+# =============================================================================
+def read_prices_csv(path: PathLike, tz: str = "Europe/Berlin") -> pd.Series:
+    """
+    Read a CSV file containing columns [time, price] into a timezone-aware Series.
+
+    This function is the single source of truth for:
+      - timestamp parsing (UTC -> tz conversion)
+      - NaT detection (unparsable timestamps)
+      - NaN / non-numeric price detection
+      - duplicate timestamp detection
+      - sorting by time
+
+    Assumptions
+    -----------
+    - Timestamps are parsed with `utc=True`. This is robust for offset-aware strings.
+
+    Parameters
+    ----------
+    path:
+        Path to CSV file.
+    tz:
+        Target timezone for the resulting DatetimeIndex.
+
+    Returns
+    -------
+    pd.Series
+        A float Series indexed by tz-aware timestamps.
+
+    Raises
+    ------
+    ValueError
+        If required columns are missing, timestamps cannot be parsed, prices
+        contain NaNs, or duplicate timestamps exist.
+    """
+    path = Path(path)
     df = pd.read_csv(path)
-    if "time" not in df or "price" not in df:
-        raise ValueError("CSV must contain columns 'time' and 'price'")
 
-    ts = pd.to_datetime(df["time"], errors="coerce", utc=True).dt.tz_convert(tz)
-    s = pd.Series(df["price"].astype(float).values, index=ts).sort_index()
-    s = s[~s.index.isna()]
-    if s.isna().any():
-        raise ValueError(f"prices contain NaNs: {path}")
+    required = {"time", "price"}
+    missing = required.difference(df.columns)
+    if missing:
+        raise ValueError(f"CSV must contain columns {sorted(missing)}: {path}")
+
+    # -------------------------------------------------------------------------
+    # Parse timestamps (UTC) and fail fast on any unparsable entries
+    # -------------------------------------------------------------------------
+    ts_utc = pd.to_datetime(df["time"], errors="coerce", utc=True)
+    if ts_utc.isna().any():
+        bad_n = int(ts_utc.isna().sum())
+        raise ValueError(f"Found {bad_n} unparsable timestamps in {path}")
+
+    ts = ts_utc.dt.tz_convert(tz)
+
+    # -------------------------------------------------------------------------
+    # Parse prices and fail fast on non-numeric entries
+    # -------------------------------------------------------------------------
+    prices = pd.to_numeric(df["price"], errors="coerce")
+    if prices.isna().any():
+        bad_n = int(prices.isna().sum())
+        raise ValueError(f"Found {bad_n} non-numeric / NaN prices in {path}")
+
+    s = pd.Series(prices.astype(float).to_numpy(), index=pd.DatetimeIndex(ts)).sort_index()
+    s.name = "price"
+
+    # -------------------------------------------------------------------------
+    # Guard against duplicate timestamps (often caused by DST or bad merges)
+    # -------------------------------------------------------------------------
+    if s.index.has_duplicates:
+        dup = s.index[s.index.duplicated()].unique()[:5]
+        raise ValueError(f"Duplicate timestamps in {path} (examples): {list(dup)}")
+
     return s
 
-def write_prices_csv(prices: pd.Series, path: str) -> str:
-    """Write a pandas Series (with DatetimeIndex) to a CSV file."""
-    df = pd.DataFrame({"time": prices.index, "price": prices.values})
-    output_path = Path(path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_path, index=False)
-    return str(output_path.resolve())
 
-def build_prices_from_settings(settings):
-    prices_by_market = {}
-    if settings["optimization"]["markets"]["dayahead"]["enabled"]:
-        da = DayAheadPrices.from_csv(settings["optimization"]["markets"]["dayahead"]["source"])
-        prices_by_market["DA"] = da.prices_eur_per_kwh
-    if settings["optimization"]["markets"]["intraday"]["enabled"]:
-        idp = IntradayPrices.from_csv(settings["optimization"]["markets"]["intraday"]["source"])
-        prices_by_market["ID"] = idp.prices_eur_per_kwh
+# =============================================================================
+# Settings-based builders
+# =============================================================================
+def build_prices_from_settings(settings: Mapping[str, Any], *, tz: str = "Europe/Berlin") -> Dict[str, pd.Series]:
+    """
+    Build price series by market from settings.
+
+    Market codes
+    ------------
+    - "DA": day-ahead
+    - "ID": intraday
+    - "IMB_POS", "IMB_NEG": optional imbalance prices
+
+    """
+    prices_by_market: Dict[str, pd.Series] = {}
+
+    mk_cfg = settings["optimization"]["markets"]
+
+    if mk_cfg["dayahead"]["enabled"]:
+        prices_by_market["DA"] = read_prices_csv(mk_cfg["dayahead"]["source"], tz=tz)
+
+    if mk_cfg["intraday"]["enabled"]:
+        prices_by_market["ID"] = read_prices_csv(mk_cfg["intraday"]["source"], tz=tz)
 
     # Optional: imbalance / reBAP (pos/neg)
     imb_cfg = settings["optimization"].get("imbalance", {})
     if imb_cfg.get("enabled", False):
-        pos = read_prices_csv(imb_cfg["source_pos"])
-        neg = read_prices_csv(imb_cfg["source_neg"])
-        prices_by_market["IMB_POS"] = pos
-        prices_by_market["IMB_NEG"] = neg
+        prices_by_market["IMB_POS"] = read_prices_csv(imb_cfg["source_pos"], tz=tz)
+        prices_by_market["IMB_NEG"] = read_prices_csv(imb_cfg["source_neg"], tz=tz)
+
     return prices_by_market
 
-def build_fees_from_settings(settings):
-    fees_by_market = {}
+
+def build_fees_from_settings(settings: Mapping[str, Any]) -> Dict[str, float]:
+    """
+    Build a dict of per-market transaction fees [EUR/kWh] keyed by market code.
+    """
+    fees_by_market: Dict[str, float] = {}
+
     mk_cfg = settings["optimization"]["markets"]
 
     if mk_cfg["dayahead"]["enabled"]:
-        fees_by_market["DA"] = (
-            float(mk_cfg["dayahead"].get("fee_eur_per_kwh", 0.0))
-        )
+        fees_by_market["DA"] = float(mk_cfg["dayahead"].get("fee_eur_per_kwh", 0.0))
 
     if mk_cfg["intraday"]["enabled"]:
-        fees_by_market["ID"] = (
-            float(mk_cfg["intraday"].get("fee_eur_per_kwh", 0.0))
-        )
+        fees_by_market["ID"] = float(mk_cfg["intraday"].get("fee_eur_per_kwh", 0.0))
+
     return fees_by_market

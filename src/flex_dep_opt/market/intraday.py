@@ -1,14 +1,28 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Literal
+
 import pandas as pd
 
 Unit = Literal["eur_per_kwh", "eur_per_mwh"]
 
+
+# =============================================================================
+# Intraday price container
+# =============================================================================
 @dataclass
 class IntradayPrices:
-    """Container for intraday prices (typically 15-min resolution),
-    stored internally in EUR/kWh.
+    """
+    Container for intraday prices (typically 15-min resolution).
+    -------------------
+    - Parsing, validation, and normalization are centralized in `io/prices_io.py`.
+    - This class is therefore a lightweight container that enforces only basic
+      invariants (index type, tz-awareness) and provides convenience methods.
+
+    Units
+    -----
+    - Internally stored in EUR/kWh.
     """
     prices_eur_per_kwh: pd.Series
 
@@ -17,51 +31,34 @@ class IntradayPrices:
             raise ValueError("prices must have a DatetimeIndex")
         if self.prices_eur_per_kwh.index.tz is None:
             raise ValueError("timestamp index must be timezone-aware")
-        if self.prices_eur_per_kwh.isna().any():
-            raise ValueError("prices contain NaNs")
 
-        # ensure sorting
         self.prices_eur_per_kwh = self.prices_eur_per_kwh.sort_index()
 
     @classmethod
-    @classmethod
-    def from_csv(
-            cls,
-            path: str,
-            time_col: str = "time",
-            price_col: str = "price",
-            *,
-            unit: Unit = "eur_per_kwh",
-            tz: str = "Europe/Berlin",
-    ) -> "IntradayPrices":
-        """Load intraday prices from CSV.
-
-        Robust against strings with offsets like '2025-10-01 00:00:00+02:00'.
-        Normalizes everything to the target timezone `tz`.
+    def from_series(cls, s: pd.Series, unit: Unit = "eur_per_kwh") -> "IntradayPrices":
         """
-        df = pd.read_csv(path)
-        if time_col not in df or price_col not in df:
-            raise ValueError(f"CSV must have columns '{time_col}' and '{price_col}'")
+        Build from a Series and convert units if needed.
 
-        # 1) Parse as UTC → works for naive and offset-aware strings
-        ts = pd.to_datetime(df[time_col], errors="coerce", utc=True)
-
-        # 2) Convert to target timezone
-        ts = ts.dt.tz_convert(tz)
-
-        # 3) Prices
-        prices = df[price_col].astype(float)
+        Note: Numeric/NaN/duplicate validation is expected to be handled upstream
+        (prices_io) for data loaded from files.
+        """
         if unit == "eur_per_mwh":
-            prices = prices / 1000.0
-
-        s = pd.Series(prices.values, index=ts)
-        s = s[~s.index.isna()]
-
-        return cls(prices_eur_per_kwh=s)
+            s = s / 1000.0
+        elif unit != "eur_per_kwh":
+            raise ValueError(f"unknown unit: {unit}")
+        return cls(prices_eur_per_kwh=s.astype(float))
 
     @property
-    def duration(self) -> int:
-        return len(self.prices_eur_per_kwh)
+    def points(self) -> int:
+        return int(len(self.prices_eur_per_kwh))
+
+    @property
+    def start(self) -> pd.Timestamp:
+        return self.prices_eur_per_kwh.index[0]
+
+    @property
+    def end(self) -> pd.Timestamp:
+        return self.prices_eur_per_kwh.index[-1]
 
     def to_frame(self) -> pd.DataFrame:
         return self.prices_eur_per_kwh.to_frame(name="price_eur_per_kwh")
@@ -69,9 +66,9 @@ class IntradayPrices:
     def summary(self) -> dict:
         s = self.prices_eur_per_kwh
         return {
-            "points": len(s),
-            "start": s.index[0].isoformat(),
-            "end": s.index[-1].isoformat(),
+            "points": int(len(s)),
+            "start": self.start.isoformat(),
+            "end": self.end.isoformat(),
             "min": float(s.min()),
             "max": float(s.max()),
             "mean": float(s.mean()),
