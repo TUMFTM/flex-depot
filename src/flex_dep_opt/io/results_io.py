@@ -1,73 +1,91 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Any, Union
+from typing import Any, Mapping
 
 import pandas as pd
 
-PathLike = Union[str, Path]
+
+def _as_path(path: str | Path) -> Path:
+    """Normalize path input and ensure parent directory exists."""
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
 
 
-# =============================================================================
-# Result I/O utilities
-# =============================================================================
-def save_dispatch_to_csv(dispatch_df: pd.DataFrame, path: PathLike) -> str:
+def save_dispatch_to_csv(
+    df: pd.DataFrame,
+    path: str | Path,
+    *,
+    include_time_column: bool = True,
+    time_col: str = "time",
+) -> str:
     """
-    Save a dispatch DataFrame to a CSV file.
+    Save a dispatch-like DataFrame to CSV.
+
+    This helper standardizes the common convention in the project:
+    - A dedicated timestamp column named `time` (default), not an unnamed index column.
 
     Parameters
     ----------
-    dispatch_df:
-        Time-indexed dispatch DataFrame as returned by `extract_dispatch(...)`.
-        The index is expected to represent decision timestamps and is written
-        to CSV.
+    df:
+        DataFrame to write. Index may be a DatetimeIndex (recommended).
     path:
-        Target file path. Parent directories are created automatically.
+        Output path (string or Path).
+    include_time_column:
+        If True and df has a DatetimeIndex, the index is written as a column `time_col`.
+        If False, the DataFrame is written as-is (index is not written).
+    time_col:
+        Name of the timestamp column to create when `include_time_column=True`.
 
     Returns
     -------
     str
-        Absolute path to the written CSV file.
-
-    Notes
-    -----
-    - The DataFrame index is preserved (index=True).
-    - No validation of column names or units is performed here; this function
-      is purely responsible for serialization.
+        Absolute path to the written file.
     """
-    output_path = Path(path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    out = _as_path(path)
 
-    dispatch_df.to_csv(output_path, index=True)
+    out_df = df
+    if include_time_column:
+        if isinstance(df.index, pd.DatetimeIndex):
+            out_df = df.copy()
+            out_df = out_df.reset_index().rename(columns={"index": time_col})
+        elif time_col not in df.columns:
+            raise ValueError(
+                f"include_time_column=True, but df has no DatetimeIndex and no '{time_col}' column."
+            )
 
-    return str(output_path.resolve())
+    out_df.to_csv(out, index=False)
+    return str(out.resolve())
 
 
-def save_summary_to_csv(summary: Dict[str, Any], path: PathLike) -> str:
+def save_table_to_csv(df: pd.DataFrame, path: str | Path) -> str:
     """
-    Save a summary dictionary (e.g., KPIs or aggregated metrics) to a CSV file.
+    Save any table-like DataFrame to CSV exactly as provided (index not written).
+
+    Use this for tables where the index has no semantic meaning (e.g. commit logs).
+    """
+    out = _as_path(path)
+    df.to_csv(out, index=False)
+    return str(out.resolve())
+
+
+def save_summary_to_csv(summary: Mapping[str, Any], path: str | Path) -> str:
+    """
+    Save a summary/metrics dict (KPIs) to a single-row CSV file.
 
     Parameters
     ----------
     summary:
-        Dictionary of scalar values (e.g., floats, ints, strings).
-        Each key becomes a column; the CSV contains a single row.
+        Mapping of KPI name -> value.
     path:
-        Target file path. Parent directories are created automatically.
+        Output path.
 
     Returns
     -------
     str
-        Absolute path to the written CSV file.
-
-    Notes
-    -----
-    - This function assumes a *flat* dictionary structure.
-    - Nested dictionaries should be flattened upstream.
+        Absolute path to the written file.
     """
-    output_path = Path(path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    pd.DataFrame([summary]).to_csv(output_path, index=False)
-
-    return str(output_path.resolve())
+    out = _as_path(path)
+    pd.DataFrame([dict(summary)]).to_csv(out, index=False)
+    return str(out.resolve())

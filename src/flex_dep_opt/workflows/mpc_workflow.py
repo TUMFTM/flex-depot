@@ -10,7 +10,7 @@ from flex_dep_opt.io.flexibility_io import (
     read_flexibility_bounds_csv,
     align_and_validate_flexibility_bounds,
 )
-from flex_dep_opt.io.results_io import save_dispatch_to_csv, save_summary_to_csv
+from flex_dep_opt.io.results_io import save_dispatch_to_csv, save_table_to_csv
 from flex_dep_opt.opt.model import flexibility_commercialization
 from flex_dep_opt.opt.solve import solve_model, extract_dispatch
 from flex_dep_opt.market.trading_rules import (
@@ -362,20 +362,31 @@ def run_mpc(cfg: dict) -> None:
     # 10) Export results
     # ============================================================
     finally:
+        # --- Read simulation "name" from settings ---
+        name = str(sim_cfg.get("name", "")).strip()
+        if not name:
+            raise ValueError("settings.yaml: simulation.name must be set (e.g. 'illustrative_example').")
+
+        # --- Output directory + filenames ---
+        out_dir = Path("results")
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        out_dispatch = out_dir / f"dispatch_{name}.csv"
+        out_commit = out_dir / f"commit_{name}.csv"
+
+        # --- Write dispatch ---
         if rows:
             result = pd.DataFrame(rows)
             result.index.name = "time"
+            save_dispatch_to_csv(result, out_dispatch, include_time_column=True)
 
-            out_dispatch = Path(sim_cfg["out_dispatch"]).with_suffix(".csv")
-            out_dispatch.parent.mkdir(parents=True, exist_ok=True)
-            save_dispatch_to_csv(result.reset_index(), out_dispatch)
-
+        # --- Write commit ---
         if commit_rows:
             commit_df = pd.DataFrame(commit_rows)
+            commit_df = commit_df.sort_values(["delivery_time", "current_time"])
+            save_table_to_csv(commit_df, out_commit)
 
-            out_commit = Path(sim_cfg["out_commit"]).with_suffix(".csv")
-            out_commit.parent.mkdir(parents=True, exist_ok=True)
-            save_dispatch_to_csv(commit_df.sort_values(["delivery_time", "current_time"]), out_commit)
-
-        logger.info("MPC finished → results/dispatch.csv & results/commit.csv")
+        logger.info(
+            f"MPC finished → {out_dispatch.as_posix()} & {out_commit.as_posix()}"
+        )
 

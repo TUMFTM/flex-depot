@@ -28,34 +28,55 @@ def postprocess_mpc_results(cfg: dict) -> None:
     5) Generate interactive Plotly HTML plots
     """
     sim = cfg["simulation"]
-    tz = "Europe/Berlin"
 
-    start = pd.to_datetime(sim["start"]).tz_localize(tz)
-    end = pd.to_datetime(sim["end"]).tz_localize(tz)
+    # ------------------------------------------------------------------
+    # Name-based I/O (new convention)
+    # ------------------------------------------------------------------
+    name = str(sim.get("name", "")).strip()
+    if not name:
+        raise ValueError("settings.yaml: simulation.name must be set.")
 
-    # -------------------------------------------------------------------------
-    # Resolve CSV inputs (produced by MPC workflow)
-    # -------------------------------------------------------------------------
-    dispatch_csv = Path(sim["out_dispatch"]).with_suffix(".csv")
-    commit_csv = Path(sim["out_commit"]).with_suffix(".csv")
+    results_dir = Path("results")
+    dispatch_csv = results_dir / f"dispatch_{name}.csv"
+    commit_csv = results_dir / f"commit_{name}.csv"
 
-    # -------------------------------------------------------------------------
-    # Load dispatch.csv
-    # MPC exporter wrote a "time" column; parse in UTC and convert (robust to DST).
-    # -------------------------------------------------------------------------
+    if not dispatch_csv.exists():
+        raise FileNotFoundError(f"Dispatch CSV not found: {dispatch_csv.resolve()}")
+    if not commit_csv.exists():
+        raise FileNotFoundError(f"Commit CSV not found: {commit_csv.resolve()}")
+
+    # ------------------------------------------------------------------
+    # Time window
+    # ------------------------------------------------------------------
+    start = pd.to_datetime(sim["start"]).tz_localize("Europe/Berlin")
+    end = pd.to_datetime(sim["end"]).tz_localize("Europe/Berlin")
+
+    # ------------------------------------------------------------------
+    # Load dispatch
+    # ------------------------------------------------------------------
     df = pd.read_csv(dispatch_csv)
-    idx = pd.to_datetime(df["time"], utc=True).dt.tz_convert(tz)
+    if "time" not in df.columns:
+        raise ValueError(f"{dispatch_csv} must contain a 'time' column.")
+    idx = pd.to_datetime(df["time"], utc=True).dt.tz_convert("Europe/Berlin")
+
     dispatch = df.drop(columns=["time"])
     dispatch.index = idx
     dispatch = dispatch.loc[start:end]
 
-    # -------------------------------------------------------------------------
-    # Load commit.csv
-    # -------------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Load commit
+    # ------------------------------------------------------------------
     cdf = pd.read_csv(commit_csv)
-    cdf["delivery_time"] = pd.to_datetime(cdf["delivery_time"], utc=True).dt.tz_convert(tz)
-    cdf["current_time"] = pd.to_datetime(cdf["current_time"], utc=True).dt.tz_convert(tz)
-    commit_df = cdf[(cdf["delivery_time"] >= start) & (cdf["delivery_time"] <= end)]
+
+    # robust parsing if saved as strings
+    if "delivery_time" in cdf.columns:
+        cdf["delivery_time"] = pd.to_datetime(cdf["delivery_time"], utc=True).dt.tz_convert("Europe/Berlin")
+    if "current_time" in cdf.columns:
+        cdf["current_time"] = pd.to_datetime(cdf["current_time"], utc=True).dt.tz_convert("Europe/Berlin")
+
+    commit_df = cdf
+    if "delivery_time" in commit_df.columns:
+        commit_df = commit_df[(commit_df["delivery_time"] >= start) & (commit_df["delivery_time"] <= end)]
 
     # -------------------------------------------------------------------------
     # Prices + fees
@@ -81,11 +102,11 @@ def postprocess_mpc_results(cfg: dict) -> None:
     # Optional: persist postprocessing results next to dispatch/commit outputs
     # -------------------------------------------------------------------------
     out_dir = dispatch_csv.parent
-    cashflow_csv = out_dir / "cashflows.csv"
-    kpi_csv = out_dir / "kpis.csv"
+    cashflow_csv = out_dir / f"cashflows_{name}.csv"
+    kpi_csv = out_dir / f"kpis_{name}.csv"
 
     # cashflows: keep DatetimeIndex in the CSV for later analysis
-    save_dispatch_to_csv(cf_df, cashflow_csv)
+    save_dispatch_to_csv(cf_df, cashflow_csv, include_time_column=True)
 
     # KPIs: single row
     save_summary_to_csv(kpis, kpi_csv)
@@ -93,9 +114,8 @@ def postprocess_mpc_results(cfg: dict) -> None:
     # -------------------------------------------------------------------------
     # HTML output paths (same base names as config entries)
     # -------------------------------------------------------------------------
-    dispatch_html = Path(sim["out_dispatch"]).with_suffix(".html")
-    cashflow_html = Path(sim["out_commit"]).with_suffix(".html")
-    dispatch_html.parent.mkdir(parents=True, exist_ok=True)
+    dispatch_html = results_dir / f"dispatch_{name}.html"
+    cashflow_html = results_dir / f"cashflow_{name}.html"
 
     # -------------------------------------------------------------------------
     # Plot 1: dispatch report
@@ -107,7 +127,7 @@ def postprocess_mpc_results(cfg: dict) -> None:
         title="MPC Flexband Dispatch and Market Positions",
     )
     fig_dispatch.write_html(dispatch_html, include_plotlyjs="cdn")
-    print(f"MPC plot saved → {dispatch_html.resolve()}")
+    print(f"MPC Plot saved → {dispatch_html.resolve()}")
     webbrowser.open(dispatch_html.resolve().as_uri())
 
     # -------------------------------------------------------------------------
