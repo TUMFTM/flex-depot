@@ -44,7 +44,7 @@ Manuscript under review at Energy Informatics, Springer Nature (2026)
 
 `Market Layer` defines market and trading rules such as gate-closures.
 
-`Postprocessing Layer` includes result summary generation and plotting script.
+`Postprocessing Layer` includes result summary generation and a plotting script.
 
 
 ## Installation
