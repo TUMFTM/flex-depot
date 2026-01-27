@@ -1,20 +1,37 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
-
 [project]
-name = "flex-dep-opt"
-version = "0.1.0"
-description = "Flexibility depot optimization"
+name = "flex-depot"
+version = "1.0.0"
+description = "Rolling-horizon MPC optimization of depot flexibility with market trading and gate closures."
 readme = "README.md"
-requires-python = ">=3.9"
-dependencies = []
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+  { name = "Marcel Brödel", email = "marcel.broedel@tum.de" },
+]
 
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "pyomo>=6.6",
+    "pyyaml>=6.0.3",
+    "tqdm>=4.67.1",
+    "plotly>=5.18",
+    "matplotlib>=3.8",
+    "scienceplots>=2.2.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.5",
+  "pytest>=8.0",
+]
+gurobi = [
+  "gurobipy>=12.0.3",
+]
 
 [project.scripts]
-flex-dep-opt = "flex_dep_opt.cli:main" # Befehl nach Installation
-
-
-[tool.setuptools.packages.find]
-where = ["src"]
+flex-depot = "flex_dep_opt.cli:main"

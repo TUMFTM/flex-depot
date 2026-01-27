@@ -48,3 +48,55 @@ Manuscript under review at Energy Informatics, Springer Nature (2026)
 
 
 ## Installation
+### 1) Clone repository
+FLEX-DEPOT is available at the institute's [GitHub](TBD) and can be cloned from there using
+```
+git clone <TBD>
+```
+
+### 2) Create and activate a virtual environment
+It is recommended to create and activate a clean virtual environment for the installation. For Windows (PowerShell) this can be done by the following command:
+```
+py -m venv <name_of_virtual_environment>
+.\<name_of_virtual_environment>\Scripts\activate
+```
+For example to create a virtual environment in the local `.venv/` directory:
+```
+py -m venv .venv
+.\.venv\Scripts\activate
+```
+
+### 3) Install the package
+Navigate to the root directory of the cloned repository and install the package and its dependencies using pip:
+```
+cd <root_directory>
+python -m pip install --upgrade pip
+pip install -e .
+```
+
+### 4) Solver
+FLEX-DEPOT uses the [Pyomo](https://pyomo.readthedocs.io/en/stable/) compatible MILP solver [Gurobi](https://www.gurobi.com/solutions/gurobi-optimizer/).
+Install the Python bindings:
+```
+pip install -e ".[gurobi]"
+```
+Verify that `gurobipy` is available:
+```
+python -c "import gurobipy; print('gurobipy ok')"
+```
+Verify that your Gurobi license is working:
+```
+grbprobe
+```
+Verify that Pyomo can access Gurobi:
+```
+python -c "import pyomo.environ as pyo; print(pyo.SolverFactory('gurobi').available())"
+```
+
+
+### 5) Quick start (recommended): run the example batch file (Windows)
+The repository includes a ready-to-run example script:
+```
+./run_example.bat
+```
+This will run the example configuration and generate result files in the results/ directory.
