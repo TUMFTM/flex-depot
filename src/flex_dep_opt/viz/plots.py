@@ -266,7 +266,7 @@ def plot_market_cashflows_plotly(
                 parents.append(mk)
                 values.append(side_total)
 
-                alpha = 1.0 if side == "Sell" else 0.3
+                alpha = 1.0 if side == "Buy" else 0.3
                 colors.append(_rgba(mk, alpha))
 
         return labels, parents, values, colors
@@ -582,7 +582,7 @@ def plot_mpc_dispatch_plotly(
         mk_code = inner.upper()
         values = dispatch[col]
 
-        colors = [_rgba(mk_code, 1.0 if v < 0 else 0.3) for v in values]  # optional: highlight Sell
+        colors = [_rgba(mk_code, 0.3 if v < 0 else 1.0) for v in values]
         labels = ["Buy" if v > 0 else "Sell" if v < 0 else "Neutral" for v in values]
 
         # Build commit time strings aligned to dispatch.index (delivery_time axis)
