@@ -46,6 +46,8 @@ Manuscript under review at Energy Informatics, Springer Nature (2026)
 
 `Postprocessing Layer` includes result summary generation and a plotting script.
 
+## Control Workflow
+![flex-depot-workflow.svg](images/flex-depot-workflow.svg)
 
 ## Installation
 ### 1) Clone repository
