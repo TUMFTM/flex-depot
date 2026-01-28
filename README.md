@@ -6,9 +6,10 @@ The core of the project is a MILP/LP (depending on settings) [Pyomo](https://pyo
 positions and physical power flow between depot and public grid while respecting aggregated asset power and energy flexibility bounds and gate-closure rules.
 
 Key capabilities:
-- Unified optimization for DA/ID (and optional imbalance) markets. Ready to implement other markets.
+- Unified optimization for DA/ID spot markets. Ready to implement other markets.
+- (Optional) second optimization run with imbalance activated to ensure feasiblity.
 - Rolling-horizon MPC that commits market positions when gate closure is reached.
-- CSV-based I/O for prices, mobility bounds, and results.
+- CSV-based I/O for prices, flexibility bounds, and results.
 - Plotly-based visualization of dispatch, prices, and cashflows.
 
 ## Created by
@@ -102,3 +103,7 @@ The repository includes a ready-to-run example script:
 ./run_example.bat
 ```
 This will run the example configuration and generate result files in the results/ directory.
+
+
+## How to use
+TBD
