@@ -114,6 +114,13 @@ def flexibility_commercialization(
     # Tight Big-M bounds per timestep (for MILP mode)
     m.P_ch_max_t = pyo.Param(m.T, initialize=lambda mdl, t: float(P_ch_max_ser.iloc[int(t)]))
     m.P_dis_max_t = pyo.Param(m.T, initialize=lambda mdl, t: float(P_dis_max_ser.iloc[int(t)]))
+    # Big-M bounds:
+    # Tight per-timestep upper bounds used in MILP mode to link continuous power/market
+    # variables with a binary import/export mode. The Big-M technique "switches"
+    # constraints on or off via a binary variable, preventing simultaneous import
+    # and export within the same timestep. Here, M is chosen as the physically
+    # feasible maximum power derived from the flexibility bands (not an arbitrary
+    # large constant), which keeps the LP relaxation tight and numerically stable.
 
     # --- Depot parameters ---
     m.eta_c = pyo.Param(initialize=float(depot.eta_grid2depot))
