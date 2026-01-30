@@ -243,7 +243,7 @@ def run_mpc(cfg: dict) -> None:
             try:
                 _set_E0(model)
                 _set_terminal_terms(model)
-                solve_model(model)
+                solve_model(model, solver_name=sim_cfg["solver"])
                 solved = True
                 used_rebap = False
 
@@ -277,7 +277,7 @@ def run_mpc(cfg: dict) -> None:
                     try:
                         _set_E0(model2)
                         _set_terminal_terms(model2)
-                        solve_model(model2)
+                        solve_model(model2, solver_name=sim_cfg["solver"])
                         solved = True
                         used_rebap = True
                         model = model2

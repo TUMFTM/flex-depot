@@ -2,77 +2,164 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from pathlib import Path
+
 import pandas as pd
+import os
 import pyomo.environ as pyo
 
 
 # =============================================================================
-# Solver availability checks
+# Solver helpers & availability checks
 # =============================================================================
-def _ensure_gurobi_available() -> None:
-    """
-    Raise a RuntimeError if gurobipy/Gurobi is not available to the current Python environment.
+def _cbc_executable() -> str | None:
+    """Return a CBC executable path if we can determine one; otherwise None (use PATH)."""
+    env = os.getenv("CBC_PATH")
+    if env:
+        return env
 
-    We check:
-      1) `gurobipy` import (Python package / bindings)
-      2) Pyomo solver availability for "gurobi" (license, installation, solver link)
-    """
-    try:
-        import gurobipy  # noqa: F401
-    except ImportError as e:
-        raise RuntimeError(
-            "Gurobi (gurobipy) not found. Install it in your environment with: pip install gurobipy"
-        ) from e
+    win_default = r"C:\coin-or\bin\cbc.exe"
+    if os.name == "nt" and Path(win_default).exists():
+        return win_default
 
-    solver = pyo.SolverFactory("gurobi")
+    return None
+
+def _ensure_solver_available(solver_name: str) -> None:
+    """
+    Raise a RuntimeError if the requested solver is not available to Pyomo.
+    """
+    solver_name = solver_name.lower()
+
+    if solver_name == "gurobi":
+        try:
+            import gurobipy  # noqa: F401
+        except ImportError as e:
+            raise RuntimeError(
+                "Gurobi (gurobipy) not found. Install it in your environment with: pip install gurobipy"
+            ) from e
+        solver = pyo.SolverFactory("gurobi")
+
+    elif solver_name == "cbc":
+        cbc_exe = _cbc_executable()
+        solver = pyo.SolverFactory("cbc", executable=cbc_exe) if cbc_exe else pyo.SolverFactory("cbc")
+
+    else:
+        # If you want to allow more solvers later, keep this generic.
+        solver = pyo.SolverFactory(solver_name)
+
     if not solver.available(exception_flag=False):
-        raise RuntimeError(
-            "Gurobi solver not available to Pyomo. "
-            "Check your Gurobi license and ensure 'gurobipy' is installed in the same environment."
-        )
+        hint = ""
+        if solver_name == "cbc":
+            hint = (
+                " CBC not available. Install via conda: `conda install -c conda-forge coincbc` "
+                "or ensure `cbc` is on PATH / set CBC_PATH to cbc.exe."
+            )
+        elif solver_name == "gurobi":
+            hint = " Gurobi solver not available to Pyomo. Check license and gurobipy installation."
+        raise RuntimeError(f"Solver '{solver_name}' not available to Pyomo.{hint}")
+
+
+def _apply_solver_options(
+    opt: Any,
+    solver_name: str,
+    *,
+    silent: bool = True,
+    time_limit_s: Optional[int] = None,
+    mip_gap: Optional[float] = None,
+    threads: Optional[int] = None,
+) -> None:
+    solver_name = solver_name.lower()
+
+    if solver_name == "gurobi":
+        if silent:
+            opt.options["OutputFlag"] = 0
+        if time_limit_s is not None:
+            opt.options["TimeLimit"] = int(time_limit_s)
+        if mip_gap is not None:
+            opt.options["MIPGap"] = float(mip_gap)
+        if threads is not None:
+            opt.options["Threads"] = int(threads)
+
+    elif solver_name == "cbc":
+        # CBC:
+        # - time limit: seconds
+        # - relative gap: ratio
+        # - threads: threads
+        if time_limit_s is not None:
+            opt.options["seconds"] = int(time_limit_s)
+        if mip_gap is not None:
+            opt.options["ratio"] = float(mip_gap)
+        if threads is not None:
+            opt.options["threads"] = int(threads)
+        # silence is mainly controlled via tee in Pyomo
 
 
 # =============================================================================
-# Solve helper
+# Solve
 # =============================================================================
 def solve_model(
-    model: pyo.ConcreteModel
+    model: pyo.ConcreteModel,
+    *,
+    solver_name: str = "gurobi",
+    time_limit_s: Optional[int] = None,
+    mip_gap: Optional[float] = None,
+    threads: Optional[int] = None,
+    tee: bool = False,
 ) -> pyo.results.SolverResults:
     """
-    Solve a Pyomo model using the Gurobi solver (required).
+    Solve a Pyomo model using the specified solver (e.g. "gurobi" or "cbc").
 
     Parameters
     ----------
-    model:
-        The Pyomo model to solve.
-
-    Returns
-    -------
-    pyo.results.SolverResults
-        The Pyomo solver result object.
+    solver_name:
+        "gurobi" (default) or "cbc".
+    time_limit_s:
+        Optional wall-clock time limit in seconds.
+    mip_gap:
+        Optional relative MIP gap (e.g. 0.01 for 1%).
+    threads:
+        Optional number of threads.
+    tee:
+        If True, stream solver output to stdout (useful for debugging).
 
     Raises
     ------
     RuntimeError
-        If Gurobi is not available or the solution is not optimal.
+        If the solver is not available or no acceptable solution is reported.
     """
-    _ensure_gurobi_available()
+    _ensure_solver_available(solver_name)
 
-    # Construct solver via classic Pyomo interface
-    opt = pyo.SolverFactory("gurobi")
+    solver_name_l = solver_name.lower()
+    if solver_name_l == "cbc":
+        cbc_exe = _cbc_executable()
+        opt = pyo.SolverFactory("cbc", executable=cbc_exe) if cbc_exe else pyo.SolverFactory("cbc")
+    else:
+        opt = pyo.SolverFactory(solver_name_l)
 
-    opt.options["OutputFlag"] = 0
+    _apply_solver_options(
+        opt,
+        solver_name_l,
+        silent=not tee,
+        time_limit_s=time_limit_s,
+        mip_gap=mip_gap,
+        threads=threads,
+    )
 
-    results = opt.solve(model, tee=False)
+    results = opt.solve(model, tee=tee)
 
-    # Basic status checks
     status_ok = (results.solver.status == pyo.SolverStatus.ok)
-    term_optimal = (results.solver.termination_condition == pyo.TerminationCondition.optimal)
+    term = results.solver.termination_condition
 
-    if not (status_ok and term_optimal):
+    if not status_ok:
         raise RuntimeError(
-            "Gurobi did not report an optimal solution. "
-            f"Status={results.solver.status}, Termination={results.solver.termination_condition}"
+            f"Solver '{solver_name}' did not return status OK. "
+            f"Status={results.solver.status}, Termination={term}"
+        )
+
+    if term != pyo.TerminationCondition.optimal:
+        raise RuntimeError(
+            f"Solver '{solver_name}' did not report an optimal solution. "
+            f"Status={results.solver.status}, Termination={term}"
         )
 
     return results

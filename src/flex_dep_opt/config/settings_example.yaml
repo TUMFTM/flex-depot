@@ -3,6 +3,7 @@ simulation:
   end: "2025-10-5 23:45"                                    # simulation end
   timestep_hours: 0.25                                      # simulation timestep
   name: "illustrative_example"                              # used for naming of result files
+  solver: "gurobi"                                          # "gurobi", "cbc"
 
 optimization:
   markets:
