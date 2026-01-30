@@ -111,3 +111,70 @@ FLEX-DEPOT uses two terminal commands, defined in ```cli.py```:
 2. Running the postprocessing by ```python -m flex_dep_opt run-post --config <settings.yaml_file_path>``` <br>
 
 For sequential running of simulation and postprocessing, a batch file can be created and run, similar to ```run_example.bat```. <br>
+Within the YAML file all parameters for a simulation run can be set: 
+
+Simulation settings:
+
+| Parameter                     | Type   | Description                                                | Valid values / format    |
+|------------------------------|--------|------------------------------------------------------------|--------------------------|
+| simulation.start             | str    | Simulation start time (inclusive)                          | YYYY-MM-DD HH:MM         |
+| simulation.end               | str    | Simulation end time (inclusive)                            | YYYY-MM-DD HH:MM         |
+| simulation.timestep_hours    | float  | Simulation timestep in hours                               | 0.25 (others not tested) |
+| simulation.name              | str    | Identifier used for naming result files                    | arbitrary string         |
+| simulation.solver            | str    | Optimization solver backend                                | {gurobi, cbc}            |
+
+Market configuration: 
+
+| Parameter                                           | Type   | Description                                             | Valid values / format |
+|----------------------------------------------------|--------|---------------------------------------------------------|-----------------------|
+| optimization.markets.dayahead.enabled              | bool   | Enable day-ahead market participation                   | true / false          |
+| optimization.markets.dayahead.source               | str    | CSV file with day-ahead price time series               | path to CSV           |
+| optimization.markets.dayahead.fee_eur_per_kwh      | float  | Transaction fee applied to day-ahead trades             | ≥ 0 (€/kWh)           |
+| optimization.markets.intraday.enabled              | bool   | Enable intraday market participation                    | true / false          |
+| optimization.markets.intraday.source               | str    | CSV file with intraday price time series                | path to CSV           |
+| optimization.markets.intraday.fee_eur_per_kwh      | float  | Transaction fee applied to intraday trades              | ≥ 0 (€/kWh)           |
+
+Trading rules: 
+
+| Parameter                                                     | Type   | Description                                              | Valid values / format |
+|--------------------------------------------------------------|--------|----------------------------------------------------------|-----------------------|
+| optimization.trading.mode                                   | str    | Trading mode controlling market interaction realism      | {none, realistic}    |
+| optimization.trading.dayahead.gate_closure_hour             | str    | Day-ahead gate closure time                              | HH:MM                |
+| optimization.trading.dayahead.closes_previous_day           | bool   | Whether DA closes on day D-1                              | true / false         |
+| optimization.trading.intraday.offset_minutes_before_delivery| int    | Intraday trading offset before delivery                  | ≥ 0 (minutes)        |
+
+Imbalance settlement:
+
+| Parameter                                                      | Type   | Description                                              | Valid values / format |
+|---------------------------------------------------------------|--------|----------------------------------------------------------|-----------------------|
+| optimization.imbalance.enabled                                | bool   | Enable imbalance settlement as fallback                  | true / false         |
+| optimization.imbalance.only_on_infeasible                     | bool   | Activate imbalance only if no feasible schedule exists   | true / false         |
+| optimization.imbalance.source_pos                             | str    | CSV file with positive imbalance prices                  | path to CSV          |
+| optimization.imbalance.source_neg                             | str    | CSV file with negative imbalance prices                  | path to CSV          |
+| optimization.imbalance.imbalance_volume_penalty_eur_per_kwh   | float  | Penalty on imbalance energy to discourage usage          | ≥ 0 (€/kWh)          |
+
+Optimization logic:
+
+| Parameter                                   | Type   | Description                                             | Valid values / format |
+|--------------------------------------------|--------|---------------------------------------------------------|-----------------------|
+| optimization.virtual_arbitrage             | bool   | Allow offsetting buy/sell across markets                | true / false         |
+| optimization.mpc.da_horizon_hours          | int    | MPC prediction horizon for day-ahead optimization       | ≥ 1 (hours)          |
+| optimization.mpc.id_horizon_hours          | int    | MPC prediction horizon for intraday optimization        | ≥ 1 (hours)          |
+| optimization.mpc.terminal_condition        | bool   | Enable soft terminal energy condition                   | true / false         |
+| optimization.mpc.terminal_weight_eur_per_kwh | float | Weight for terminal energy deviation penalty            | ≥ 0 (€/kWh)          |
+
+Flexibility inputs: 
+
+| Parameter                                                        | Type   | Description                                              | Valid values / format |
+|-----------------------------------------------------------------|--------|----------------------------------------------------------|-----------------------|
+| optimization.flexibility.bounds_file                            | str    | CSV file with aggregated power and energy flexibility bands | path to CSV       |
+| optimization.flexibility.cycle_regularization.enabled           | bool   | Enable cycling regularization                            | true / false         |
+| optimization.flexibility.cycle_regularization.cost_eur_per_kwh_throughput | float | Cost per charged/discharged energy throughput | ≥ 0 (€/kWh) |
+
+Depot settings (only if desired, in addition to settings that are implicitly in flexibility bands)
+
+| Parameter                                | Type   | Description                                         | Valid values / format |
+|-----------------------------------------|--------|-----------------------------------------------------|-----------------------|
+| optimization.depot.eta_grid2depot       | float  | Efficiency for grid-to-depot power flow             | (0, 1]                |
+| optimization.depot.eta_depot2grid       | float  | Efficiency for depot-to-grid power flow             | (0, 1]                |
+| optimization.depot.grid_connection_limit| float  | Symmetric grid connection limit                     | ≥ 0 (kW)              |
