@@ -15,10 +15,10 @@ def main():
     parser = argparse.ArgumentParser(prog="flex-dep-opt")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p_mpc = sub.add_parser("mpc")
+    p_mpc = sub.add_parser("run-sim")
     p_mpc.add_argument("--config", default="settings_example.yaml")
 
-    p_plot_mpc = sub.add_parser("plot-results-mpc")
+    p_plot_mpc = sub.add_parser("run-post")
     p_plot_mpc.add_argument("--config", default="settings_example.yaml")
 
     p_plot_mpc = sub.add_parser("plot-results-mpc-paper")
@@ -27,13 +27,13 @@ def main():
     args = parser.parse_args()
 
     # run mpc (Rolling Horizon)
-    if args.cmd == "mpc":
+    if args.cmd == "run-sim":
         cfg = load_settings(args.config)
         run_mpc(cfg)
         return
 
     # run plot
-    if args.cmd == "plot-results-mpc":
+    if args.cmd == "run-post":
         cfg = load_settings(args.config)
         postprocess_mpc_results(cfg)
         return

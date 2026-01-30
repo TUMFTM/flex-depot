@@ -106,4 +106,8 @@ This will run the example configuration and generate result files in the results
 
 
 ## How to use
-TBD
+FLEX-DEPOT uses two terminal commands, defined in ```cli.py```: 
+1. Running the simulation by ```python -m flex_dep_opt run-sim --config <settings.yaml_file_path>```
+2. Running the postprocessing by ```python -m flex_dep_opt run-post --config <settings.yaml_file_path>``` <br>
+
+For sequential running of simulation and postprocessing, a batch file can be created and run, similar to ```run_example.bat```. <br>

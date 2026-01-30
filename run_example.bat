@@ -14,5 +14,5 @@ attrib -r results\* /s >nul 2>&1
 del /f /q results\* /s >nul 2>&1
 for /d %%D in (results\*) do rmdir /s /q "%%D"
 
-python -m flex_dep_opt mpc --config "%CONFIG%"
-python -m flex_dep_opt plot-results-mpc --config "%CONFIG%"
+python -m flex_dep_opt run-sim --config "%CONFIG%"
+python -m flex_dep_opt run-post --config "%CONFIG%"
