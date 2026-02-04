@@ -218,3 +218,8 @@ __marimo__/
 # Time series test data,
 /data/flexibility/fleet_1_vb_bounds_15min.csv
 /data/flexibility/fleet_1_vb_bounds_15min_50kW.csv
+/data/prices/prices_reBAPneg_Sep25.csv
+/data/prices/prices_reBAPpos_Sep25.csv
+/data/prices/example_prices_ID_Sep25.csv
+/data/prices/epex_prices_DA_Sep25.csv
+/src/flex_dep_opt/config/settings.yaml

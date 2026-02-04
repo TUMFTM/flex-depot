@@ -28,6 +28,22 @@ The full license text can be found in the LICENSE file in the root directory of 
 Brödel, M., Park, W.-H., Rosner, P., Lienkamp, M.: "FLEX-DEPOT: An open-source framework for multi-market flexibility commercialization of a logistics depot incorporating electric trucks." <br>
 Manuscript under review at Energy Informatics, Springer Nature (2026)
 
+## Citation
+If you use FLEX-DEPOT in academic work, please cite **both**:
+1. The FLEX-DEPOT software repository
+2. The associated publication
+
+**Software:**
+Brödel, M. (2026). FLEX-DEPOT (Version 1.0.0). GitHub repository.  
+https://github.com/TUMFTM/flex-depot
+
+**Publication:**
+Brödel, M., Park, W.-H., Rosner, P., Lienkamp, M.  
+*FLEX-DEPOT: An open-source framework for multi-market flexibility commercialization of a logistics depot incorporating electric trucks.*  
+Energy Informatics, 2026 (under review).
+
+Citation metadata is provided in `CITATION.cff`.
+
 ## Repository Architecture
 ![flex-depot-architecture.svg](images/flex-depot-architecture.svg)
 
@@ -52,9 +68,9 @@ Manuscript under review at Energy Informatics, Springer Nature (2026)
 
 ## Installation
 ### 1) Clone repository
-FLEX-DEPOT is available at the institute's [GitHub](TBD) and can be cloned from there using
+FLEX-DEPOT is available at the institute's [GitHub](https://github.com/TUMFTM) and can be cloned from there using
 ```
-git clone <TBD>
+git clone https://github.com/TUMFTM/flex-depot
 ```
 
 ### 2) Create and activate a virtual environment

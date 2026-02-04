@@ -1,0 +1,47 @@
+cff-version: 1.0.0
+message: >
+  If you use this software in academic work, please cite BOTH the software
+  repository and the associated publication listed below.
+
+# Related Software
+title: "FLEX-DEPOT"
+type: software
+authors:
+  - family-names: "Brödel"
+    given-names: "Marcel"
+    email: "marcel.broedel@tum.de"
+    affiliation: "Technical University of Munich"
+    orcid: "https://orcid.org/0009-0003-8537-8140"
+repository-code: "https://github.com/TUMFTM/flex-depot"
+url: "https://github.com/TUMFTM/flex-depot"
+license: "Apache-2.0"
+keywords:
+  - "energy flexibility"
+  - "logistics depot"
+  - "electric trucks"
+  - "optimization"
+  - "MPC"
+  - "Pyomo"
+  - "MILP"
+  - "day-ahead"
+  - "intraday"
+  - "energy markets"
+version: "1.0.0"
+date-released: TODO
+
+# Related paper
+preferred-citation:
+  type: article
+  authors:
+    - family-names: "Brödel"
+      given-names: "Marcel"
+    - family-names: "Park"
+      given-names: "Woan-Ho"
+    - family-names: "Rosner"
+      given-names: "Philipp"
+    - family-names: "Lienkamp"
+      given-names: "Markus"
+  title: "FLEX-DEPOT: An open-source framework for multi-market flexibility commercialization of a logistics depot incorporating electric trucks"
+  journal: "Energy Informatics"
+  year: 2026
+  status: "under review"
