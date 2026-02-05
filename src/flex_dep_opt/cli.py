@@ -20,9 +20,6 @@ def main():
     p_plot_mpc = sub.add_parser("run-post")
     p_plot_mpc.add_argument("--config", default="settings_example.yaml")
 
-    p_plot_mpc = sub.add_parser("plot-results-mpc-paper")
-    p_plot_mpc.add_argument("--config", default="settings_example.yaml")
-
     args = parser.parse_args()
 
     # run mpc (Rolling Horizon)
