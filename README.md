@@ -97,14 +97,11 @@ pip install -e .
 FLEX-DEPOT uses the [Pyomo](https://pyomo.readthedocs.io/en/stable/) compatible MILP solver [Gurobi](https://www.gurobi.com/solutions/gurobi-optimizer/). The open-source [cbc](https://github.com/coin-or) solver works well. The proprietary Gurobi solver is recommended however, as it is faster in execution, especially for large problems and offers a free academic license.
 For Gurobi, install the Python bindings:
 ```
-pip install -e ".[gurobi]"
+pip install gurobipy==<your_gurobi_version>
 ```
-Verify that `gurobipy` is available:
+Verify that your Gurobi version and license version are the same:
 ```
-python -c "import gurobipy; print('gurobipy ok')"
-```
-Verify that your Gurobi license is working:
-```
+pip show gurobipy
 grbprobe
 ```
 Verify that Pyomo can access Gurobi:
