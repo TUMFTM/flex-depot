@@ -3,7 +3,6 @@ import yaml
 
 from flex_dep_opt.workflows.mpc_workflow import run_mpc
 from flex_dep_opt.workflows.postprocessing_workflow import postprocess_mpc_results
-from flex_dep_opt.workflows.postprocessing_workflow_paper import postprocess_mpc_results_paper
 
 
 def load_settings(path: str):
@@ -36,10 +35,4 @@ def main():
     if args.cmd == "run-post":
         cfg = load_settings(args.config)
         postprocess_mpc_results(cfg)
-        return
-
-    # run paper plot
-    if args.cmd == "plot-results-mpc-paper":
-        cfg = load_settings(args.config)
-        postprocess_mpc_results_paper(cfg)
         return
