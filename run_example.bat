@@ -4,7 +4,6 @@ REM Flex-Depot: MPC + Plot
 REM ================================
 
 cd /d "%~dp0"
-call .venv\Scripts\activate
 
 set CONFIG=src\flex_dep_opt\config\settings_example.yaml
 
