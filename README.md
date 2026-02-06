@@ -73,24 +73,19 @@ FLEX-DEPOT is available at the institute's [GitHub](https://github.com/TUMFTM) a
 git clone https://github.com/TUMFTM/flex-depot
 ```
 
-
 ### 2) Create and activate a virtual environment
-It is recommended to create and activate a clean virtual environment for the installation.
-This can be done within the root directory. Navigate there:
+Recommendation: It is recommended to create and activate a clean virtual environment for the installation in the local `.venv/` directory. For Windows (PowerShell) the environment set up can be done by the following commands:
 ```
 cd <root_directory>
+py -m venv .venv
+.\.venv\Scripts\activate
 ```
-For Windows (PowerShell) the environment set up can be done by the following command:
+Alternative: A self-defined environment can also be set up elsewhere:
 ```
 py -m venv <name_of_virtual_environment>
 .\<name_of_virtual_environment>\Scripts\activate
 ```
-For example to create a virtual environment in the local `.venv/` directory:
-```
-py -m venv .venv
-.\.venv\Scripts\activate
-```
-Or alternatively using conda: 
+or alternatively using conda: 
 ```
 conda create -n <name_of_conda_environment> python=3.11
 conda activate <name_of_conda_environment>
