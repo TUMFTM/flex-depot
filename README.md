@@ -84,11 +84,15 @@ For example to create a virtual environment in the local `.venv/` directory:
 py -m venv .venv
 .\.venv\Scripts\activate
 ```
+Or alternatively using conda: 
+```
+conda create -n <name_of_conda_environment> python=3.11
+conda activate <name_of_conda_environment>
+```
 
 ### 3) Install the package
-Navigate to the root directory of the cloned repository and install the package and its dependencies using pip:
+Install the package and its dependencies using pip:
 ```
-cd <root_directory>
 python -m pip install --upgrade pip
 pip install -e .
 ```
@@ -109,10 +113,10 @@ Verify that Pyomo can access Gurobi:
 python -c "import pyomo.environ as pyo; print(pyo.SolverFactory('gurobi').available())"
 ```
 
-
 ### 5) Quick start (recommended): run the example batch file (Windows)
-The repository includes a ready-to-run example script:
+Navigate to the root directory of the cloned repository and run the example script:
 ```
+cd <root_directory>
 ./run_example.bat
 ```
 This will run the example configuration and generate result files in the results/ directory.
