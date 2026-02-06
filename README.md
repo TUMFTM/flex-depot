@@ -73,8 +73,14 @@ FLEX-DEPOT is available at the institute's [GitHub](https://github.com/TUMFTM) a
 git clone https://github.com/TUMFTM/flex-depot
 ```
 
+
 ### 2) Create and activate a virtual environment
-It is recommended to create and activate a clean virtual environment for the installation. For Windows (PowerShell) this can be done by the following command:
+It is recommended to create and activate a clean virtual environment for the installation.
+This can be done within the root directory. Navigate there:
+```
+cd <root_directory>
+```
+For Windows (PowerShell) the environment set up can be done by the following command:
 ```
 py -m venv <name_of_virtual_environment>
 .\<name_of_virtual_environment>\Scripts\activate
@@ -114,12 +120,11 @@ python -c "import pyomo.environ as pyo; print(pyo.SolverFactory('gurobi').availa
 ```
 
 ### 5) Quick start (recommended): run the example batch file (Windows)
-Navigate to the root directory of the cloned repository and run the example script:
+The repository contains a ready-to-run example script:
 ```
-cd <root_directory>
 ./run_example.bat
 ```
-This will run the example configuration and generate result files in the results/ directory.
+This command will run the example configuration and generate result files in the results/ directory.
 
 
 ## How to use
