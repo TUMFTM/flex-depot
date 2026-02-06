@@ -80,7 +80,7 @@ cd <root_directory>
 py -m venv .venv
 .\.venv\Scripts\activate
 ```
-Alternative: A self-defined environment can also be set up elsewhere:
+Alternative: A self-defined environment can also be set up (in this case do not forget to add `<name_of_virtual_environment>` to `.gitignore`):
 ```
 py -m venv <name_of_virtual_environment>
 .\<name_of_virtual_environment>\Scripts\activate
