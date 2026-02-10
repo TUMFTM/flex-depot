@@ -114,12 +114,16 @@ Verify that Pyomo can access Gurobi:
 python -c "import pyomo.environ as pyo; print(pyo.SolverFactory('gurobi').available())"
 ```
 
-### 5) Quick start (recommended): run the example batch file (Windows)
-The repository contains a ready-to-run example script:
+### 5) Quick start (recommended)
+The repository contains a ready-to-run example script for Windows:
 ```
 ./run_example.bat
 ```
-This command will run the example configuration and generate result files in the results/ directory.
+Or the unix shell script for Linux/macOS:
+```
+bash run_example.sh
+```
+These commands will run the example configuration and generate result files in the results/ directory.
 
 
 ## How to use
