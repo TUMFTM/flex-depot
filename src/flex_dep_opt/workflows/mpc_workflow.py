@@ -4,13 +4,16 @@ from pathlib import Path
 import pandas as pd
 from tqdm.auto import tqdm
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from flex_dep_opt.domain.depot import Depot
 from flex_dep_opt.io.prices_io import build_prices_from_settings, build_fees_from_settings
 from flex_dep_opt.io.flexibility_io import (
     read_flexibility_bounds_csv,
     align_and_validate_flexibility_bounds,
 )
-from flex_dep_opt.io.results_io import save_dispatch_to_csv, save_table_to_csv, save_settings_yaml_file, make_run_dir, write_latest_run_pointer
+from flex_dep_opt.io.results_io import save_dispatch_to_csv, save_table_to_csv, save_settings_yaml_file, make_run_dir, write_latest_run_pointer, save_run_info_txt
 from flex_dep_opt.opt.model import flexibility_commercialization
 from flex_dep_opt.opt.solve import solve_model, extract_dispatch
 from flex_dep_opt.market.trading_rules import (
@@ -41,6 +44,7 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
     Gate-closure times are computed in the market layer via `gate_closure_timestamp()`.
     This ensures mask enforcement and commit logging use the exact same rules.
     """
+    run_started_at = datetime.now(ZoneInfo("Europe/Berlin"))
 
     # ============================================================
     # 1) Read configuration blocks
@@ -390,6 +394,18 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
             commit_df = pd.DataFrame(commit_rows)
             commit_df = commit_df.sort_values(["delivery_time", "current_time"])
             save_table_to_csv(commit_df, out_commit)
+
+        run_finished_at = datetime.now(ZoneInfo("Europe/Berlin"))
+
+        save_run_info_txt(
+            run_dir=run_dir,
+            simulation_name=name,
+            config_path=config_path,
+            solver_name=str(sim_cfg.get("solver", "")),
+            start_time=run_started_at,
+            end_time=run_finished_at,
+            tz="Europe/Berlin",
+        )
 
         logger.info(f"MPC finished → {run_dir.as_posix()}")
 

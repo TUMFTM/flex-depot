@@ -184,3 +184,43 @@ def read_latest_run_pointer(results_root: str | Path = "results") -> Path:
         )
 
     return run_dir
+
+
+def save_run_info_txt(
+    *,
+    run_dir: str | Path,
+    simulation_name: str,
+    config_path: str | Path | None,
+    solver_name: str,
+    start_time: datetime,
+    end_time: datetime,
+    tz: str = "Europe/Berlin",
+) -> str:
+    """
+    Save run metadata into run_info.txt.
+    """
+    run_dir = Path(run_dir)
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    tzinfo = ZoneInfo(tz)
+
+    # Ensure timezone-aware timestamps
+    if start_time.tzinfo is None:
+        start_time = start_time.replace(tzinfo=tzinfo)
+    if end_time.tzinfo is None:
+        end_time = end_time.replace(tzinfo=tzinfo)
+
+    duration_s = (end_time - start_time).total_seconds()
+
+    lines = [
+        f"simulation.name: {simulation_name}",
+        f"solver: {solver_name}",
+        f"config_path: {Path(config_path).resolve() if config_path else '(not provided)'}",
+        f"started_at: {start_time.astimezone(tzinfo).isoformat()}",
+        f"finished_at: {end_time.astimezone(tzinfo).isoformat()}",
+        f"duration_seconds: {duration_s:.2f}",
+    ]
+
+    out_path = run_dir / "run_info.txt"
+    out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return str(out_path.resolve())
