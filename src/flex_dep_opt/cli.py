@@ -25,7 +25,7 @@ def main():
     # run mpc (Rolling Horizon)
     if args.cmd == "run-sim":
         cfg = load_settings(args.config)
-        run_mpc(cfg)
+        run_mpc(cfg, config_path=args.config)
         return
 
     # run plot

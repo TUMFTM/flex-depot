@@ -4,6 +4,11 @@ from pathlib import Path
 from typing import Any, Mapping
 
 import pandas as pd
+import shutil
+
+import re
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 
 def _as_path(path: str | Path) -> Path:
@@ -89,3 +94,93 @@ def save_summary_to_csv(summary: Mapping[str, Any], path: str | Path) -> str:
     out = _as_path(path)
     pd.DataFrame([dict(summary)]).to_csv(out, index=False)
     return str(out.resolve())
+
+
+def _slugify(name: str) -> str:
+    """Make a filesystem-friendly run name."""
+    s = name.strip()
+    s = re.sub(r"\s+", "_", s)
+    s = re.sub(r"[^A-Za-z0-9_\-]", "", s)
+    return s or "run"
+
+
+def make_run_dir(base_dir: str | Path, run_name: str, *, tz: str = "Europe/Berlin") -> Path:
+    """
+    Create a unique run directory: <base>/<run_name>__<YYYY-MM-DD_HH-MM-SS>.
+
+    Returns the created directory path.
+    """
+    base = Path(base_dir)
+    base.mkdir(parents=True, exist_ok=True)
+
+    ts = datetime.now(ZoneInfo(tz)).strftime("%Y-%m-%d_%H-%M-%S")
+    folder = base / f"{_slugify(run_name)}__{ts}"
+    folder.mkdir(parents=True, exist_ok=False)
+    return folder
+
+
+def save_settings_yaml_file(settings_path: str | Path, out_dir: str | Path) -> str:
+    """
+    Copy the original settings YAML file into a run output directory.
+
+    Parameters
+    ----------
+    settings_path:
+        Path to the YAML file that was loaded by the CLI.
+    out_dir:
+        Output directory (the run folder).
+
+    Returns
+    -------
+    str
+        Absolute path to the copied YAML file.
+    """
+    settings_path = Path(settings_path)
+    if not settings_path.exists():
+        raise FileNotFoundError(f"Settings YAML not found: {settings_path}")
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Keep original filename (usually settings_example.yaml)
+    out_path = out_dir / settings_path.name
+
+    shutil.copy2(settings_path, out_path)
+    return str(out_path.resolve())
+
+
+def write_latest_run_pointer(run_dir: str | Path, results_root: str | Path = "results") -> str:
+    """
+    Write a pointer file results/LATEST.txt containing the absolute path to the latest run directory.
+    """
+    run_dir = Path(run_dir).resolve()
+
+    root = Path(results_root)
+    root.mkdir(parents=True, exist_ok=True)
+
+    latest_path = root / "LATEST.txt"
+    latest_path.write_text(str(run_dir), encoding="utf-8")
+    return str(latest_path.resolve())
+
+
+def read_latest_run_pointer(results_root: str | Path = "results") -> Path:
+    """
+    Read results/LATEST.txt and return the referenced run directory.
+    """
+    root = Path(results_root)
+    latest_path = root / "LATEST.txt"
+
+    if not latest_path.exists():
+        raise FileNotFoundError(
+            f"No latest run pointer found at {latest_path.resolve()}. "
+            "Run `run-sim` first."
+        )
+
+    run_dir = Path(latest_path.read_text(encoding="utf-8").strip())
+
+    if not run_dir.exists():
+        raise FileNotFoundError(
+            f"Latest run directory from LATEST.txt does not exist: {run_dir}"
+        )
+
+    return run_dir

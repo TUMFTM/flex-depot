@@ -10,7 +10,7 @@ from flex_dep_opt.io.flexibility_io import (
     read_flexibility_bounds_csv,
     align_and_validate_flexibility_bounds,
 )
-from flex_dep_opt.io.results_io import save_dispatch_to_csv, save_table_to_csv
+from flex_dep_opt.io.results_io import save_dispatch_to_csv, save_table_to_csv, save_settings_yaml_file, make_run_dir, write_latest_run_pointer
 from flex_dep_opt.opt.model import flexibility_commercialization
 from flex_dep_opt.opt.solve import solve_model, extract_dispatch
 from flex_dep_opt.market.trading_rules import (
@@ -25,7 +25,7 @@ logging.getLogger("pyomo").setLevel(logging.WARNING)
 logging.getLogger("pyomo.core").setLevel(logging.ERROR)
 
 
-def run_mpc(cfg: dict) -> None:
+def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
     """
     Rolling-horizon Model Predictive Control (MPC).
 
@@ -367,12 +367,17 @@ def run_mpc(cfg: dict) -> None:
         if not name:
             raise ValueError("settings.yaml: simulation.name must be set (e.g. 'illustrative_example').")
 
-        # --- Output directory + filenames ---
-        out_dir = Path("results")
-        out_dir.mkdir(parents=True, exist_ok=True)
+        # --- Create per-run output directory (Option A: name + timestamp) ---
+        run_dir = make_run_dir("results", name, tz="Europe/Berlin")
+        write_latest_run_pointer(run_dir, results_root="results")
 
-        out_dispatch = out_dir / f"dispatch_{name}.csv"
-        out_commit = out_dir / f"commit_{name}.csv"
+        # --- Save the exact YAML that was passed via CLI / batch (1:1 copy) ---
+        if config_path is not None:
+            save_settings_yaml_file(config_path, run_dir)
+
+        # --- Output filenames inside run_dir ---
+        out_dispatch = run_dir / "dispatch.csv"
+        out_commit = run_dir / "commit.csv"
 
         # --- Write dispatch ---
         if rows:
@@ -386,7 +391,5 @@ def run_mpc(cfg: dict) -> None:
             commit_df = commit_df.sort_values(["delivery_time", "current_time"])
             save_table_to_csv(commit_df, out_commit)
 
-        logger.info(
-            f"MPC finished → {out_dispatch.as_posix()} & {out_commit.as_posix()}"
-        )
+        logger.info(f"MPC finished → {run_dir.as_posix()}")
 

@@ -12,7 +12,7 @@ from flex_dep_opt.post.metrics import (
     compute_kpis,
 )
 from flex_dep_opt.post.plots import plot_market_cashflows_plotly, plot_mpc_dispatch_plotly
-from flex_dep_opt.io.results_io import save_dispatch_to_csv, save_summary_to_csv
+from flex_dep_opt.io.results_io import save_dispatch_to_csv, save_summary_to_csv, read_latest_run_pointer
 
 
 def postprocess_mpc_results(cfg: dict) -> None:
@@ -36,9 +36,11 @@ def postprocess_mpc_results(cfg: dict) -> None:
     if not name:
         raise ValueError("settings.yaml: simulation.name must be set.")
 
-    results_dir = Path("results")
-    dispatch_csv = results_dir / f"dispatch_{name}.csv"
-    commit_csv = results_dir / f"commit_{name}.csv"
+    results_root = Path("results")
+    run_dir = read_latest_run_pointer(results_root)
+
+    dispatch_csv = run_dir / "dispatch.csv"
+    commit_csv = run_dir / "commit.csv"
 
     if not dispatch_csv.exists():
         raise FileNotFoundError(f"Dispatch CSV not found: {dispatch_csv.resolve()}")
@@ -114,8 +116,8 @@ def postprocess_mpc_results(cfg: dict) -> None:
     # -------------------------------------------------------------------------
     # HTML output paths (same base names as config entries)
     # -------------------------------------------------------------------------
-    dispatch_html = results_dir / f"dispatch_{name}.html"
-    cashflow_html = results_dir / f"cashflow_{name}.html"
+    dispatch_html = run_dir / "dispatch.html"
+    cashflow_html = run_dir / "cashflow.html"
 
     # -------------------------------------------------------------------------
     # Plot 1: dispatch report
