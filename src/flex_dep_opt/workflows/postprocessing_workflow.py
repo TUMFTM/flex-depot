@@ -103,9 +103,9 @@ def postprocess_mpc_results(cfg: dict) -> None:
     # -------------------------------------------------------------------------
     # Optional: persist postprocessing results next to dispatch/commit outputs
     # -------------------------------------------------------------------------
-    out_dir = dispatch_csv.parent
-    cashflow_csv = out_dir / f"cashflows_{name}.csv"
-    kpi_csv = out_dir / f"kpis_{name}.csv"
+    #out_dir = dispatch_csv.parent
+    cashflow_csv = run_dir / "cashflow.csv"
+    kpi_csv = run_dir / "kpis.csv"
 
     # cashflows: keep DatetimeIndex in the CSV for later analysis
     save_dispatch_to_csv(cf_df, cashflow_csv, include_time_column=True)
