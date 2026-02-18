@@ -407,5 +407,5 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
             tz="Europe/Berlin",
         )
 
-        logger.info(f"MPC finished → {run_dir.as_posix()}")
+        print(f"MPC finished → Postprocessing starts")
 

@@ -129,7 +129,6 @@ def postprocess_mpc_results(cfg: dict) -> None:
         title="MPC Flexband Dispatch and Market Positions",
     )
     fig_dispatch.write_html(dispatch_html, include_plotlyjs="cdn")
-    print(f"MPC Plot saved → {dispatch_html.resolve()}")
     webbrowser.open(dispatch_html.resolve().as_uri())
 
     # -------------------------------------------------------------------------
@@ -143,6 +142,9 @@ def postprocess_mpc_results(cfg: dict) -> None:
         title="Market Cashflows",
     )
     fig_cf.write_html(cashflow_html, include_plotlyjs="cdn")
-    print(f"Cashflow plot saved → {cashflow_html.resolve()}")
     webbrowser.open(cashflow_html.resolve().as_uri())
+
+    print(f"Result CSV files saved → {run_dir.as_posix()}")
+    print(f"Result HTML plots saved → {run_dir.as_posix()}")
+    print(f"Postprocessing finished")
 
