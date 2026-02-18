@@ -21,7 +21,8 @@ dependencies = [
     "tqdm>=4.67.1",
     "plotly>=5.18",
     "matplotlib>=3.8",
-    "scienceplots>=2.2.0"
+    "scienceplots>=2.2.0",
+    "tzdata>=2024.1"
 ]
 
 [project.optional-dependencies]
