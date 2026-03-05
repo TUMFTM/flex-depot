@@ -1,6 +1,6 @@
 simulation:
   start: "2025-10-01 00:00"                                 # simulation start
-  end: "2025-10-06 23:45"                                   # simulation end
+  end: "2025-10-12 23:45"                                   # simulation end
   timestep_hours: 0.25                                      # simulation timestep
   name: "illustrative_example"                              # used for naming of result files
   solver: "gurobi"                                          # "gurobi", "cbc"
