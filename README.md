@@ -68,9 +68,8 @@ Citation metadata is provided in `CITATION.cff`.
 
 ## Installation
 ### 1) Clone repository
-FLEX-DEPOT is available at the institute's [GitHub](https://github.com/TUMFTM) and can be cloned from there using
 ```
-git clone https://github.com/TUMFTM/flex-depot
+git clone https://github.com/marcelbroedel/flex-depot-dev
 ```
 
 ### 2) Create and activate a virtual environment
