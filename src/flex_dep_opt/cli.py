@@ -4,10 +4,7 @@ import yaml
 from flex_dep_opt.workflows.mpc_workflow import run_mpc
 from flex_dep_opt.workflows.postprocessing_workflow import postprocess_mpc_results
 
-
-def load_settings(path: str):
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+from flex_dep_opt.config.load_settings import load_settings
 
 
 def main():
