@@ -43,7 +43,7 @@ optimization:
     bounds_file: "data/flexibility/vb_bounds_example.csv"
     cycle_regularization:
       enabled: true
-      cost_eur_per_kwh_throughput: 0.0                     # €/kWh
+      cost_eur_per_kwh_throughput: 0.02                     # €/kWh
 
   depot:
     eta_grid2depot : 1.0                                    # efficiency import
