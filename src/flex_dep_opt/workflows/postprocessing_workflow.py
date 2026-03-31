@@ -147,12 +147,13 @@ def postprocess_mpc_results(cfg: dict) -> None:
     fig_cf.write_html(cashflow_html, include_plotlyjs="cdn")
     webbrowser.open(cashflow_html.resolve().as_uri())
 
-    fcr, fcr_resampled = generate_fcr_availability_df()
+    symmetric_limit, fcr_grouped_capacity, fcr_result = generate_fcr_availability_df()
 
     fig_dev = plot_mpc_fcr_plotly(
-        fcr=fcr,
-        fcr_resampled=fcr_resampled,
-        title="fcr test plot",
+        symmetric_limit=symmetric_limit,
+        fcr_grouped_capacity=fcr_grouped_capacity,
+        fcr_result=fcr_result,
+        title="FCR Test Plot",
     )
     fig_dev.write_html(dev_html, include_plotlyjs="cdn")
     webbrowser.open(dev_html.resolve().as_uri())

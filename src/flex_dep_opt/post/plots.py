@@ -445,48 +445,75 @@ def plot_mpc_dispatch_plotly(
 
     return fig
 
-def plot_mpc_fcr_plotly(fcr, fcr_resampled, title) -> go.Figure:
-
+def plot_mpc_fcr_plotly(symmetric_limit, fcr_grouped_capacity, fcr_result, title) -> go.Figure:
     fig = make_subplots(
-        rows=1, cols=1,
-        subplot_titles=("Symmetric FCR Capacity (4h Blocks)",),
+        rows=3, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.08,
+        subplot_titles=(
+            "Symmetric FCR Capacity (4h Blocks)",
+            "FCR Market Prices (Germany)",
+            "FCR Revenue (Germany)",
+        ),
+        row_heights=[0.45, 0.3, 0.25]
     )
 
+    # --- ROW 1: CAPACITY ---
     fig.add_trace(go.Scatter(
-        x=fcr.index, 
-        y=fcr['inst_symmetric_limit'], 
+        x=symmetric_limit.index,
+        y=symmetric_limit['inst_symmetric_limit'],
         name="Inst. Symm Limit (15m)",
-        line=dict(color='rgba(150,150,150,0.2)', width=1, dash='dot'),
-        showlegend=True
+        line=dict(color='rgba(150,150,150,0.4)', width=1, dash='dot'),
     ), row=1, col=1)
 
     fig.add_trace(go.Scatter(
-        x=fcr_resampled.index, 
-        y=fcr_resampled, 
-        name="FCR Capacity (+)",
-        line=dict(color='#2ca02c', width=3), 
+        x=fcr_grouped_capacity.index,
+        y=fcr_grouped_capacity,
+        name="Marketable Capacity (+)",
+        line=dict(color='#2ca02c', width=2),
         line_shape='hv'
     ), row=1, col=1)
 
     fig.add_trace(go.Scatter(
-        x=fcr_resampled.index, 
-        y=-fcr_resampled,
-        name="FCR Capacity (-)",
-        line=dict(color='#2ca02c', width=3),
+        x=fcr_grouped_capacity.index,
+        y=-fcr_grouped_capacity,
+        name="Marketable Capacity (-)",
+        line=dict(color='#2ca02c', width=2),
         line_shape='hv',
         fill='tonexty',
         fillcolor='rgba(44, 160, 44, 0.1)'
     ), row=1, col=1)
 
-    # 4. Layout & Styling
+    fig.add_trace(go.Scatter(
+        x=fcr_result.index,
+        y=fcr_result['fcr_price'],
+        name="Settlement Price (DE)",
+        line=dict(color='#d62728', width=2),
+        line_shape='hv'
+    ), row=2, col=1)
+
+    fig.add_trace(go.Scatter(
+        x=fcr_result.index,
+        y=fcr_result['fcr_revenue_eur'],
+        name="Revenue (DE)",
+        line=dict(color='#1f77b4', width=2),
+        line_shape='hv',
+        fill='tozeroy',
+        fillcolor='rgba(31, 119, 180, 0.15)'
+    ), row=3, col=1)
+
     fig.update_layout(
         title=title,
         template="plotly_white",
-        height=600, 
+        height=900,
         hovermode="x unified",
+        showlegend=True,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
-    
-    fig.update_yaxes(title_text="FCR Capacity [kWh]", row=1, col=1)
+
+    fig.update_yaxes(title_text="Capacity [kWh]", row=1, col=1)
+    fig.update_yaxes(title_text="Price [€/MW]", row=2, col=1)
+    fig.update_yaxes(title_text="Revenue [€]", row=3, col=1)
+    fig.update_xaxes(title_text="Time", row=3, col=1)
 
     return fig
