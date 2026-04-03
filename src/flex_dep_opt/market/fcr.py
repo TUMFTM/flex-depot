@@ -88,3 +88,12 @@ def generate_fcr_availability_df():
     fcr_grouped_capacity = fcr_grouped_capacity.loc[common_index]
 
     return symmetric_limit, fcr_grouped_capacity, fcr_result
+
+def get_fcr_price_series():
+    symmetric_limit, fcr_grouped_capacity, fcr_result = generate_fcr_availability_df()
+    s = fcr_result['fcr_price']
+    s.name = "price"
+    s.index.name = "time"
+    new_index = pd.date_range(s.index[0], s.index[-1], freq="15min")
+    s = s.reindex(new_index).ffill()
+    return s
