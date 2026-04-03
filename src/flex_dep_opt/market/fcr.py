@@ -82,4 +82,9 @@ def generate_fcr_availability_df():
         fcr_result['fcr_capacity_kWh'] / 1000.0
     ) * fcr_result['fcr_price']
 
+    common_index = fcr_result.index.intersection(symmetric_limit.index).intersection(fcr_grouped_capacity.index)
+    fcr_result = fcr_result.loc[common_index]
+    symmetric_limit = symmetric_limit.loc[common_index]
+    fcr_grouped_capacity = fcr_grouped_capacity.loc[common_index]
+
     return symmetric_limit, fcr_grouped_capacity, fcr_result

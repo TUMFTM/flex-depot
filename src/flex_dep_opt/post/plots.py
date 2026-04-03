@@ -458,7 +458,6 @@ def plot_mpc_fcr_plotly(symmetric_limit, fcr_grouped_capacity, fcr_result, title
         row_heights=[0.45, 0.3, 0.25]
     )
 
-    # --- ROW 1: CAPACITY ---
     fig.add_trace(go.Scatter(
         x=symmetric_limit.index,
         y=symmetric_limit['inst_symmetric_limit'],
