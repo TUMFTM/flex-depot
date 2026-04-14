@@ -23,6 +23,7 @@ def flexibility_commercialization(
     imbalance_prices_pos: pd.Series | None = None,
     imbalance_prices_neg: pd.Series | None = None,
     imbalance_volume_penalty_eur_per_kwh: float = 0.0,
+    fcr_prices: pd.Series | None = None,
 ) -> pyo.ConcreteModel:
     """
     Flex-band based multi-market commercialization model (Pyomo).
@@ -148,6 +149,76 @@ def flexibility_commercialization(
         initialize=lambda mdl, mk, t: float(committed_positions[mk].iloc[int(t)]),
     )
 
+    # setup fcr slots
+    use_fcr = False
+    if fcr_prices is not None and not fcr_prices.empty:
+        fcr_slot_starts = []
+        slot_steps: dict[int, list[int]] = {}
+        
+        j = 0
+        for slot_start in fcr_prices.index:
+            slot_end = slot_start + pd.Timedelta(hours=4)
+            idxs = [
+                i for i, ts in enumerate(time_index)
+                if slot_start <= ts < slot_end
+            ]
+            if idxs:
+                fcr_slot_starts.append(slot_start)
+                slot_steps[j] = idxs
+                j += 1
+                
+        n_fcr = len(fcr_slot_starts)
+        if n_fcr > 0:
+            use_fcr = True
+            m.S_FCR = pyo.RangeSet(0, n_fcr - 1)
+
+            m.fcr_price_param = pyo.Param(
+                m.S_FCR,
+                initialize=lambda mdl, j_idx: float(fcr_prices.loc[fcr_slot_starts[j_idx]]),
+            )
+
+            # use flex power bounds to compute max available fcr capacity per slot
+            # tightest power headroom across the slot determines the max fcr offer
+            def get_fcr_cap_max(j_idx):
+                i_list = slot_steps[j_idx]
+                if not i_list:
+                    return 0.0
+                caps = []
+                for i in i_list:
+                    # symmetric headroom
+                    upward_available_kw = float(P_upper_ser.iloc[i])
+                    downward_available_kw = float(-P_lower_ser.iloc[i])
+                    caps.append(min(upward_available_kw, downward_available_kw))
+                return float(min(caps))
+
+            m.fcr_cap_max_kw = pyo.Param(
+                m.S_FCR,
+                initialize=lambda mdl, j_idx: get_fcr_cap_max(j_idx),
+            )
+
+            # covered hours per slot
+            fcr_slot_hours = {
+                j_idx: len(slot_steps[j_idx]) * float(timestep_hours)
+                for j_idx in range(n_fcr)
+            }
+            m.fcr_slot_hours = pyo.Param(
+                m.S_FCR,
+                initialize=lambda mdl, j_idx: fcr_slot_hours[j_idx],
+            )
+
+            m.x_fcr_committed = pyo.Param(
+                m.S_FCR,
+                initialize=0.0,
+                mutable=True,
+            )
+
+            m.fcr_gate_open = pyo.Param(
+                m.S_FCR,
+                initialize=1,
+                mutable=True,
+                within=pyo.Binary,
+            )
+
     # ============================================================
     # 3) Decision variables
     # ============================================================
@@ -155,6 +226,17 @@ def flexibility_commercialization(
     m.p_dis = pyo.Var(m.T, within=pyo.NonNegativeReals)  # export magnitude [kW]
     m.p_net = pyo.Var(m.T, within=pyo.Reals)             # net power (+import / -export) [kW]
     m.E = pyo.Var(m.S, within=pyo.Reals)                 # energy state [kWh] (band model)
+
+    # fcr variables
+    if use_fcr:
+        # offered kW
+        m.x_fcr = pyo.Var(m.S_FCR, within=pyo.NonNegativeReals)
+
+        # offered MW (in 1MW resolution)
+        m.z_fcr = pyo.Var(m.S_FCR, within=pyo.NonNegativeIntegers)
+
+        # commitment mode (0=no offer, 1=offer)
+        m.y_fcr = pyo.Var(m.S_FCR, within=pyo.Binary)
 
     # Market positions (signed): +import (buy), -export (sell)
     m.p_market = pyo.Var(
@@ -236,6 +318,50 @@ def flexibility_commercialization(
         return base == mdl.p_net[t]
 
     m.market_balance = pyo.Constraint(m.T, rule=balance_rule)
+
+    # fcr constraints
+    if use_fcr:
+        _fcr_M = float(p_market_max_value) * 2.0
+
+        def fcr_gate_ub_rule(mdl, j):
+            return mdl.x_fcr[j] <= mdl.x_fcr_committed[j] + _fcr_M * mdl.fcr_gate_open[j]
+
+        def fcr_gate_lb_rule(mdl, j):
+            return mdl.x_fcr[j] >= mdl.x_fcr_committed[j] - _fcr_M * mdl.fcr_gate_open[j]
+
+        m.fcr_gate_ub = pyo.Constraint(m.S_FCR, rule=fcr_gate_ub_rule)
+        m.fcr_gate_lb = pyo.Constraint(m.S_FCR, rule=fcr_gate_lb_rule)
+
+        # 1MW resolution steps 
+        m.fcr_resolution = pyo.Constraint(
+            m.S_FCR,
+            rule=lambda mdl, j: mdl.x_fcr[j] == 1000.0 * mdl.z_fcr[j]
+        )
+
+        # 1MW min bid
+        m.fcr_min_bid = pyo.Constraint(
+            m.S_FCR,
+            rule=lambda mdl, j: mdl.z_fcr[j] >= 1.0 * mdl.y_fcr[j],
+        )
+
+        m.fcr_cap_limit = pyo.Constraint(
+            m.S_FCR,
+            rule=lambda mdl, j: mdl.x_fcr[j] <= mdl.fcr_cap_max_kw[j] * mdl.y_fcr[j],
+        )
+
+        def fcr_headroom_up_rule(mdl, j, t):
+            return mdl.p_net[t] + mdl.x_fcr[j] <= mdl.P_upper[t]
+
+        def fcr_headroom_dn_rule(mdl, j, t):
+            return mdl.p_net[t] - mdl.x_fcr[j] >= mdl.P_lower[t]
+
+        fcr_jt_pairs = [
+            (j, t) for j, steps in slot_steps.items() for t in steps
+        ]
+        m.FCR_JT = pyo.Set(initialize=fcr_jt_pairs, dimen=2)
+
+        m.fcr_headroom_up = pyo.Constraint(m.FCR_JT, rule=fcr_headroom_up_rule)
+        m.fcr_headroom_dn = pyo.Constraint(m.FCR_JT, rule=fcr_headroom_dn_rule)
 
     # ------------------------------------------------------------
     # Virtual arbitrage handling:
@@ -335,7 +461,14 @@ def flexibility_commercialization(
         # Soft terminal objective (weight set by MPC)
         term_penalty = mdl.w_term * mdl.e_term_dev
 
-        return energy_cashflow + imb_cash - fee_cost - deg_cost - imb_vol_pen - term_penalty
+        fcr_revenue = 0.0
+        if use_fcr:
+            fcr_revenue = sum(
+                (mdl.fcr_price_param[j] / 1000.0) * mdl.x_fcr[j] * (mdl.fcr_slot_hours[j] / 4.0)
+                for j in mdl.S_FCR
+            )
+
+        return energy_cashflow + fcr_revenue + imb_cash - fee_cost - deg_cost - imb_vol_pen - term_penalty
 
     m.obj = pyo.Objective(rule=obj_expr, sense=pyo.maximize)
 

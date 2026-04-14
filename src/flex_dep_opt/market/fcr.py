@@ -7,8 +7,7 @@ def load_settings(path: str):
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
-
-def _load_fcr_price_file(year: int) -> pd.Series:
+def _load_fcr_price_file(year: int = 2025) -> pd.Series:
     path = f"data/prices/RESULT_OVERVIEW_CAPACITY_MARKET_FCR_{year}-01-01_{year}-12-31.xlsx"
     df = pd.read_excel(path)
 
@@ -28,18 +27,22 @@ def _load_fcr_price_file(year: int) -> pd.Series:
 
     return df[price_col].rename("fcr_price")
 
+def get_fcr_prices(years: list[int] = (2022, 2023, 2024, 2025)) -> pd.Series:
+    fcr_prices = (
+        pd.concat([_load_fcr_price_file(y) for y in years])
+        .pipe(lambda s: s[~s.index.duplicated(keep="first")])
+        .sort_index()
+    )
+    return fcr_prices
 
+# deprecated
 def generate_fcr_availability_df(years: list[int] = (2022, 2023, 2024, 2025)):
     cfg = load_settings("src/flex_dep_opt/config/settings_example.yaml")
     opt_cfg = cfg["optimization"]
     flex_cfg = opt_cfg.get("flexibility", {})
     flexibility_bounds_full = read_flexibility_bounds_csv(flex_cfg["bounds_file"])
 
-    fcr_prices = (
-        pd.concat([_load_fcr_price_file(y) for y in years])
-        .pipe(lambda s: s[~s.index.duplicated(keep="first")])
-        .sort_index()
-    )
+    fcr_prices = get_fcr_prices(years)
 
     symmetric_limit = flexibility_bounds_full.copy()
     if symmetric_limit.index.tz is None:
@@ -64,9 +67,10 @@ def generate_fcr_availability_df(years: list[int] = (2022, 2023, 2024, 2025)):
          for ts in fcr_prices.index},
         name="fcr_capacity_kWh",
     )
-    fcr_grouped_capacity = fcr_grouped_capacity.where(fcr_grouped_capacity >= 1000, other=0.0)
 
-    fcr_result = fcr_grouped_capacity.to_frame().join(fcr_prices, how="inner")
+    fcr_grouped_capacity = (fcr_grouped_capacity // 1000) * 1000
+
+    fcr_result = fcr_grouped_capacity.to_frame().join(fcr_prices.rename("fcr_price"), how="inner")
     fcr_result = fcr_result.dropna(subset=["fcr_capacity_kWh", "fcr_price"])
     fcr_result["fcr_revenue_eur"] = (fcr_result["fcr_capacity_kWh"] / 1000.0) * fcr_result["fcr_price"]
 
@@ -78,5 +82,7 @@ def generate_fcr_availability_df(years: list[int] = (2022, 2023, 2024, 2025)):
     fcr_result = fcr_result.loc[common_index]
     symmetric_limit = symmetric_limit.loc[common_index]
     fcr_grouped_capacity = fcr_grouped_capacity.loc[common_index]
+
+    print(fcr_result)
 
     return symmetric_limit, fcr_grouped_capacity, fcr_result

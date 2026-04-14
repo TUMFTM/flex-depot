@@ -93,6 +93,46 @@ def postprocess_mpc_results(cfg: dict) -> None:
 
     dt = float(sim["timestep_hours"])
 
+    # todo remove, deprecated
+    symmetric_limit, fcr_grouped_capacity, fcr_result = generate_fcr_availability_df()
+
+    symmetric_limit = symmetric_limit.loc[
+        (symmetric_limit.index >= start) & (symmetric_limit.index <= end)
+    ]
+    fcr_grouped_capacity = fcr_grouped_capacity.loc[
+        (fcr_grouped_capacity.index >= start) & (fcr_grouped_capacity.index <= end)
+    ]
+    fcr_result = fcr_result.loc[
+        (fcr_result.index >= start) & (fcr_result.index <= end)
+    ]
+
+    fcr_kpis: dict = {}
+    if "x_fcr_kw" in dispatch.columns:
+        x_fcr_kw = dispatch["x_fcr_kw"]
+
+        dispatch_reset = x_fcr_kw.reset_index()
+        dispatch_reset.columns = ["time", "x_fcr_kw"]
+        fcr_reset = fcr_result.index.to_frame(index=False, name="slot_start")
+
+        merged = pd.merge_asof(
+            fcr_reset.sort_values("slot_start"),
+            dispatch_reset.sort_values("time"),
+            left_on="slot_start",
+            right_on="time",
+            direction="nearest",
+        )
+        merged = merged.set_index("slot_start")
+
+        committed_mw = merged["x_fcr_kw"] / 1000.0
+        slot_revenue = committed_mw * fcr_result["fcr_price"]
+
+        fcr_kpis = {
+            "fcr_revenue_eur": float(slot_revenue.sum()),
+            "fcr_slots_committed": int((committed_mw > 0).sum()),
+            "fcr_avg_capacity_mw": float(committed_mw[committed_mw > 0].mean())
+            if (committed_mw > 0).any() else 0.0,
+        }
+
     # -------------------------------------------------------------------------
     # Compute metrics
     # -------------------------------------------------------------------------
@@ -101,6 +141,7 @@ def postprocess_mpc_results(cfg: dict) -> None:
         dispatch, prices_by_market, timestep_hours=dt
     )
     kpis = compute_kpis(cf_df, energy_by_mk, fees_by_market, commit=commit_df)
+    kpis.update(fcr_kpis)
 
     # -------------------------------------------------------------------------
     # Optional: persist postprocessing results next to dispatch/commit outputs
@@ -120,7 +161,7 @@ def postprocess_mpc_results(cfg: dict) -> None:
     # -------------------------------------------------------------------------
     dispatch_html = run_dir / "dispatch.html"
     cashflow_html = run_dir / "cashflow.html"
-    dev_html = run_dir / "dev.html"
+    fcr_html = run_dir / "fcr.html"
 
     # -------------------------------------------------------------------------
     # Plot 1: dispatch report
@@ -129,6 +170,7 @@ def postprocess_mpc_results(cfg: dict) -> None:
         dispatch=dispatch,
         prices_by_market=prices_by_market,
         commit_df=commit_df,
+        fcr_result=fcr_result if not fcr_result.empty else None,
         title="MPC Flexband Dispatch and Market Positions",
     )
     fig_dispatch.write_html(dispatch_html, include_plotlyjs="cdn")
@@ -147,16 +189,16 @@ def postprocess_mpc_results(cfg: dict) -> None:
     fig_cf.write_html(cashflow_html, include_plotlyjs="cdn")
     webbrowser.open(cashflow_html.resolve().as_uri())
 
-    symmetric_limit, fcr_grouped_capacity, fcr_result = generate_fcr_availability_df()
-
-    fig_dev = plot_mpc_fcr_plotly(
+    # todo maybe remove, deprecated
+    fig_fcr = plot_mpc_fcr_plotly(
         symmetric_limit=symmetric_limit,
         fcr_grouped_capacity=fcr_grouped_capacity,
         fcr_result=fcr_result,
-        title="FCR Test Plot",
+        dispatch=dispatch if "x_fcr_kw" in dispatch.columns else None,
+        title="FCR Capacity & Results",
     )
-    fig_dev.write_html(dev_html, include_plotlyjs="cdn")
-    webbrowser.open(dev_html.resolve().as_uri())
+    fig_fcr.write_html(fcr_html, include_plotlyjs="cdn")
+    webbrowser.open(fcr_html.resolve().as_uri())
 
     print(f"Result CSV files saved → {run_dir.as_posix()}")
     print(f"Result HTML plots saved → {run_dir.as_posix()}")

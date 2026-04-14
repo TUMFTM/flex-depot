@@ -16,7 +16,24 @@ MARKET_COLORS: Dict[str, Tuple[int, int, int]] = {
     "DA": (0, 101, 189),
     "ID": (227, 114, 34),
     "IMB": (120, 80, 160),
+    "FCR": (44, 160, 44),
 }
+
+FCR_GREEN = "rgb(44,160,44)"
+FCR_GREEN_LIGHT = "rgba(44,160,44,0.12)"
+FCR_GREEN_MID = "rgba(44,160,44,0.25)"
+
+def _expand_slots_to_step(
+    slot_series: pd.Series,
+    dense_index: pd.DatetimeIndex,
+    slot_duration: pd.Timedelta = pd.Timedelta(hours=4),
+) -> pd.Series:
+    result = pd.Series(0.0, index=dense_index)
+    for slot_start, val in slot_series.items():
+        slot_end = slot_start + slot_duration
+        mask = (dense_index >= slot_start) & (dense_index < slot_end)
+        result.loc[mask] = val
+    return result
 
 
 def _rgb(market: str) -> str:
@@ -174,6 +191,15 @@ def plot_market_cashflows_plotly(
         ("      Trading Profit", f"{float(kpis['trading_profit_eur']):.1f} €"),
         ("      Trading Fees", f"{float(kpis['fees_eur']):.1f} €"),
         ("      Imbalance Cost", f"{float(kpis['imb_cost_eur']):.1f} €"),
+    ]
+    if "fcr_revenue_eur" in kpis:
+        kpi_rows.append(("      FCR Revenue", f"{float(kpis['fcr_revenue_eur']):.1f} €"))
+    if "fcr_slots_committed" in kpis:
+        kpi_rows.append(("      FCR Slots Committed", f"{int(kpis['fcr_slots_committed']):d}"))
+    if "fcr_avg_capacity_mw" in kpis:
+        kpi_rows.append(("      FCR Avg Capacity", f"{float(kpis['fcr_avg_capacity_mw']):.2f} MW"))
+
+    kpi_rows += [
         ("Number of Trades", f"{int(kpis['trade_steps']):d}"),
         ("Net Volume", f"{float(kpis['net_kwh']):.1f} kWh"),
         ("      Sell Volume", f"{float(kpis['sell_kwh']):.1f} kWh"),
@@ -225,6 +251,7 @@ def plot_mpc_dispatch_plotly(
     prices_by_market: Mapping[str, pd.Series] | None = None,
     *,
     commit_df: pd.DataFrame | None = None,
+    fcr_result: pd.DataFrame | None = None,
     title: str = "MPC Flexband Dispatch and Market Positions",
 ) -> go.Figure:
     """
@@ -248,6 +275,8 @@ def plot_mpc_dispatch_plotly(
     market_cols = infer_market_position_columns(dispatch)
     has_imb = has_imbalance(dispatch)
     has_used_flag = "used_rebap" in dispatch.columns
+
+    has_fcr = "x_fcr_kw" in dispatch.columns
 
     # Commit times (for hover annotation)
     commit_time_by_market: dict[str, pd.Series] = {}
@@ -295,6 +324,21 @@ def plot_mpc_dispatch_plotly(
                 row=1, col=1
             )
 
+    if fcr_result is not None and "fcr_price" in fcr_result.columns:
+        fig.add_trace(
+            go.Scatter(
+                x=fcr_result.index,
+                y=fcr_result["fcr_price"],
+                mode="lines",
+                name="FCR Price [€/MW per 4h]",
+                line=dict(width=2, color=FCR_GREEN, dash="dot"),
+                line_shape="hv",
+                visible="legendonly",
+                yaxis="y1",
+            ),
+            row=1, col=1
+        )
+
     # Row 2: Power band + p_net
     fig.add_trace(
         go.Scatter(x=dispatch.index, y=dispatch["P_upper_kw"], mode="lines", name="P upper [kW]",
@@ -312,6 +356,54 @@ def plot_mpc_dispatch_plotly(
                    line=dict(width=3, color="rgb(162,173,0)")),
         row=2, col=1
     )
+
+    if has_fcr:
+        if fcr_result is not None and "fcr_capacity_kWh" in fcr_result.columns:
+            committed_slots = dispatch["x_fcr_kw"].replace(0.0, float("nan")).dropna()
+            slot_vals = {}
+            for slot in fcr_result.index:
+                slot_end = slot + pd.Timedelta(hours=4)
+                in_slot = committed_slots[
+                    (committed_slots.index >= slot) & (committed_slots.index < slot_end)
+                ]
+                slot_vals[slot] = in_slot.max() if not in_slot.empty else 0.0
+            x_fcr_slots = pd.Series(slot_vals)
+        else:
+            x_fcr_slots = dispatch["x_fcr_kw"].replace(0.0, float("nan")).dropna()
+
+        x_fcr_dense = _expand_slots_to_step(x_fcr_slots, dispatch.index)
+
+        headroom_upper = dispatch["p_net_kw"] + x_fcr_dense
+        headroom_lower = dispatch["p_net_kw"] - x_fcr_dense
+
+        fig.add_trace(
+            go.Scatter(
+                x=dispatch.index,
+                y=headroom_upper,
+                mode="lines",
+                name="FCR headroom upper",
+                line=dict(width=1, color=FCR_GREEN, dash="dot"),
+                showlegend=True,
+            ),
+            row=2, col=1
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=dispatch.index,
+                y=headroom_lower,
+                mode="lines",
+                name="FCR headroom lower / window",
+                fill="tonexty",
+                fillcolor=FCR_GREEN_LIGHT,
+                line=dict(width=1, color=FCR_GREEN, dash="dot"),
+                hovertemplate=(
+                    "FCR window: %{customdata[0]:.0f} → %{customdata[1]:.0f} kW<br>"
+                    "Reserved: %{customdata[2]:.0f} kW<extra></extra>"
+                ),
+                customdata=list(zip(headroom_upper, headroom_lower, x_fcr_dense)),
+            ),
+            row=2, col=1
+        )
 
     # Row 3: Energy band + E
     fig.add_trace(
@@ -363,13 +455,39 @@ def plot_mpc_dispatch_plotly(
             row=4, col=1
         )
 
-    # Row 4b: Imbalance net position
+    if has_fcr:
+        if "x_fcr_dense" not in dir():
+            committed_slots = dispatch["x_fcr_kw"].replace(0.0, float("nan")).dropna()
+            x_fcr_dense = _expand_slots_to_step(committed_slots, dispatch.index)
+
+        fig.add_trace(
+            go.Scatter(
+                x=dispatch.index,
+                y=x_fcr_dense,
+                mode="lines",
+                name="FCR committed [kW]",
+                line=dict(width=2, color=FCR_GREEN),
+                hovertemplate="FCR: %{y:.0f} kW<extra></extra>",
+            ),
+            row=4, col=1
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=dispatch.index,
+                y=-x_fcr_dense,
+                mode="lines",
+                name="FCR committed [-kW]",
+                line=dict(width=2, color=FCR_GREEN, dash="dot"),
+                showlegend=False,
+            ),
+            row=4, col=1
+        )
+
+    # Imbalance net position
     if has_imb:
         p_imb_net = dispatch["p_imb_pos_kw"] - dispatch["p_imb_neg_kw"]
-        values = p_imb_net
-
-        colors = [_rgba("IMB", 1.0 if v > 0 else 0.3) for v in values]
-        labels = ["Buy" if v > 0 else "Sell" if v < 0 else "Neutral" for v in values]
+        colors = [_rgba("IMB", 1.0 if v > 0 else 0.3) for v in p_imb_net]
+        labels = ["Buy" if v > 0 else "Sell" if v < 0 else "Neutral" for v in p_imb_net]
 
         if has_used_flag:
             used_str = dispatch["used_rebap"].astype(bool).map(lambda x: "reBAP used" if x else "no reBAP").values
@@ -386,7 +504,7 @@ def plot_mpc_dispatch_plotly(
         fig.add_trace(
             go.Bar(
                 x=dispatch.index,
-                y=values,
+                y=p_imb_net,
                 name="IMB (reBAP) Net [kW]",
                 marker_color=colors,
                 customdata=custom,
@@ -402,7 +520,7 @@ def plot_mpc_dispatch_plotly(
             row=4, col=1
         )
 
-    # Highlight reBAP usage (optional)
+    # Highlight reBAP usage
     if has_used_flag:
         used = dispatch["used_rebap"].astype(bool).fillna(False)
         start = None
@@ -445,74 +563,239 @@ def plot_mpc_dispatch_plotly(
 
     return fig
 
-def plot_mpc_fcr_plotly(symmetric_limit, fcr_grouped_capacity, fcr_result, title) -> go.Figure:
+
+def plot_mpc_fcr_plotly(
+    *,
+    symmetric_limit: pd.DataFrame,
+    fcr_grouped_capacity: pd.Series,
+    fcr_result: pd.DataFrame,
+    dispatch: pd.DataFrame | None = None,
+    title: str = "FCR Capacity & Results",
+) -> go.Figure:
+    has_dispatch = dispatch is not None and "x_fcr_kw" in dispatch.columns
+
+    dense_index = symmetric_limit.index
+
+    cap_dense = _expand_slots_to_step(fcr_grouped_capacity / 1000.0, dense_index)
+
+    price_dense = _expand_slots_to_step(fcr_result["fcr_price"], dense_index)
+
+    potential_per_slot = (fcr_grouped_capacity / 1000.0) * fcr_result["fcr_price"]
+    potential_dense = _expand_slots_to_step(potential_per_slot, dense_index)
+
+    realised_mw: pd.Series | None = None
+    realised_dense: pd.Series | None = None
+    realised_revenue_dense: pd.Series | None = None
+
+    if has_dispatch:
+        committed_slots_sparse = dispatch["x_fcr_kw"].replace(0.0, float("nan")).dropna()
+        slot_vals: dict[pd.Timestamp, float] = {}
+        for slot in fcr_result.index:
+            slot_end = slot + pd.Timedelta(hours=4)
+            in_slot = committed_slots_sparse[
+                (committed_slots_sparse.index >= slot) &
+                (committed_slots_sparse.index < slot_end)
+            ]
+            slot_vals[slot] = float(in_slot.max()) if not in_slot.empty else 0.0
+
+        realised_mw = pd.Series(slot_vals) / 1000.0
+        realised_dense = _expand_slots_to_step(realised_mw, dense_index)
+
+        revenue_per_slot = realised_mw * fcr_result["fcr_price"]
+        realised_revenue_dense = _expand_slots_to_step(revenue_per_slot, dense_index)
+
+    n_rows = 4 if has_dispatch else 3
+    row_heights = [0.35, 0.22, 0.22, 0.21] if has_dispatch else [0.45, 0.3, 0.25]
+
+    subplot_titles = [
+        "Symmetric FCR capacity: available vs. committed",
+        "FCR settlement price (Germany)",
+        "FCR revenue: potential vs. realised",
+    ]
+    if has_dispatch:
+        subplot_titles.append("DA + ID volume displaced by FCR commitment")
+
     fig = make_subplots(
-        rows=3, cols=1,
+        rows=n_rows, cols=1,
         shared_xaxes=True,
-        vertical_spacing=0.08,
-        subplot_titles=(
-            "Symmetric FCR Capacity (4h Blocks)",
-            "FCR Market Prices (Germany)",
-            "FCR Revenue (Germany)",
-        ),
-        row_heights=[0.45, 0.3, 0.25]
+        vertical_spacing=0.07,
+        subplot_titles=subplot_titles,
+        row_heights=row_heights,
     )
 
-    fig.add_trace(go.Scatter(
-        x=symmetric_limit.index,
-        y=symmetric_limit['inst_symmetric_limit'],
-        name="Inst. Symm Limit (15m)",
-        line=dict(color='rgba(150,150,150,0.4)', width=1, dash='dot'),
-    ), row=1, col=1)
+    fig.add_trace(
+        go.Scatter(
+            x=symmetric_limit.index,
+            y=symmetric_limit["inst_symmetric_limit"] / 1000.0,
+            name="Available (15min) [MW]",
+            line=dict(color="rgba(150,150,150,0.45)", width=1, dash="dot"),
+            hovertemplate="%{y:.3f} MW<extra>available 15m</extra>",
+        ),
+        row=1, col=1
+    )
 
-    fig.add_trace(go.Scatter(
-        x=fcr_grouped_capacity.index,
-        y=fcr_grouped_capacity,
-        name="Marketable Capacity (+)",
-        line=dict(color='#2ca02c', width=2),
-        line_shape='hv'
-    ), row=1, col=1)
+    fig.add_trace(
+        go.Scatter(
+            x=dense_index,
+            y=cap_dense,
+            name="Slot capacity (+) [MW]",
+            line=dict(color=FCR_GREEN, width=2),
+            hovertemplate="%{y:.3f} MW<extra>slot max +</extra>",
+        ),
+        row=1, col=1
+    )
 
-    fig.add_trace(go.Scatter(
-        x=fcr_grouped_capacity.index,
-        y=-fcr_grouped_capacity,
-        name="Marketable Capacity (-)",
-        line=dict(color='#2ca02c', width=2),
-        line_shape='hv',
-        fill='tonexty',
-        fillcolor='rgba(44, 160, 44, 0.1)'
-    ), row=1, col=1)
+    fig.add_trace(
+        go.Scatter(
+            x=dense_index,
+            y=-cap_dense,
+            name="Slot capacity (-) [MW]",
+            line=dict(color=FCR_GREEN, width=2),
+            fill="tonexty",
+            fillcolor=FCR_GREEN_LIGHT,
+            showlegend=False,
+            hovertemplate="%{y:.3f} MW<extra>slot max -</extra>",
+        ),
+        row=1, col=1
+    )
 
-    fig.add_trace(go.Scatter(
-        x=fcr_result.index,
-        y=fcr_result['fcr_price'],
-        name="Settlement Price (DE)",
-        line=dict(color='#d62728', width=2),
-        line_shape='hv'
-    ), row=2, col=1)
+    if realised_dense is not None:
+        fig.add_trace(
+            go.Scatter(
+                x=dense_index,
+                y=realised_dense,
+                name="Committed [MW]",
+                line=dict(color=FCR_GREEN, width=3),
+                fill="tozeroy",
+                fillcolor=FCR_GREEN_MID,
+                hovertemplate="%{y:.3f} MW committed<extra></extra>",
+            ),
+            row=1, col=1
+        )
+        avg_avail = cap_dense[cap_dense > 0].mean() if (cap_dense > 0).any() else 0.0
+        avg_comm = realised_dense[realised_dense > 0].mean() if (realised_dense > 0).any() else 0.0
+        util_pct = 100.0 * avg_comm / avg_avail if avg_avail > 0 else 0.0
+        fig.add_annotation(
+            text=f"Avg utilisation: {util_pct:.1f}%",
+            xref="paper", yref="paper",
+            x=0.01, y=0.99,
+            showarrow=False,
+            font=dict(size=12, color=FCR_GREEN),
+            bgcolor="rgba(255,255,255,0.7)",
+        )
 
-    fig.add_trace(go.Scatter(
-        x=fcr_result.index,
-        y=fcr_result['fcr_revenue_eur'],
-        name="Revenue (DE)",
-        line=dict(color='#1f77b4', width=2),
-        line_shape='hv',
-        fill='tozeroy',
-        fillcolor='rgba(31, 119, 180, 0.15)'
-    ), row=3, col=1)
+    fig.add_trace(
+        go.Scatter(
+            x=dense_index,
+            y=price_dense,
+            name="Settlement price [€/MW]",
+            line=dict(color="rgb(214,39,40)", width=2),
+            fill="tozeroy",
+            fillcolor="rgba(214,39,40,0.07)",
+            hovertemplate="%{y:.2f} €/MW<extra></extra>",
+        ),
+        row=2, col=1
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=dense_index,
+            y=potential_dense,
+            name="Potential revenue [€/slot]",
+            line=dict(color="rgba(214,39,40,0.4)", width=1),
+            fill="tozeroy",
+            fillcolor="rgba(214,39,40,0.07)",
+            hovertemplate="%{y:.2f} €<extra>potential</extra>",
+        ),
+        row=3, col=1
+    )
+    if realised_revenue_dense is not None:
+        fig.add_trace(
+            go.Scatter(
+                x=dense_index,
+                y=realised_revenue_dense,
+                name="Realised revenue [€/slot]",
+                line=dict(color=FCR_GREEN, width=2),
+                fill="tozeroy",
+                fillcolor=FCR_GREEN_MID,
+                hovertemplate="%{y:.2f} €<extra>realised</extra>",
+            ),
+            row=3, col=1
+        )
+        total_potential = float(potential_per_slot.sum())
+        total_realised = float((realised_mw * fcr_result["fcr_price"]).sum())
+        capture = f"{100*total_realised/total_potential:.1f}%" if total_potential > 0 else "n/a"
+        fig.add_annotation(
+            text=(
+                f"Total potential: {total_potential:.0f} €  |  "
+                f"Realised: {total_realised:.0f} €  |  "
+                f"Capture: {capture}"
+            ),
+            xref="paper", yref="paper",
+            x=0.01, y=0.01,
+            showarrow=False,
+            font=dict(size=11),
+            bgcolor="rgba(255,255,255,0.7)",
+        )
+
+    if has_dispatch:
+        da_id_cols = [
+            c for c in infer_market_position_columns(dispatch)
+            if any(mk in c.upper() for mk in ("DA", "ID"))
+        ]
+
+        if da_id_cols:
+            da_id_abs = dispatch[da_id_cols].abs().sum(axis=1)
+            slot_da_id: dict[pd.Timestamp, float] = {}
+            for slot in fcr_result.index:
+                slot_end = slot + pd.Timedelta(hours=4)
+                in_slot = da_id_abs[
+                    (da_id_abs.index >= slot) & (da_id_abs.index < slot_end)
+                ]
+                slot_da_id[slot] = float(in_slot.mean()) if not in_slot.empty else 0.0
+
+            da_id_dense = _expand_slots_to_step(pd.Series(slot_da_id), dense_index)
+
+            fig.add_trace(
+                go.Scatter(
+                    x=dense_index,
+                    y=da_id_dense,
+                    name="DA+ID volume [avg kW]",
+                    fill="tozeroy",
+                    fillcolor="rgba(100,100,100,0.15)",
+                    line=dict(color="rgba(100,100,100,0.5)", width=1),
+                    hovertemplate="%{y:.1f} kW avg DA+ID<extra></extra>",
+                ),
+                row=4, col=1
+            )
+
+        if realised_dense is not None:
+            fig.add_trace(
+                go.Scatter(
+                    x=dense_index,
+                    y=realised_dense * 1000.0,
+                    name="FCR committed [kW]",
+                    line=dict(color=FCR_GREEN, width=2),
+                    hovertemplate="%{y:.1f} kW FCR<extra></extra>",
+                ),
+                row=4, col=1
+            )
+
+    fig.update_yaxes(title_text="Capacity [MW]", row=1, col=1)
+    fig.update_yaxes(title_text="Price [€/MW]", row=2, col=1)
+    fig.update_yaxes(title_text="Revenue [€]", row=3, col=1)
+    if has_dispatch:
+        fig.update_yaxes(title_text="Volume [kW]", row=4, col=1)
+    fig.update_xaxes(title_text="Time", row=n_rows, col=1)
 
     fig.update_layout(
         title=title,
         template="plotly_white",
-        height=900,
+        height=300 * n_rows,
         hovermode="x unified",
         showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(l=60, r=60, t=80, b=60),
     )
-
-    fig.update_yaxes(title_text="Capacity [kWh]", row=1, col=1)
-    fig.update_yaxes(title_text="Price [€/MW]", row=2, col=1)
-    fig.update_yaxes(title_text="Revenue [€]", row=3, col=1)
-    fig.update_xaxes(title_text="Time", row=3, col=1)
 
     return fig

@@ -1,8 +1,10 @@
 import logging
 from pathlib import Path
 
+from flex_dep_opt.market.fcr import get_fcr_prices
 import pandas as pd
 from tqdm.auto import tqdm
+import pyomo.environ as pyo
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -26,6 +28,31 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger("gurobipy").setLevel(logging.WARNING)
 logging.getLogger("pyomo").setLevel(logging.WARNING)
 logging.getLogger("pyomo.core").setLevel(logging.ERROR)
+
+def _fcr_gate_closure_timestamp(slot_start: pd.Timestamp) -> pd.Timestamp:
+    # d-1 08:00 CET gate closure for slot
+    d_minus_1 = slot_start.normalize() - pd.Timedelta(days=1)
+    return d_minus_1.replace(hour=8, tzinfo=ZoneInfo("Europe/Berlin"))
+
+
+def _extract_fcr_from_model(model, window_idx: pd.DatetimeIndex) -> pd.Series:
+    result = pd.Series(0.0, index=window_idx, name="x_fcr_kw")
+
+    if not hasattr(model, "S_FCR"):
+        return result
+
+    if not hasattr(model, "_fcr_slot_starts"):
+        return result
+
+    fcr_slot_starts = model._fcr_slot_starts
+    for j in model.S_FCR:
+        slot_start = fcr_slot_starts[j]
+        slot_end = slot_start + pd.Timedelta(hours=4)
+        committed_kw = pyo.value(model.x_fcr[j])
+        mask = (window_idx >= slot_start) & (window_idx < slot_end)
+        result.loc[mask] = committed_kw
+
+    return result
 
 
 def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
@@ -66,6 +93,8 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
     # ============================================================
     flexibility_bounds_full = read_flexibility_bounds_csv(flex_cfg["bounds_file"])
 
+    fcr_prices_full = get_fcr_prices()
+
     # ============================================================
     # 3) Time settings
     # ============================================================
@@ -98,6 +127,13 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
     imb_pos_full = prices_by_market.pop("IMB_POS", None)
     imb_neg_full = prices_by_market.pop("IMB_NEG", None)
 
+    # slice fcr prices to simulation window
+    fcr_prices_full = fcr_prices_full.loc[
+        (fcr_prices_full.index >= start) & (fcr_prices_full.index <= end)
+    ]
+
+    all_fcr_slot_starts = list(fcr_prices_full.index)
+
     # ============================================================
     # 5) Model options
     # ============================================================
@@ -110,6 +146,10 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
     # 6) Initialize committed market positions
     # ============================================================
     committed_positions = {mk: pd.Series(0.0, index=full_index) for mk in prices_by_market.keys()}
+
+    committed_fcr_slots: dict[pd.Timestamp, float] = {
+        slot: 0.0 for slot in all_fcr_slot_starts
+    }
 
     # ============================================================
     # 7) Initialize energy state (band-consistent)
@@ -126,7 +166,8 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
     # ============================================================
     rows = []
     commit_rows = []
-
+    fcr_commit_rows = []
+    
     # ============================================================
     # 9) Rolling-horizon MPC loop
     # ============================================================
@@ -135,6 +176,7 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
 
         for i in range(len(full_index)):
             current_time = full_index[i]
+            next_time = current_time + pd.Timedelta(hours=step_hours)
             pbar.set_postfix(time=str(current_time), E=f"{E_state:.1f} kWh")
 
             # --------------------------------------------------------
@@ -164,6 +206,22 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
             window_imb_pos = (imb_pos_full.loc[window_idx] if (imb_enabled and imb_pos_full is not None) else None)
             window_imb_neg = (imb_neg_full.loc[window_idx] if (imb_enabled and imb_neg_full is not None) else None)
 
+            # fcr gates
+            window_start = window_idx[0]
+            window_end_ts = window_idx[-1] + pd.Timedelta(hours=4)  # last slot may start up to 4h before window end
+
+            window_fcr_prices = fcr_prices_full.loc[
+                (fcr_prices_full.index >= window_start) &
+                (fcr_prices_full.index < window_end_ts)
+            ]
+
+            # gate-open mask for slots in this window
+            # a slot is still open if its D-1 08:00 gate closure is in the future
+            fcr_gate_open_window: dict[pd.Timestamp, bool] = {}
+            for slot in window_fcr_prices.index:
+                gate_ts = _fcr_gate_closure_timestamp(slot)
+                fcr_gate_open_window[slot] = current_time < gate_ts
+
             # --------------------------------------------------------
             # 9.3) Build market activity masks (gate-closures enforced here)
             # --------------------------------------------------------
@@ -187,19 +245,40 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
             # --------------------------------------------------------
             # 9.4) Build and parameterize optimization model
             # --------------------------------------------------------
-            model = flexibility_commercialization(
-                depot=Depot(**dep_cfg),
-                prices_by_market=window_prices,
-                fee_eur_per_kwh_by_market=fees_by_market,
-                timestep_hours=step_hours,
-                virtual_arbitrage=virtual_arbitrage,
-                cycling_cost_eur_per_kwh=c_cyc,
-                market_activity_mask=decision_masks,
-                committed_positions={mk: committed_positions[mk].loc[window_idx] for mk in committed_positions},
-                flexibility_bounds=window_flexibility_bounds,
-                allow_imbalance=False,
-                imbalance_volume_penalty_eur_per_kwh=0.0,
-            )
+            def _build_model(allow_imbalance: bool, imb_penalty: float) -> object:
+                _m = flexibility_commercialization(
+                    depot=Depot(**dep_cfg),
+                    prices_by_market=window_prices,
+                    fee_eur_per_kwh_by_market=fees_by_market,
+                    timestep_hours=step_hours,
+                    virtual_arbitrage=virtual_arbitrage,
+                    cycling_cost_eur_per_kwh=c_cyc,
+                    market_activity_mask=decision_masks,
+                    committed_positions={
+                        mk: committed_positions[mk].loc[window_idx]
+                        for mk in committed_positions
+                    },
+                    flexibility_bounds=window_flexibility_bounds,
+                    allow_imbalance=allow_imbalance,
+                    imbalance_prices_pos=window_imb_pos,
+                    imbalance_prices_neg=window_imb_neg,
+                    imbalance_volume_penalty_eur_per_kwh=imb_penalty,
+                    fcr_prices=window_fcr_prices if not window_fcr_prices.empty else None,
+                )
+
+                if hasattr(_m, "S_FCR"):
+                    _m._fcr_slot_starts = list(window_fcr_prices.index)
+                    for j in _m.S_FCR:
+                        slot = _m._fcr_slot_starts[j]
+                        is_open = fcr_gate_open_window.get(slot, False)
+                        committed_val = committed_fcr_slots.get(slot, 0.0)
+                        _m.fcr_gate_open[j].set_value(1 if is_open else 0)
+                        if not is_open:
+                            _m.x_fcr_committed[j].set_value(committed_val)
+
+                return _m
+
+            model = _build_model(allow_imbalance=False, imb_penalty=0.0)
 
             # Helper to set E0 consistently on a given model
             def _set_E0(_model):
@@ -260,22 +339,9 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
                     tqdm.write("PASS1 infeasible → Imbalance activated (PASS2)")
                     logger.info(f"PASS1 infeasible at {current_time} → trying PASS2 (imbalance). Details: {e1}")
 
-                    model2 = flexibility_commercialization(
-                        depot=Depot(**dep_cfg),
-                        prices_by_market=window_prices,
-                        fee_eur_per_kwh_by_market=fees_by_market,
-                        timestep_hours=step_hours,
-                        virtual_arbitrage=virtual_arbitrage,
-                        cycling_cost_eur_per_kwh=c_cyc,
-                        market_activity_mask=decision_masks,
-                        committed_positions={mk: committed_positions[mk].loc[window_idx] for mk in committed_positions},
-                        flexibility_bounds=window_flexibility_bounds,
+                    model2 = _build_model(
                         allow_imbalance=True,
-                        imbalance_prices_pos=window_imb_pos,
-                        imbalance_prices_neg=window_imb_neg,
-                        imbalance_volume_penalty_eur_per_kwh=float(
-                            imb_cfg.get("imbalance_volume_penalty_eur_per_kwh", 1000.0)
-                        ),
+                        imb_penalty=float(imb_cfg.get("imbalance_volume_penalty_eur_per_kwh", 1000.0)),
                     )
 
                     try:
@@ -298,6 +364,8 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
             # 9.6) Extract first-step dispatch
             # --------------------------------------------------------
             dispatch_window = extract_dispatch(model, window_idx)
+            fcr_kw_window = _extract_fcr_from_model(model, window_idx)
+            dispatch_window["x_fcr_kw"] = fcr_kw_window
             first_row = dispatch_window.iloc[0].copy()
             first_row["used_rebap"] = used_rebap
             first_row.name = window_idx[0]
@@ -306,8 +374,6 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
             # --------------------------------------------------------
             # 9.7) Commit market positions at gate closure
             # --------------------------------------------------------
-            next_time = current_time + pd.Timedelta(hours=step_hours)
-
             trading_masks_next = build_market_activity_mask_for_time(
                 current_time=next_time,
                 delivery_times=window_idx,
@@ -354,6 +420,34 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
 
                     commit_rows.append(row)
 
+            # commit fcr slots at their gate closure
+            if hasattr(model, "S_FCR"):
+                for j in model.S_FCR:
+                    slot = model._fcr_slot_starts[j]
+                    gate_ts = _fcr_gate_closure_timestamp(slot)
+                    slot_was_open = current_time < gate_ts
+                    slot_now_closed = next_time >= gate_ts
+
+                    if slot_was_open and slot_now_closed:
+                        committed_val = pyo.value(model.x_fcr[j])
+                        committed_fcr_slots[slot] = committed_val
+                        fcr_price_val = float(window_fcr_prices.loc[slot])
+
+                        fcr_commit_rows.append({
+                            "slot_start": slot,
+                            "gate_closure_time": gate_ts,
+                            "committed_at": current_time,
+                            "x_fcr_kw": committed_val,
+                            "x_fcr_mw": committed_val / 1000.0,
+                            "fcr_price": fcr_price_val,
+                            "fcr_revenue_eur": (committed_val / 1000.0) * fcr_price_val,
+                        })
+
+                        logger.info(
+                            f"FCR slot committed: {slot} - {committed_val:.1f} kW "
+                            f"@ {fcr_price_val:.2f} €/MW"
+                        )
+
             # --------------------------------------------------------
             # 9.8) Roll energy state forward
             # --------------------------------------------------------
@@ -382,6 +476,7 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
         # --- Output filenames inside run_dir ---
         out_dispatch = run_dir / "dispatch.csv"
         out_commit = run_dir / "commit.csv"
+        out_fcr_commit = run_dir / "fcr_commit.csv"
 
         # --- Write dispatch ---
         if rows:
@@ -394,6 +489,11 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
             commit_df = pd.DataFrame(commit_rows)
             commit_df = commit_df.sort_values(["delivery_time", "current_time"])
             save_table_to_csv(commit_df, out_commit)
+
+        # fcr commits log
+        if fcr_commit_rows:
+            fcr_commit_df = pd.DataFrame(fcr_commit_rows).sort_values("slot_start")
+            save_table_to_csv(fcr_commit_df, out_fcr_commit)
 
         run_finished_at = datetime.now(ZoneInfo("Europe/Berlin"))
 
