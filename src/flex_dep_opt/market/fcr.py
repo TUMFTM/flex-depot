@@ -1,6 +1,5 @@
 import pandas as pd
 import yaml
-from flex_dep_opt.io.flexibility_io import read_flexibility_bounds_csv
 
 
 def load_settings(path: str):
@@ -34,55 +33,3 @@ def get_fcr_prices(years: list[int] = (2022, 2023, 2024, 2025)) -> pd.Series:
         .sort_index()
     )
     return fcr_prices
-
-# deprecated
-def generate_fcr_availability_df(years: list[int] = (2022, 2023, 2024, 2025)):
-    cfg = load_settings("src/flex_dep_opt/config/settings_example.yaml")
-    opt_cfg = cfg["optimization"]
-    flex_cfg = opt_cfg.get("flexibility", {})
-    flexibility_bounds_full = read_flexibility_bounds_csv(flex_cfg["bounds_file"])
-
-    fcr_prices = get_fcr_prices(years)
-
-    symmetric_limit = flexibility_bounds_full.copy()
-    if symmetric_limit.index.tz is None:
-        symmetric_limit.index = symmetric_limit.index.tz_localize(
-            "Europe/Berlin", ambiguous="infer", nonexistent="shift_forward"
-        )
-    else:
-        symmetric_limit.index = symmetric_limit.index.tz_convert("Europe/Berlin")
-
-    symmetric_limit["inst_symmetric_limit"] = (
-        symmetric_limit[["Capacity_upper_kWh", "Capacity_lower_kWh"]].abs().min(axis=1)
-    )
-
-    def min_capacity_in_slot(slot_start, capacity_series):
-        slot_end = slot_start + pd.Timedelta(hours=4)
-        mask = (capacity_series.index >= slot_start) & (capacity_series.index < slot_end)
-        values = capacity_series[mask]
-        return values.min() if not values.empty else 0.0
-
-    fcr_grouped_capacity = pd.Series(
-        {ts: min_capacity_in_slot(ts, symmetric_limit["inst_symmetric_limit"])
-         for ts in fcr_prices.index},
-        name="fcr_capacity_kWh",
-    )
-
-    fcr_grouped_capacity = (fcr_grouped_capacity // 1000) * 1000
-
-    fcr_result = fcr_grouped_capacity.to_frame().join(fcr_prices.rename("fcr_price"), how="inner")
-    fcr_result = fcr_result.dropna(subset=["fcr_capacity_kWh", "fcr_price"])
-    fcr_result["fcr_revenue_eur"] = (fcr_result["fcr_capacity_kWh"] / 1000.0) * fcr_result["fcr_price"]
-
-    common_index = (
-        fcr_result.index
-        .intersection(symmetric_limit.index)
-        .intersection(fcr_grouped_capacity.index)
-    )
-    fcr_result = fcr_result.loc[common_index]
-    symmetric_limit = symmetric_limit.loc[common_index]
-    fcr_grouped_capacity = fcr_grouped_capacity.loc[common_index]
-
-    print(fcr_result)
-
-    return symmetric_limit, fcr_grouped_capacity, fcr_result
