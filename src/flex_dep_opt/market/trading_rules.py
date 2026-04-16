@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Dict, List, Optional, Tuple
 
+from flex_dep_opt.config.settings import OptimizationSettings
 import pandas as pd
 
 
@@ -23,7 +24,7 @@ def _parse_hhmm(value: str, default: Tuple[int, int] = (12, 0)) -> Tuple[int, in
 def gate_closure_timestamp(
     market: str,
     delivery_time: pd.Timestamp,
-    optimization_cfg: dict,
+    optimization_cfg: OptimizationSettings,
 ) -> pd.Timestamp:
     """
     Compute the market gate-closure timestamp for a given delivery time.
@@ -55,12 +56,12 @@ def gate_closure_timestamp(
     ValueError
         If `market` is unknown.
     """
-    trading_cfg = optimization_cfg.get("trading", {})
+    trading_cfg = optimization_cfg.trading
 
     if market == "DA":
-        da_cfg = trading_cfg.get("dayahead", {})
-        gc_hour_str = da_cfg.get("gate_closure_hour", "12:00")
-        closes_prev = bool(da_cfg.get("closes_previous_day", True))
+        da_cfg = trading_cfg.dayahead
+        gc_hour_str = da_cfg.gate_closure_hour
+        closes_prev = da_cfg.closes_previous_day
 
         gc_h, gc_m = _parse_hhmm(gc_hour_str, default=(12, 0))
 
@@ -73,8 +74,8 @@ def gate_closure_timestamp(
         return base_date + pd.Timedelta(hours=gc_h, minutes=gc_m)
 
     if market == "ID":
-        id_cfg = trading_cfg.get("intraday", {})
-        offset_min = int(id_cfg.get("offset_minutes_before_delivery", 30))
+        id_cfg = trading_cfg.intraday
+        offset_min = id_cfg.offset_minutes_before_delivery
         return delivery_time - pd.Timedelta(minutes=offset_min)
 
     raise ValueError(f"Unknown market: {market}")
@@ -83,20 +84,16 @@ def gate_closure_timestamp(
 # =============================================================================
 # Market selection helpers
 # =============================================================================
-def _enabled_markets_from_cfg(optimization_cfg: dict) -> List[str]:
+def _enabled_markets_from_cfg(optimization_cfg: OptimizationSettings) -> List[str]:
     """
     Return enabled markets as a list of market codes ("DA", "ID", ...).
-
-    The expected structure is:
-        optimization_cfg["markets"]["dayahead"]["enabled"]
-        optimization_cfg["markets"]["intraday"]["enabled"]
     """
-    market_cfg = optimization_cfg["markets"]
+    market_cfg = optimization_cfg.markets
 
     enabled: List[str] = []
-    if market_cfg.get("dayahead", {}).get("enabled", False):
+    if market_cfg.dayahead.enabled:
         enabled.append("DA")
-    if market_cfg.get("intraday", {}).get("enabled", False):
+    if market_cfg.intraday.enabled:
         enabled.append("ID")
     return enabled
 
@@ -107,7 +104,7 @@ def _enabled_markets_from_cfg(optimization_cfg: dict) -> List[str]:
 def build_market_activity_mask_for_time(
     current_time: pd.Timestamp,
     delivery_times: pd.DatetimeIndex,
-    optimization_cfg: dict,
+    optimization_cfg: OptimizationSettings,
 ) -> Dict[str, pd.Series]:
     """
     Build market activity masks for ONE MPC step.
@@ -136,8 +133,8 @@ def build_market_activity_mask_for_time(
         One boolean series per enabled market, indexed by `delivery_times`.
         If no markets are enabled, returns an empty dict.
     """
-    trading_cfg = optimization_cfg.get("trading", {})
-    mode = trading_cfg.get("mode", "none")
+    trading_cfg = optimization_cfg.trading
+    mode = trading_cfg.mode
 
     enabled_markets = _enabled_markets_from_cfg(optimization_cfg)
     mask_by_market: Dict[str, pd.Series] = {}

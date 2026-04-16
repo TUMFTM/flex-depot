@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import webbrowser
 
+from flex_dep_opt.config.settings import Settings
 import pandas as pd
 
 from flex_dep_opt.io.prices_io import build_prices_from_settings, build_fees_from_settings
@@ -15,26 +16,20 @@ from flex_dep_opt.post.plots import plot_market_cashflows_plotly, plot_mpc_dispa
 from flex_dep_opt.io.results_io import save_dispatch_to_csv, save_summary_to_csv, read_latest_run_pointer
 
 
-def postprocess_mpc_results(cfg: dict) -> None:
+def postprocess_mpc_results(settings: Settings) -> None:
     """
     Postprocessing workflow for MPC results.
 
     Steps
     -----
-    1) Read dispatch.csv and commit.csv from cfg["simulation"]
+    1) Read dispatch.csv and commit.csv from settings.simulation
     2) Load prices and fees from settings and slice to [start, end]
     3) Compute metrics (cashflows, aggregates, KPIs)
     4) Export optional postprocessing CSVs (cashflows + KPI summary)
     5) Generate interactive Plotly HTML plots
     """
-    sim = cfg["simulation"]
+    sim = settings.simulation
 
-    # ------------------------------------------------------------------
-    # Name-based I/O (new convention)
-    # ------------------------------------------------------------------
-    name = str(sim.get("name", "")).strip()
-    if not name:
-        raise ValueError("settings.yaml: simulation.name must be set.")
 
     results_root = Path("results")
     run_dir = read_latest_run_pointer(results_root)
@@ -50,8 +45,8 @@ def postprocess_mpc_results(cfg: dict) -> None:
     # ------------------------------------------------------------------
     # Time window
     # ------------------------------------------------------------------
-    start = pd.to_datetime(sim["start"]).tz_localize("Europe/Berlin")
-    end = pd.to_datetime(sim["end"]).tz_localize("Europe/Berlin")
+    start = pd.to_datetime(sim.start).tz_localize("Europe/Berlin")
+    end = pd.to_datetime(sim.end).tz_localize("Europe/Berlin")
 
     # ------------------------------------------------------------------
     # Load dispatch
@@ -83,13 +78,13 @@ def postprocess_mpc_results(cfg: dict) -> None:
     # -------------------------------------------------------------------------
     # Prices + fees
     # -------------------------------------------------------------------------
-    prices_by_market = build_prices_from_settings(cfg)
+    prices_by_market = build_prices_from_settings(settings)
     for mk, s in list(prices_by_market.items()):
         prices_by_market[mk] = s.loc[start:end]
 
-    fees_by_market = build_fees_from_settings(cfg)
+    fees_by_market = build_fees_from_settings(settings)
 
-    dt = float(sim["timestep_hours"])
+    dt = sim.timestep_hours
 
     fcr_kpis: dict = {}
     if "x_fcr_kw" in dispatch.columns and "fcr" in prices_by_market:

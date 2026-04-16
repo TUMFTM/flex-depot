@@ -15,13 +15,15 @@ from flex_dep_opt.io.flexibility_io import (
     read_flexibility_bounds_csv,
     align_and_validate_flexibility_bounds,
 )
-from flex_dep_opt.io.results_io import save_dispatch_to_csv, save_table_to_csv, save_settings_yaml_file, make_run_dir, write_latest_run_pointer, save_run_info_txt
+from flex_dep_opt.io.results_io import save_dispatch_to_csv, save_table_to_csv, make_run_dir, write_latest_run_pointer, save_run_info_txt
 from flex_dep_opt.opt.model import flexibility_commercialization
 from flex_dep_opt.opt.solve import solve_model, extract_dispatch
 from flex_dep_opt.market.trading_rules import (
     build_market_activity_mask_for_time,
     gate_closure_timestamp,
 )
+
+from flex_dep_opt.config.settings import Settings
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -55,7 +57,7 @@ def _extract_fcr_from_model(model, window_idx: pd.DatetimeIndex) -> pd.Series:
     return result
 
 
-def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
+def run_mpc(settings: Settings) -> None:
     """
     Rolling-horizon Model Predictive Control (MPC).
 
@@ -76,41 +78,41 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
     # ============================================================
     # 1) Read configuration blocks
     # ============================================================
-    sim_cfg = cfg["simulation"]
-    opt_cfg = cfg["optimization"]
-    mpc_cfg = opt_cfg["mpc"]
-    flex_cfg = opt_cfg.get("flexibility", {})
-    dep_cfg = opt_cfg["depot"]
+    sim_cfg = settings.simulation
+    opt_cfg = settings.optimization
+    mpc_cfg = opt_cfg.mpc
+    flex_cfg = opt_cfg.flexibility
+    dep_cfg = opt_cfg.depot
 
-    imb_cfg = opt_cfg.get("imbalance", {})
-    imb_enabled = bool(imb_cfg.get("enabled", False))
+    imb_cfg = opt_cfg.imbalance
+    imb_enabled = imb_cfg.enabled
 
-    terminal_enabled = bool(mpc_cfg.get("terminal_condition", False))
-    terminal_weight = float(mpc_cfg.get("terminal_weight_eur_per_kwh", 50.0))
+    terminal_enabled = bool(mpc_cfg.terminal_condition)
+    terminal_weight = float(mpc_cfg.terminal_weight_eur_per_kwh)
 
     # ============================================================
     # 2) Load flexibility bounds (flex bands)
     # ============================================================
-    flexibility_bounds_full = read_flexibility_bounds_csv(flex_cfg["bounds_file"])
+    flexibility_bounds_full = read_flexibility_bounds_csv(flex_cfg.bounds_file)
 
     fcr_prices_full = get_fcr_prices()
 
     # ============================================================
     # 3) Time settings
     # ============================================================
-    step_hours = float(sim_cfg["timestep_hours"])
-    da_horizon_hours = float(mpc_cfg["da_horizon_hours"])
-    id_horizon_hours = float(mpc_cfg["id_horizon_hours"])
+    step_hours = float(sim_cfg.timestep_hours)
+    da_horizon_hours = float(mpc_cfg.da_horizon_hours)
+    id_horizon_hours = float(mpc_cfg.id_horizon_hours)
     da_horizon_steps = int(da_horizon_hours / step_hours)
 
     # ============================================================
     # 4) Load prices, fees and simulation time index
     # ============================================================
-    prices_by_market = build_prices_from_settings(cfg)
-    fees_by_market = build_fees_from_settings(cfg)
+    prices_by_market = build_prices_from_settings(settings)
+    fees_by_market = build_fees_from_settings(settings)
 
-    start = pd.to_datetime(sim_cfg["start"]).tz_localize("Europe/Berlin")
-    end = pd.to_datetime(sim_cfg["end"]).tz_localize("Europe/Berlin")
+    start = pd.to_datetime(sim_cfg.start).tz_localize("Europe/Berlin")
+    end = pd.to_datetime(sim_cfg.end).tz_localize("Europe/Berlin")
 
     for mk in prices_by_market:
         prices_by_market[mk] = prices_by_market[mk].loc[start:end]
@@ -137,10 +139,10 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
     # ============================================================
     # 5) Model options
     # ============================================================
-    virtual_arbitrage = opt_cfg.get("virtual_arbitrage", False)
+    virtual_arbitrage = opt_cfg.virtual_arbitrage
 
-    cyc_cfg = flex_cfg.get("cycle_regularization", {})
-    c_cyc = float(cyc_cfg["cost_eur_per_kwh_throughput"]) if cyc_cfg.get("enabled", False) else 0.0
+    cyc_cfg = flex_cfg.cycle_regularization
+    c_cyc = cyc_cfg.cost_eur_per_kwh_throughput if cyc_cfg.enabled else 0.0
 
     # ============================================================
     # 6) Initialize committed market positions
@@ -247,7 +249,7 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
             # --------------------------------------------------------
             def _build_model(allow_imbalance: bool, imb_penalty: float) -> object:
                 _m = flexibility_commercialization(
-                    depot=Depot(**dep_cfg),
+                    depot=Depot(dep_cfg.eta_grid2depot, dep_cfg.eta_depot2grid, dep_cfg.grid_connection_limit),
                     prices_by_market=window_prices,
                     fee_eur_per_kwh_by_market=fees_by_market,
                     timestep_hours=step_hours,
@@ -326,7 +328,7 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
             try:
                 _set_E0(model)
                 _set_terminal_terms(model)
-                solve_model(model, solver_name=sim_cfg["solver"])
+                solve_model(model, solver_name=sim_cfg.solver)
                 solved = True
                 used_rebap = False
 
@@ -341,13 +343,13 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
 
                     model2 = _build_model(
                         allow_imbalance=True,
-                        imb_penalty=float(imb_cfg.get("imbalance_volume_penalty_eur_per_kwh", 1000.0)),
+                        imb_penalty=imb_cfg.imbalance_volume_penalty_eur_per_kwh,
                     )
 
                     try:
                         _set_E0(model2)
                         _set_terminal_terms(model2)
-                        solve_model(model2, solver_name=sim_cfg["solver"])
+                        solve_model(model2, solver_name=sim_cfg.solver)
                         solved = True
                         used_rebap = True
                         model = model2
@@ -407,7 +409,7 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
                     }
 
                     # Mode "none": commit only the immediate first decision (as before)
-                    if opt_cfg["trading"]["mode"] == "none" and tau == window_idx[0]:
+                    if opt_cfg.trading.mode == "none" and tau == window_idx[0]:
                         committed_positions[mk].loc[tau] = row["p_opt"]
                         row["committed_new"] = row["p_opt"]
                         row["commit_now"] = True
@@ -461,7 +463,7 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
     # ============================================================
     finally:
         # --- Read simulation "name" from settings ---
-        name = str(sim_cfg.get("name", "")).strip()
+        name = sim_cfg.name.strip()
         if not name:
             raise ValueError("settings.yaml: simulation.name must be set (e.g. 'illustrative_example').")
 
@@ -470,8 +472,7 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
         write_latest_run_pointer(run_dir, results_root="results")
 
         # --- Save the exact YAML that was passed via CLI / batch (1:1 copy) ---
-        if config_path is not None:
-            save_settings_yaml_file(config_path, run_dir)
+        settings.save_to_toml(run_dir / "settings.toml")
 
         # --- Output filenames inside run_dir ---
         out_dispatch = run_dir / "dispatch.csv"
@@ -500,8 +501,8 @@ def run_mpc(cfg: dict, config_path: str | Path | None = None) -> None:
         save_run_info_txt(
             run_dir=run_dir,
             simulation_name=name,
-            config_path=config_path,
-            solver_name=str(sim_cfg.get("solver", "")),
+            config_path=settings.get_source_path(),
+            solver_name=sim_cfg.solver,
             start_time=run_started_at,
             end_time=run_finished_at,
             tz="Europe/Berlin",

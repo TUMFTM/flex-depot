@@ -1,11 +1,10 @@
 import argparse
 import yaml
 
+from flex_dep_opt.config.settings import Settings
+
 from flex_dep_opt.workflows.mpc_workflow import run_mpc
 from flex_dep_opt.workflows.postprocessing_workflow import postprocess_mpc_results
-
-from flex_dep_opt.config.load_settings import load_settings
-
 
 def main():
     parser = argparse.ArgumentParser(prog="flex-dep-opt")
@@ -19,14 +18,12 @@ def main():
 
     args = parser.parse_args()
 
-    # run mpc (Rolling Horizon)
+    settings = Settings()
+
     if args.cmd == "run-sim":
-        cfg = load_settings(args.config)
-        run_mpc(cfg, config_path=args.config)
+        run_mpc(settings)
         return
 
-    # run plot
     if args.cmd == "run-post":
-        cfg = load_settings(args.config)
-        postprocess_mpc_results(cfg)
+        postprocess_mpc_results(settings)
         return

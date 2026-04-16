@@ -119,36 +119,6 @@ def make_run_dir(base_dir: str | Path, run_name: str, *, tz: str = "Europe/Berli
     return folder
 
 
-def save_settings_yaml_file(settings_path: str | Path, out_dir: str | Path) -> str:
-    """
-    Copy the original settings YAML file into a run output directory.
-
-    Parameters
-    ----------
-    settings_path:
-        Path to the YAML file that was loaded by the CLI.
-    out_dir:
-        Output directory (the run folder).
-
-    Returns
-    -------
-    str
-        Absolute path to the copied YAML file.
-    """
-    settings_path = Path(settings_path)
-    if not settings_path.exists():
-        raise FileNotFoundError(f"Settings YAML not found: {settings_path}")
-
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    # Keep original filename (usually settings_example.yaml)
-    out_path = out_dir / settings_path.name
-
-    shutil.copy2(settings_path, out_path)
-    return str(out_path.resolve())
-
-
 def write_latest_run_pointer(run_dir: str | Path, results_root: str | Path = "results") -> str:
     """
     Write a pointer file results/LATEST.txt containing the absolute path to the latest run directory.

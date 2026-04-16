@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Mapping, Union
 
+from flex_dep_opt.config.settings import Settings
 import pandas as pd
 
 PathLike = Union[str, Path]
@@ -86,7 +87,7 @@ def read_prices_csv(path: PathLike, tz: str = "Europe/Berlin") -> pd.Series:
 # =============================================================================
 # Settings-based builders
 # =============================================================================
-def build_prices_from_settings(settings: Mapping[str, Any], *, tz: str = "Europe/Berlin") -> Dict[str, pd.Series]:
+def build_prices_from_settings(settings: Settings, *, tz: str = "Europe/Berlin") -> Dict[str, pd.Series]:
     """
     Build price series by market from settings.
 
@@ -99,35 +100,35 @@ def build_prices_from_settings(settings: Mapping[str, Any], *, tz: str = "Europe
     """
     prices_by_market: Dict[str, pd.Series] = {}
 
-    mk_cfg = settings["optimization"]["markets"]
+    mk_cfg = settings.optimization.markets
 
-    if mk_cfg["dayahead"]["enabled"]:
-        prices_by_market["DA"] = read_prices_csv(mk_cfg["dayahead"]["source"], tz=tz)
+    if mk_cfg.dayahead.enabled:
+        prices_by_market["DA"] = read_prices_csv(mk_cfg.dayahead.source, tz=tz)
 
-    if mk_cfg["intraday"]["enabled"]:
-        prices_by_market["ID"] = read_prices_csv(mk_cfg["intraday"]["source"], tz=tz)
+    if mk_cfg.intraday.enabled:
+        prices_by_market["ID"] = read_prices_csv(mk_cfg.intraday.source, tz=tz)
 
     # Optional: imbalance / reBAP (pos/neg)
-    imb_cfg = settings["optimization"].get("imbalance", {})
-    if imb_cfg.get("enabled", False):
-        prices_by_market["IMB_POS"] = read_prices_csv(imb_cfg["source_pos"], tz=tz)
-        prices_by_market["IMB_NEG"] = read_prices_csv(imb_cfg["source_neg"], tz=tz)
+    imb_cfg = settings.optimization.imbalance
+    if imb_cfg.enabled:
+        prices_by_market["IMB_POS"] = read_prices_csv(imb_cfg.source_pos, tz=tz)
+        prices_by_market["IMB_NEG"] = read_prices_csv(imb_cfg.source_neg, tz=tz)
 
     return prices_by_market
 
 
-def build_fees_from_settings(settings: Mapping[str, Any]) -> Dict[str, float]:
+def build_fees_from_settings(settings: Settings) -> Dict[str, float]:
     """
     Build a dict of per-market transaction fees [EUR/kWh] keyed by market code.
     """
     fees_by_market: Dict[str, float] = {}
 
-    mk_cfg = settings["optimization"]["markets"]
+    mk_cfg = settings.optimization.markets
 
-    if mk_cfg["dayahead"]["enabled"]:
-        fees_by_market["DA"] = float(mk_cfg["dayahead"].get("fee_eur_per_kwh", 0.0))
+    if mk_cfg.dayahead.enabled:
+        fees_by_market["DA"] = mk_cfg.dayahead.fee_eur_per_kwh
 
-    if mk_cfg["intraday"]["enabled"]:
-        fees_by_market["ID"] = float(mk_cfg["intraday"].get("fee_eur_per_kwh", 0.0))
+    if mk_cfg.intraday.enabled:
+        fees_by_market["ID"] = mk_cfg.intraday.fee_eur_per_kwh
 
     return fees_by_market

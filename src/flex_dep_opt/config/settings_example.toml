@@ -8,12 +8,12 @@ solver = "cbc"
 [optimization.markets.dayahead]
 enabled = true
 source = "data/prices/prices_DA_example.csv"
-fee_eur_per_kwh = 0.005
+fee_eur_per_kwh = 0.005                      # clearing fee + exchange fee + broker fee + ...
 
 [optimization.markets.intraday]
 enabled = true
 source = "data/prices/prices_IDC_example.csv"
-fee_eur_per_kwh = 0.008
+fee_eur_per_kwh = 0.008                       # clearing fee + exchange fee + broker fee + ...
 
 [optimization.trading]
 mode = "realistic"
@@ -23,7 +23,7 @@ gate_closure_hour = "12:00"
 closes_previous_day = true
 
 [optimization.trading.intraday]
-offset_minutes_before_delivery = 5
+offset_minutes_before_delivery = 5 # trading until T-5min
 
 [optimization.imbalance]
 enabled = true
