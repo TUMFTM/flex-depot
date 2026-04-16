@@ -26,7 +26,7 @@ def _load_fcr_price_file(year: int = 2025) -> pd.Series:
 
     return df[price_col].rename("fcr_price")
 
-def get_fcr_prices(years: list[int] = (2025)) -> pd.Series:
+def get_fcr_prices(years: list[int] = [2025]) -> pd.Series:
     fcr_prices = (
         pd.concat([_load_fcr_price_file(y) for y in years])
         .pipe(lambda s: s[~s.index.duplicated(keep="first")])
