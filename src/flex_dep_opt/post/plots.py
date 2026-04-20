@@ -251,7 +251,6 @@ def plot_mpc_dispatch_plotly(
     prices_by_market: Mapping[str, pd.Series] | None = None,
     *,
     commit_df: pd.DataFrame | None = None,
-    fcr_result: pd.DataFrame | None = None,
     title: str = "MPC Flexband Dispatch and Market Positions",
 ) -> go.Figure:
     """
@@ -324,21 +323,6 @@ def plot_mpc_dispatch_plotly(
                 row=1, col=1
             )
 
-    if fcr_result is not None and "fcr_price" in fcr_result.columns:
-        fig.add_trace(
-            go.Scatter(
-                x=fcr_result.index,
-                y=fcr_result["fcr_price"],
-                mode="lines",
-                name="FCR Price [€/MW per 4h]",
-                line=dict(width=2, color=FCR_GREEN, dash="dot"),
-                line_shape="hv",
-                visible="legendonly",
-                yaxis="y1",
-            ),
-            row=1, col=1
-        )
-
     # Row 2: Power band + p_net
     fig.add_trace(
         go.Scatter(x=dispatch.index, y=dispatch["P_upper_kw"], mode="lines", name="P upper [kW]",
@@ -358,19 +342,7 @@ def plot_mpc_dispatch_plotly(
     )
 
     if has_fcr:
-        if fcr_result is not None and "fcr_capacity_kWh" in fcr_result.columns:
-            committed_slots = dispatch["x_fcr_kw"].replace(0.0, float("nan")).dropna()
-            slot_vals = {}
-            for slot in fcr_result.index:
-                slot_end = slot + pd.Timedelta(hours=4)
-                in_slot = committed_slots[
-                    (committed_slots.index >= slot) & (committed_slots.index < slot_end)
-                ]
-                slot_vals[slot] = in_slot.max() if not in_slot.empty else 0.0
-            x_fcr_slots = pd.Series(slot_vals)
-        else:
-            x_fcr_slots = dispatch["x_fcr_kw"].replace(0.0, float("nan")).dropna()
-
+        x_fcr_slots = dispatch["x_fcr_kw"].replace(0.0, float("nan")).dropna()
         x_fcr_dense = _expand_slots_to_step(x_fcr_slots, dispatch.index)
 
         headroom_upper = dispatch["p_net_kw"] + x_fcr_dense

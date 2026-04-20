@@ -1,5 +1,4 @@
 import argparse
-import yaml
 
 from flex_dep_opt.config.settings import Settings
 

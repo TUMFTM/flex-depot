@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from flex_dep_opt.config.settings import OptimizationSettings
 import pandas as pd
