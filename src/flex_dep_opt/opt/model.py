@@ -24,6 +24,7 @@ def flexibility_commercialization(
     imbalance_prices_neg: pd.Series | None = None,
     imbalance_volume_penalty_eur_per_kwh: float = 0.0,
     fcr_prices: pd.Series | None = None,
+    fcr_energy_req_hours: float = 1.5,
 ) -> pyo.ConcreteModel:
     """
     Flex-band based multi-market commercialization model (Pyomo).
@@ -349,6 +350,7 @@ def flexibility_commercialization(
             rule=lambda mdl, j: mdl.x_fcr[j] <= mdl.fcr_cap_max_kw[j] * mdl.y_fcr[j],
         )
 
+        # power headroom constraints: ensure that power bands can accommodate FCR
         def fcr_headroom_up_rule(mdl, j, t):
             return mdl.p_net[t] + mdl.x_fcr[j] <= mdl.P_upper[t]
 
@@ -359,6 +361,28 @@ def flexibility_commercialization(
             (j, t) for j, steps in slot_steps.items() for t in steps
         ]
         m.FCR_JT = pyo.Set(initialize=fcr_jt_pairs, dimen=2)
+
+        m.fcr_headroom_up = pyo.Constraint(m.FCR_JT, rule=fcr_headroom_up_rule)
+        m.fcr_headroom_dn = pyo.Constraint(m.FCR_JT, rule=fcr_headroom_dn_rule)
+
+        # energy headroom constraints: ensure that energy capacity is balanced and can accommodate FCR requirements
+        m.fcr_energy_req_hours = pyo.Param(initialize=float(fcr_energy_req_hours))
+
+        def fcr_energy_headroom_up_rule(mdl, j, t):
+            fcr_energy_needed_kwh = (mdl.x_fcr[j] * mdl.fcr_energy_req_hours) / mdl.eta_d
+            return mdl.E[t] - fcr_energy_needed_kwh >= mdl.E_lower[t]
+
+        def fcr_energy_headroom_dn_rule(mdl, j, t):
+            fcr_energy_incoming_kwh = mdl.x_fcr[j] * mdl.fcr_energy_req_hours * mdl.eta_c
+            return mdl.E[t] + fcr_energy_incoming_kwh <= mdl.E_upper[t]
+
+        fcr_jt_pairs = [
+            (j, t) for j, steps in slot_steps.items() for t in steps
+        ]
+        m.FCR_JT = pyo.Set(initialize=fcr_jt_pairs, dimen=2)
+
+        m.fcr_energy_cap_up = pyo.Constraint(m.FCR_JT, rule=fcr_energy_headroom_up_rule)
+        m.fcr_energy_cap_dn = pyo.Constraint(m.FCR_JT, rule=fcr_energy_headroom_dn_rule)
 
         m.fcr_headroom_up = pyo.Constraint(m.FCR_JT, rule=fcr_headroom_up_rule)
         m.fcr_headroom_dn = pyo.Constraint(m.FCR_JT, rule=fcr_headroom_dn_rule)
