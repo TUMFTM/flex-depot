@@ -252,6 +252,9 @@ def plot_mpc_dispatch_plotly(
     *,
     commit_df: pd.DataFrame | None = None,
     title: str = "MPC Flexband Dispatch and Market Positions",
+    fcr_energy_req_hours: float = 1.5,
+    eta_c: float = 1.0,
+    eta_d: float = 1.0,
 ) -> go.Figure:
     """
     MPC Visualisierung für Flexband-Modell.
@@ -260,7 +263,7 @@ def plot_mpc_dispatch_plotly(
     --------
     1) Market prices (optional)
     2) Power band + p_net
-    3) Energy band + E
+    3) Energy band + E + FCR Energy Buffers
     4) Market positions (bars) + optional imbalance position
     """
     if not isinstance(dispatch.index, pd.DatetimeIndex):
@@ -276,6 +279,10 @@ def plot_mpc_dispatch_plotly(
     has_used_flag = "used_rebap" in dispatch.columns
 
     has_fcr = "x_fcr_kw" in dispatch.columns
+    x_fcr_dense = None
+    if has_fcr:
+        x_fcr_slots = dispatch["x_fcr_kw"].replace(0.0, float("nan")).dropna()
+        x_fcr_dense = _expand_slots_to_step(x_fcr_slots, dispatch.index)
 
     # Commit times (for hover annotation)
     commit_time_by_market: dict[str, pd.Series] = {}
@@ -341,10 +348,7 @@ def plot_mpc_dispatch_plotly(
         row=2, col=1
     )
 
-    if has_fcr:
-        x_fcr_slots = dispatch["x_fcr_kw"].replace(0.0, float("nan")).dropna()
-        x_fcr_dense = _expand_slots_to_step(x_fcr_slots, dispatch.index)
-
+    if has_fcr and x_fcr_dense is not None:
         headroom_upper = dispatch["p_net_kw"] + x_fcr_dense
         headroom_lower = dispatch["p_net_kw"] - x_fcr_dense
 
@@ -389,11 +393,37 @@ def plot_mpc_dispatch_plotly(
                    fillcolor="rgba(0,0,0,0.08)"),
         row=3, col=1
     )
+
     fig.add_trace(
         go.Scatter(x=dispatch.index, y=dispatch["E_kWh"], mode="lines", name="E [kWh]",
                    line=dict(width=3, color="rgb(162,173,0)")),
         row=3, col=1
     )
+
+    if has_fcr and x_fcr_dense is not None:
+        buffer_dn_kwh = x_fcr_dense * fcr_energy_req_hours * eta_c
+        buffer_up_kwh = (x_fcr_dense * fcr_energy_req_hours) / eta_d
+
+        fcr_potential_e_max = dispatch["E_kWh"] + buffer_dn_kwh
+        fcr_potential_e_min = dispatch["E_kWh"] - buffer_up_kwh
+
+        fig.add_trace(
+            go.Scatter(
+                x=dispatch.index, y=fcr_potential_e_max, mode="lines", name="Max Potential E (FCR Down)",
+                line=dict(width=1, color=FCR_GREEN, dash="dot"),
+                hovertemplate="Max Potential SoC: %{y:.1f} kWh<extra></extra>"
+            ),
+            row=3, col=1
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=dispatch.index, y=fcr_potential_e_min, mode="lines", name="Min Potential E (FCR Up)",
+                fill="tonexty", fillcolor=FCR_GREEN_LIGHT, line=dict(width=1, color=FCR_GREEN, dash="dot"),
+                hovertemplate="Min Potential SoC: %{y:.1f} kWh<extra></extra>"
+            ),
+            row=3, col=1
+        )
 
     # Row 4: Market positions
     for col in market_cols:
@@ -427,11 +457,7 @@ def plot_mpc_dispatch_plotly(
             row=4, col=1
         )
 
-    if has_fcr:
-        if "x_fcr_dense" not in dir():
-            committed_slots = dispatch["x_fcr_kw"].replace(0.0, float("nan")).dropna()
-            x_fcr_dense = _expand_slots_to_step(committed_slots, dispatch.index)
-
+    if has_fcr and x_fcr_dense is not None:
         fig.add_trace(
             go.Scatter(
                 x=dispatch.index,
