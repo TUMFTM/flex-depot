@@ -29,10 +29,17 @@ class TradingDayahead(BaseModel):
 class TradingIntraday(BaseModel):
     offset_minutes_before_delivery: int = 30
 
+class FCRSettings(BaseModel):
+    enabled: bool = False
+    prices_source: str
+    energy_req_hours: float
+    acceptance_rate: Annotated[float, Field(gt=0.0, le=1.0)] = 1.0
+
 class TradingSettings(BaseModel):
     mode: Literal["none", "realistic"] = "none"
     dayahead: TradingDayahead
     intraday: TradingIntraday
+    fcr: FCRSettings
 
 class ImbalanceSettings(BaseModel):
     enabled: bool = False
