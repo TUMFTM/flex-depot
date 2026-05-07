@@ -1,4 +1,55 @@
 import pandas as pd
+import warnings
+
+import pandas as pd
+import warnings
+
+FCR_FREQ_DATETIME_COL = "DATETIME"
+FCR_FREQ_MEAN_COL     = "FREQ_MEAN_HZ"
+
+def get_fcr_frequency_data(file_path: str, tz: str = "Europe/Berlin") -> pd.DataFrame:
+    df = pd.read_csv(file_path)
+    if FCR_FREQ_MEAN_COL not in df.columns:
+        freq_col = next((c for c in df.columns if "FREQ" in c.upper()), None)
+        if freq_col:
+            df = df.rename(columns={freq_col: FCR_FREQ_MEAN_COL})
+        else:
+            raise ValueError(f"FCR frequency CSV missing required column: {FCR_FREQ_MEAN_COL}")
+
+    if FCR_FREQ_DATETIME_COL not in df.columns:
+        if not isinstance(df.index, pd.DatetimeIndex):
+            raise ValueError(f"FCR frequency CSV missing column: {FCR_FREQ_DATETIME_COL}")
+    else:
+        ts = pd.to_datetime(df[FCR_FREQ_DATETIME_COL], errors="coerce", utc=False)
+        if ts.isna().any():
+            raise ValueError(f"Unparsable timestamps in '{FCR_FREQ_DATETIME_COL}'")
+        
+        if ts.dt.tz is None:
+            try:
+                ts = ts.dt.tz_localize(tz, ambiguous=False, nonexistent="shift_forward")
+            except Exception:
+                ts = ts.dt.tz_localize("UTC").dt.tz_convert(tz)
+        else:
+            ts = ts.dt.tz_convert(tz)
+        
+        df.index = pd.DatetimeIndex(ts)
+        df = df.drop(columns=[FCR_FREQ_DATETIME_COL])
+
+    if df[FCR_FREQ_MEAN_COL].dtype == object:
+        df[FCR_FREQ_MEAN_COL] = (
+            df[FCR_FREQ_MEAN_COL].astype(str)
+            .str.replace(",", ".", regex=False)
+        )
+    
+    df[FCR_FREQ_MEAN_COL] = pd.to_numeric(df[FCR_FREQ_MEAN_COL], errors="coerce")
+    
+    df = df.sort_index()
+    if df.index.has_duplicates:
+        warnings.warn("Duplicate timestamps found; keeping first occurrence.", UserWarning)
+        df = df[~df.index.duplicated(keep="first")]
+
+    return df[[FCR_FREQ_MEAN_COL]]
+
 
 def get_fcr_prices(file_path: str) -> pd.Series:
     df = pd.read_excel(file_path)
@@ -21,3 +72,15 @@ def get_fcr_prices(file_path: str) -> pd.Series:
     )
 
     return fcr_series
+
+FREQUENCY_NOMINAL_HZ = 50.0
+FREQUENCY_DEADBAND_HZ = 0.010
+FREQUENCY_FULL_ACTIVATION_HZ = 0.200
+
+def droop_signal(freq_hz: float) -> float:
+        delta_f = freq_hz - FREQUENCY_NOMINAL_HZ
+        abs_df = abs(delta_f)
+        if abs_df < FREQUENCY_DEADBAND_HZ:
+            return 0.0
+        signal = -delta_f / FREQUENCY_FULL_ACTIVATION_HZ          
+        return max(-1.0, min(1.0, signal))         

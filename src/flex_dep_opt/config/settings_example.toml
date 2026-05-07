@@ -28,6 +28,7 @@ offset_minutes_before_delivery = 5 # trading until T-5min
 [optimization.trading.fcr]
 enabled = true
 prices_source = "data/prices/RESULT_OVERVIEW_CAPACITY_MARKET_FCR_2025-01-01_2025-12-31.xlsx"
+frequency_source = "data/prices/Frequenz_20250101_20251231_15min.csv"
 energy_req_hours = 1.5
 acceptance_rate = 1.0
 

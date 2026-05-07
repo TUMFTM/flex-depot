@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from flex_dep_opt.post.metrics import infer_market_position_columns, has_imbalance
-
+from flex_dep_opt.market.fcr import droop_signal, FREQUENCY_DEADBAND_HZ, FREQUENCY_NOMINAL_HZ, FREQUENCY_FULL_ACTIVATION_HZ
 
 # =============================================================================
 # Color conventions
@@ -255,6 +255,7 @@ def plot_mpc_dispatch_plotly(
     fcr_energy_req_hours: float = 1.5,
     eta_c: float = 1.0,
     eta_d: float = 1.0,
+    fcr_frequency_data: Optional[pd.DataFrame] = None,
 ) -> go.Figure:
     """
     MPC Visualisierung für Flexband-Modell.
@@ -284,6 +285,37 @@ def plot_mpc_dispatch_plotly(
         x_fcr_slots = dispatch["x_fcr_kw"].replace(0.0, float("nan")).dropna()
         x_fcr_dense = _expand_slots_to_step(x_fcr_slots, dispatch.index)
 
+
+    has_freq_subplot = has_fcr and fcr_frequency_data is not None and not fcr_frequency_data.empty
+    freq_resampled: Optional[pd.Series] = None
+    droop_power_kw: Optional[pd.Series] = None
+
+    if has_freq_subplot:
+        freq_df = fcr_frequency_data.copy()
+        if not isinstance(freq_df.index, pd.DatetimeIndex):
+            has_freq_subplot = False
+        else:
+            freq_col = "FREQ_MEAN_HZ" if "FREQ_MEAN_HZ" in freq_df.columns else next(
+                (c for c in freq_df.columns if "FREQ" in c.upper()), None
+            )
+            if freq_col is None:
+                has_freq_subplot = False
+            else:
+                freq_series = freq_df[freq_col].sort_index()
+                aligned_idx = dispatch.index
+                locs = freq_series.index.get_indexer(aligned_idx, method="nearest")
+                freq_vals = pd.Series(
+                    [float(freq_series.iloc[loc]) if loc >= 0 else FREQUENCY_NOMINAL_HZ for loc in locs],
+                    index=aligned_idx,
+                )
+                freq_resampled = freq_vals
+
+                droop_sig = freq_vals.map(droop_signal)
+                if x_fcr_dense is not None:
+                    droop_power_kw = droop_sig * x_fcr_dense
+                else:
+                    droop_power_kw = pd.Series(0.0, index=aligned_idx)
+
     # Commit times (for hover annotation)
     commit_time_by_market: dict[str, pd.Series] = {}
     if commit_df is not None and not commit_df.empty:
@@ -298,18 +330,24 @@ def plot_mpc_dispatch_plotly(
                 s = mk_rows.sort_values("current_time").drop_duplicates("delivery_time")
                 commit_time_by_market[mk] = s.set_index("delivery_time")["current_time"]
 
+    n_rows = 6 if has_freq_subplot else 4
+    subplot_titles_list = [
+        "Market Prices",
+        "Power Flexband (p_net within [P_lower, P_upper])",
+        "Energy Flexband (E within [E_lower, E_upper])",
+        "Market Positions",
+    ]
+    if has_freq_subplot:
+        subplot_titles_list.append("FCR Droop Activation")
+        subplot_titles_list.append("Grid Frequency")
+
     fig = make_subplots(
-        rows=4,
+        rows=n_rows,
         cols=1,
         shared_xaxes=True,
-        vertical_spacing=0.05,
-        specs=[[{}], [{}], [{}], [{}]],
-        subplot_titles=(
-            "Market Prices",
-            "Power Flexband (p_net within [P_lower, P_upper])",
-            "Energy Flexband (E within [E_lower, E_upper])",
-            "Market Positions",
-        ),
+        vertical_spacing=0.04,
+        specs=[[{}]] * n_rows,
+        subplot_titles=tuple(subplot_titles_list),
     )
 
     # Row 1: Prices
@@ -347,6 +385,24 @@ def plot_mpc_dispatch_plotly(
                    line=dict(width=3, color="rgb(162,173,0)")),
         row=2, col=1
     )
+
+    if "p_fcr_actual_kw" in dispatch.columns:
+        p_fcr_actual = dispatch["p_fcr_actual_kw"]
+        fcr_actual_colors = [
+            "rgba(214,39,40,0.75)" if v > 0 else "rgba(31,119,180,0.75)"
+            for v in p_fcr_actual
+        ]
+        fig.add_trace(
+            go.Bar(
+                x=dispatch.index,
+                y=p_fcr_actual.values,
+                name="FCR actual power [kW]",
+                marker_color=fcr_actual_colors,
+                hovertemplate="FCR actual: %{y:.1f} kW<br>(+discharge / -charge)<extra></extra>",
+                opacity=0.7,
+            ),
+            row=2, col=1,
+        )
 
     if has_fcr and x_fcr_dense is not None:
         headroom_upper = dispatch["p_net_kw"] + x_fcr_dense
@@ -549,10 +605,70 @@ def plot_mpc_dispatch_plotly(
     fig.update_yaxes(title_text="Energy [kWh]", row=3, col=1)
     fig.update_yaxes(title_text="Position [kW]", row=4, col=1)
 
+    if has_freq_subplot and freq_resampled is not None and droop_power_kw is not None:
+        bar_colors = [
+            "rgba(214,39,40,0.75)" if v > 0 else "rgba(31,119,180,0.75)"
+            for v in droop_power_kw
+        ]
+        fig.add_trace(
+            go.Bar(
+                x=droop_power_kw.index,
+                y=droop_power_kw.values,
+                name="FCR Droop Power [kW]",
+                marker_color=bar_colors,
+                yaxis="y5",
+                hovertemplate=(
+                    "Droop power: %{y:.1f} kW<br>"
+                    "(+discharge / -charge)<extra></extra>"
+                ),
+                opacity=0.85,
+            ),
+            row=5, col=1,
+        )
+
+        fig.update_yaxes(title_text="Power [kW]", row=5, col=1)
+
+        fig.add_trace(
+            go.Scatter(
+                x=freq_resampled.index,
+                y=freq_resampled.values,
+                mode="lines",
+                name="Grid Frequency [Hz]",
+                line=dict(width=1.5, color="rgba(80,80,80,0.7)"),
+                hovertemplate="f = %{y:.4f} Hz<extra></extra>",
+            ),
+            row=6, col=1,
+        )
+
+        fig.add_hline(
+            y=FREQUENCY_NOMINAL_HZ,
+            line=dict(width=1, color="rgba(0,0,0,0.3)", dash="dash"),
+            row=6, col=1,
+        )
+
+        fig.add_hrect(
+            y0=FREQUENCY_NOMINAL_HZ - FREQUENCY_DEADBAND_HZ,
+            y1=FREQUENCY_NOMINAL_HZ + FREQUENCY_DEADBAND_HZ,
+            fillcolor="rgba(200,200,200,0.25)",
+            line_width=0,
+            row=6, col=1,
+        )
+
+        for sign in (+1, -1):
+            fig.add_hline(
+                y=FREQUENCY_NOMINAL_HZ + sign * FREQUENCY_FULL_ACTIVATION_HZ,
+                line=dict(width=1, color="rgba(46,199,182,0.7)", dash="dot"),
+                row=6, col=1,
+            )
+
+        fig.update_yaxes(title_text="Frequency [Hz]", row=6, col=1)
+
+    plot_height = 1450 if has_freq_subplot else 1200
+
     fig.update_layout(
         title=title,
         template="plotly_white",
-        height=1200,
+        height=plot_height,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         margin=dict(l=60, r=60, t=80, b=60),
         barmode="relative",

@@ -103,7 +103,7 @@ def solve_model(
     solver_name: str = "gurobi",
     time_limit_s: Optional[int] = None,
     mip_gap: Optional[float] = None,
-    threads: Optional[int] = None,
+    threads: Optional[int] = 8,
     tee: bool = False,
 ) -> pyo.results.SolverResults:
     """
@@ -221,6 +221,52 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index: pd.DatetimeIndex) -> 
     else:
         # Fallback to old convention
         df["E_kWh"] = [pyo.value(model.E[t]) for t in T_list]
+
+    if hasattr(model, "S") and hasattr(model, "fcr_droop_signal") and hasattr(model, "S_FCR"):
+        dt = pyo.value(model.dt)
+        eta_c = pyo.value(model.eta_c)
+        eta_d = pyo.value(model.eta_d)
+
+        t_to_cleared: dict[int, float] = {}
+        if hasattr(model, "_fcr_slot_starts"):
+            slot_duration = pd.Timedelta(hours=4)
+            for j in model.S_FCR:
+                slot_start = model._fcr_slot_starts[j]
+                slot_end   = slot_start + slot_duration
+                x_cleared  = float(pyo.value(model.x_fcr_cleared[j]))
+                if x_cleared <= 0.0:
+                    continue
+                for t, ts in enumerate(time_index):
+                    if slot_start <= ts < slot_end:
+                        t_to_cleared[t] = x_cleared
+        elif hasattr(model, "FCR_JT"):
+            for j, t in model.FCR_JT:
+                x_cleared = float(pyo.value(model.x_fcr_cleared[j]))
+                if x_cleared > 0.0:
+                    t_to_cleared[t] = x_cleared
+
+        fcr_power_kw = []
+        fcr_e_delta  = []
+
+        for t in T_list:
+            d_val = float(pyo.value(model.fcr_droop_signal[t]))
+            x_cleared = t_to_cleared.get(t, 0.0)
+
+            if x_cleared > 0.0 and d_val != 0.0:
+                p_fcr = d_val * x_cleared   
+                if d_val >= 0.0:
+                    delta = -(1.0 / eta_d) * p_fcr * dt
+                else:
+                    delta = eta_c * (-p_fcr) * dt
+            else:
+                p_fcr = 0.0
+                delta = 0.0
+
+            fcr_power_kw.append(p_fcr)
+            fcr_e_delta.append(delta)
+
+        df["p_fcr_actual_kw"] = fcr_power_kw   
+        df["E_fcr_delta_kWh"] = fcr_e_delta    
 
     # -------------------------
     # Market positions (T)

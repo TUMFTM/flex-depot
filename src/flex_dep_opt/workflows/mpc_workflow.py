@@ -1,7 +1,7 @@
 import logging
 from pathlib import Path
 
-from flex_dep_opt.market.fcr import get_fcr_prices
+from flex_dep_opt.market.fcr import get_fcr_prices, get_fcr_frequency_data
 import pandas as pd
 from tqdm.auto import tqdm
 import pyomo.environ as pyo
@@ -98,6 +98,15 @@ def run_mpc(settings: Settings) -> None:
     fcr_prices_full = get_fcr_prices(opt_cfg.trading.fcr.prices_source) if opt_cfg.trading.fcr.enabled else pd.Series(dtype=float)
     fcr_energy_req_hours = opt_cfg.trading.fcr.energy_req_hours
     fcr_acceptance_rate = opt_cfg.trading.fcr.acceptance_rate
+
+    fcr_freq_source = opt_cfg.trading.fcr.frequency_source
+    fcr_frequency_data_full: pd.DataFrame | None = None
+    if opt_cfg.trading.fcr.enabled and fcr_freq_source:
+        fcr_frequency_data_full = get_fcr_frequency_data(fcr_freq_source)
+
+    frequency_nominal_hz = opt_cfg.trading.fcr.frequency_nominal_hz
+    frequency_deadband_hz = opt_cfg.trading.fcr.deadband_hz
+    frequency_full_activation_hz = opt_cfg.trading.fcr.full_activation_hz
 
     # ============================================================
     # 3) Time settings
@@ -250,6 +259,14 @@ def run_mpc(settings: Settings) -> None:
             # 9.4) Build and parameterize optimization model
             # --------------------------------------------------------
             def _build_model(allow_imbalance: bool, imb_penalty: float) -> object:
+                if fcr_frequency_data_full is not None:
+                    window_freq_data = fcr_frequency_data_full.loc[
+                        (fcr_frequency_data_full.index >= window_idx[0]) &
+                        (fcr_frequency_data_full.index <= window_idx[-1] + pd.Timedelta(hours=1))
+                    ]
+                else:
+                    window_freq_data = None
+
                 _m = flexibility_commercialization(
                     depot=Depot(dep_cfg.eta_grid2depot, dep_cfg.eta_depot2grid, dep_cfg.grid_connection_limit),
                     prices_by_market=window_prices,
@@ -270,6 +287,10 @@ def run_mpc(settings: Settings) -> None:
                     fcr_prices=window_fcr_prices if not window_fcr_prices.empty else None,
                     fcr_energy_req_hours=fcr_energy_req_hours,
                     fcr_acceptance_rate=fcr_acceptance_rate,
+                    fcr_frequency_data=window_freq_data,
+                    frequency_nominal_hz=frequency_nominal_hz,
+                    frequency_deadband_hz=frequency_deadband_hz,
+                    frequency_full_activation_hz=frequency_full_activation_hz,
                 )
 
                 if hasattr(_m, "S_FCR"):

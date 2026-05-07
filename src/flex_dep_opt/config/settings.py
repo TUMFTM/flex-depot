@@ -33,7 +33,12 @@ class FCRSettings(BaseModel):
     enabled: bool = False
     prices_source: str
     energy_req_hours: float
+    frequency_source: Optional[str] = None
     acceptance_rate: Annotated[float, Field(gt=0.0, le=1.0)] = 1.0
+    # frequency droop settings, currently unused
+    frequency_nominal_hz: float = 50.0
+    deadband_hz: float = 0.010
+    full_activation_hz: float = 0.200
 
 class TradingSettings(BaseModel):
     mode: Literal["none", "realistic"] = "none"

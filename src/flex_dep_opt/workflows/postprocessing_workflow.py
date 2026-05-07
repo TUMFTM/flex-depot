@@ -14,7 +14,7 @@ from flex_dep_opt.post.metrics import (
 )
 from flex_dep_opt.post.plots import plot_market_cashflows_plotly, plot_mpc_dispatch_plotly
 from flex_dep_opt.io.results_io import save_dispatch_to_csv, save_summary_to_csv, read_latest_run_pointer
-
+from flex_dep_opt.market.fcr import get_fcr_frequency_data
 
 def postprocess_mpc_results(settings: Settings) -> None:
     """
@@ -133,14 +133,29 @@ def postprocess_mpc_results(settings: Settings) -> None:
     # -------------------------------------------------------------------------
     # Plot 1: dispatch report
     # -------------------------------------------------------------------------
+
+    fcr_cfg = settings.optimization.trading.fcr
+    fcr_frequency_data_pp: pd.DataFrame | None = None
+    if fcr_cfg.enabled and getattr(fcr_cfg, "frequency_source", None):
+        try:
+            fcr_frequency_data_pp = get_fcr_frequency_data(fcr_cfg.frequency_source)
+            fcr_frequency_data_pp = fcr_frequency_data_pp.loc[
+                (fcr_frequency_data_pp.index >= start) &
+                (fcr_frequency_data_pp.index <= end)
+            ]
+        except Exception:
+            fcr_frequency_data_pp = None
+
     fig_dispatch = plot_mpc_dispatch_plotly(
         dispatch=dispatch,
         prices_by_market=prices_by_market,
         commit_df=commit_df,
         title="MPC Flexband Dispatch and Market Positions",
+        fcr_energy_req_hours=float(fcr_cfg.energy_req_hours),
+        fcr_frequency_data=fcr_frequency_data_pp,
     )
     fig_dispatch.write_html(dispatch_html, include_plotlyjs="cdn")
-    webbrowser.open(dispatch_html.resolve().as_uri())
+    #webbrowser.open(dispatch_html.resolve().as_uri())
 
     # -------------------------------------------------------------------------
     # Plot 2: cashflow report (plots consume precomputed metrics)
@@ -153,7 +168,7 @@ def postprocess_mpc_results(settings: Settings) -> None:
         title="Market Cashflows",
     )
     fig_cf.write_html(cashflow_html, include_plotlyjs="cdn")
-    webbrowser.open(cashflow_html.resolve().as_uri())
+    #webbrowser.open(cashflow_html.resolve().as_uri())
 
     print(f"Result CSV files saved → {run_dir.as_posix()}")
     print(f"Result HTML plots saved → {run_dir.as_posix()}")

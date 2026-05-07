@@ -6,6 +6,7 @@ import pandas as pd
 import pyomo.environ as pyo
 
 from ..domain.depot import Depot
+from flex_dep_opt.market.fcr import droop_signal, FCR_FREQ_MEAN_COL
 
 
 def flexibility_commercialization(
@@ -26,6 +27,10 @@ def flexibility_commercialization(
     fcr_prices: pd.Series | None = None,
     fcr_energy_req_hours: float = 1.5,
     fcr_acceptance_rate: float = 1.0,
+    fcr_frequency_data: pd.DataFrame | None = None,
+    frequency_nominal_hz: float = 50.0,
+    frequency_deadband_hz: float = 0.010,
+    frequency_full_activation_hz: float = 0.200,
 ) -> pyo.ConcreteModel:
     """
     Flex-band based multi-market commercialization model (Pyomo).
@@ -223,6 +228,22 @@ def flexibility_commercialization(
                 within=pyo.Binary,
             )
 
+    droop_signal_by_t: dict[int, float] = {t: 0.0 for t in range(N)}
+
+    if use_fcr and fcr_frequency_data is not None and not fcr_frequency_data.empty:
+        freq_series = fcr_frequency_data[FCR_FREQ_MEAN_COL]
+        locs = freq_series.index.get_indexer(time_index, method="nearest")
+        for t, loc in enumerate(locs):
+            if loc >= 0:
+                val = float(freq_series.iloc[loc])
+                droop_signal_by_t[t] = droop_signal(val)
+
+    m.fcr_droop_signal = pyo.Param(
+        m.T,
+        initialize=lambda mdl, t: droop_signal_by_t[t],
+        mutable=True,
+    )
+
     # ============================================================
     # 3) Decision variables
     # ============================================================
@@ -282,15 +303,24 @@ def flexibility_commercialization(
     m.grid_ub = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] <= mdl.grid_limit)
     m.grid_lb = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] >= -mdl.grid_limit)
 
-    # Energy state transition with efficiencies:
-    # E[t+1] = E[t] + eta_c * p_ch[t] * dt - (1/eta_d) * p_dis[t] * dt
     def energy_state_rule(mdl, t):
-        return (
-            mdl.E[t + 1]
-            == mdl.E[t]
-            + mdl.eta_c * mdl.p_ch[t] * mdl.dt
-            - (1.0 / mdl.eta_d) * mdl.p_dis[t] * mdl.dt
-        )
+        base_ch  = mdl.eta_c       * mdl.p_ch[t]  * mdl.dt
+        base_dis = (1.0 / mdl.eta_d) * mdl.p_dis[t] * mdl.dt
+        if use_fcr:
+            j_for_t = next((j for j, steps in slot_steps.items() if t in steps), None)
+            if j_for_t is not None:
+                d_val: float = droop_signal_by_t[t]   
+                p_fcr = d_val * mdl.x_fcr_cleared[j_for_t]  
+                if d_val >= 0.0:
+                    fcr_ch  = 0.0
+                    fcr_dis = (1.0 / mdl.eta_d) * p_fcr * mdl.dt
+                else:
+                    fcr_ch  = mdl.eta_c * (-p_fcr) * mdl.dt
+                    fcr_dis = 0.0
+
+                return mdl.E[t + 1] == mdl.E[t] + base_ch + fcr_ch - base_dis - fcr_dis
+
+        return mdl.E[t + 1] == mdl.E[t] + base_ch - base_dis
 
     m.energy_state = pyo.Constraint(m.T, rule=energy_state_rule)
 
