@@ -6,7 +6,7 @@ import pandas as pd
 import pyomo.environ as pyo
 
 from ..domain.depot import Depot
-from flex_dep_opt.market.fcr import droop_signal, FCR_FREQ_MEAN_COL
+from flex_dep_opt.market.fcr import droop_signal, FCR_FREQ_COL
 
 
 def flexibility_commercialization(
@@ -231,7 +231,7 @@ def flexibility_commercialization(
     droop_signal_by_t: dict[int, float] = {t: 0.0 for t in range(N)}
 
     if use_fcr and fcr_frequency_data is not None and not fcr_frequency_data.empty:
-        freq_series = fcr_frequency_data[FCR_FREQ_MEAN_COL]
+        freq_series = fcr_frequency_data[FCR_FREQ_COL]
         locs = freq_series.index.get_indexer(time_index, method="nearest")
         for t, loc in enumerate(locs):
             if loc >= 0:
@@ -303,24 +303,29 @@ def flexibility_commercialization(
     m.grid_ub = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] <= mdl.grid_limit)
     m.grid_lb = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] >= -mdl.grid_limit)
 
+    # Forced FCR droop power at the grid connection (signed; positive = into depot).
+    # This is wired into market_balance below so droop activations must be settled
+    # against scheduled trades / imbalance instead of bypassing through E.
+    def _p_droop_rule(mdl, t):
+        if not use_fcr:
+            return 0.0
+        j_for_t = next((j for j, steps in slot_steps.items() if t in steps), None)
+        if j_for_t is None:
+            return 0.0
+        d_val = droop_signal_by_t[t]
+        # d_val > 0 (low freq) -> upward FCR -> depot exports -> p_droop < 0
+        # d_val < 0 (high freq) -> downward FCR -> depot imports -> p_droop > 0
+        return -d_val * mdl.x_fcr_cleared[j_for_t]
+
+    m.p_droop = pyo.Expression(m.T, rule=_p_droop_rule)
+
     def energy_state_rule(mdl, t):
-        base_ch  = mdl.eta_c       * mdl.p_ch[t]  * mdl.dt
-        base_dis = (1.0 / mdl.eta_d) * mdl.p_dis[t] * mdl.dt
-        if use_fcr:
-            j_for_t = next((j for j, steps in slot_steps.items() if t in steps), None)
-            if j_for_t is not None:
-                d_val: float = droop_signal_by_t[t]   
-                p_fcr = d_val * mdl.x_fcr_cleared[j_for_t]  
-                if d_val >= 0.0:
-                    fcr_ch  = 0.0
-                    fcr_dis = (1.0 / mdl.eta_d) * p_fcr * mdl.dt
-                else:
-                    fcr_ch  = mdl.eta_c * (-p_fcr) * mdl.dt
-                    fcr_dis = 0.0
-
-                return mdl.E[t + 1] == mdl.E[t] + base_ch + fcr_ch - base_dis - fcr_dis
-
-        return mdl.E[t + 1] == mdl.E[t] + base_ch - base_dis
+        return (
+            mdl.E[t + 1]
+            == mdl.E[t]
+            + mdl.eta_c * mdl.p_ch[t] * mdl.dt
+            - (1.0 / mdl.eta_d) * mdl.p_dis[t] * mdl.dt
+        )
 
     m.energy_state = pyo.Constraint(m.T, rule=energy_state_rule)
 
@@ -349,12 +354,14 @@ def flexibility_commercialization(
 
     m.market_activity = pyo.Constraint(m.MARKETS, m.T, rule=market_activity_rule)
 
-    # Balance markets to physical net power
+    # Balance markets to physical net power.
+    # Forced FCR droop power adds to the grid flow that must be settled by
+    # scheduled trades and imbalance, so droop cannot bypass markets via E.
     def balance_rule(mdl, t):
         base = sum(mdl.p_market[mk, t] for mk in mdl.MARKETS)
         if allow_imbalance:
-            return base + mdl.p_imb_pos[t] - mdl.p_imb_neg[t] == mdl.p_net[t]
-        return base == mdl.p_net[t]
+            return base + mdl.p_imb_pos[t] - mdl.p_imb_neg[t] + mdl.p_droop[t] == mdl.p_net[t]
+        return base + mdl.p_droop[t] == mdl.p_net[t]
 
     m.market_balance = pyo.Constraint(m.T, rule=balance_rule)
 

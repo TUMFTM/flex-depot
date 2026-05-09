@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from flex_dep_opt.post.metrics import infer_market_position_columns, has_imbalance
-from flex_dep_opt.market.fcr import droop_signal, FREQUENCY_DEADBAND_HZ, FREQUENCY_NOMINAL_HZ, FREQUENCY_FULL_ACTIVATION_HZ
+from flex_dep_opt.market.fcr import droop_signal, FCR_FREQ_COL, FREQUENCY_DEADBAND_HZ, FREQUENCY_NOMINAL_HZ, FREQUENCY_FULL_ACTIVATION_HZ
 
 # =============================================================================
 # Color conventions
@@ -295,7 +295,7 @@ def plot_mpc_dispatch_plotly(
         if not isinstance(freq_df.index, pd.DatetimeIndex):
             has_freq_subplot = False
         else:
-            freq_col = "FREQ_MEAN_HZ" if "FREQ_MEAN_HZ" in freq_df.columns else next(
+            freq_col = FCR_FREQ_COL if FCR_FREQ_COL in freq_df.columns else next(
                 (c for c in freq_df.columns if "FREQ" in c.upper()), None
             )
             if freq_col is None:

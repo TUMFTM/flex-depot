@@ -5,16 +5,16 @@ import pandas as pd
 import warnings
 
 FCR_FREQ_DATETIME_COL = "DATETIME"
-FCR_FREQ_MEAN_COL     = "FREQ_MEAN_HZ"
+FCR_FREQ_COL          = "FREQ_MAX_HZ"
 
 def get_fcr_frequency_data(file_path: str, tz: str = "Europe/Berlin") -> pd.DataFrame:
     df = pd.read_csv(file_path)
-    if FCR_FREQ_MEAN_COL not in df.columns:
+    if FCR_FREQ_COL not in df.columns:
         freq_col = next((c for c in df.columns if "FREQ" in c.upper()), None)
         if freq_col:
-            df = df.rename(columns={freq_col: FCR_FREQ_MEAN_COL})
+            df = df.rename(columns={freq_col: FCR_FREQ_COL})
         else:
-            raise ValueError(f"FCR frequency CSV missing required column: {FCR_FREQ_MEAN_COL}")
+            raise ValueError(f"FCR frequency CSV missing required column: {FCR_FREQ_COL}")
 
     if FCR_FREQ_DATETIME_COL not in df.columns:
         if not isinstance(df.index, pd.DatetimeIndex):
@@ -35,20 +35,20 @@ def get_fcr_frequency_data(file_path: str, tz: str = "Europe/Berlin") -> pd.Data
         df.index = pd.DatetimeIndex(ts)
         df = df.drop(columns=[FCR_FREQ_DATETIME_COL])
 
-    if df[FCR_FREQ_MEAN_COL].dtype == object:
-        df[FCR_FREQ_MEAN_COL] = (
-            df[FCR_FREQ_MEAN_COL].astype(str)
+    if df[FCR_FREQ_COL].dtype == object:
+        df[FCR_FREQ_COL] = (
+            df[FCR_FREQ_COL].astype(str)
             .str.replace(",", ".", regex=False)
         )
-    
-    df[FCR_FREQ_MEAN_COL] = pd.to_numeric(df[FCR_FREQ_MEAN_COL], errors="coerce")
+
+    df[FCR_FREQ_COL] = pd.to_numeric(df[FCR_FREQ_COL], errors="coerce")
     
     df = df.sort_index()
     if df.index.has_duplicates:
         warnings.warn("Duplicate timestamps found; keeping first occurrence.", UserWarning)
         df = df[~df.index.duplicated(keep="first")]
 
-    return df[[FCR_FREQ_MEAN_COL]]
+    return df[[FCR_FREQ_COL]]
 
 
 def get_fcr_prices(file_path: str) -> pd.Series:
