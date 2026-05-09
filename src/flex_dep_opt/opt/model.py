@@ -26,7 +26,6 @@ def flexibility_commercialization(
     imbalance_volume_penalty_eur_per_kwh: float = 0.0,
     fcr_prices: pd.Series | None = None,
     fcr_energy_req_hours: float = 1.5,
-    fcr_acceptance_rate: float = 1.0,
     fcr_frequency_data: pd.DataFrame | None = None,
     frequency_nominal_hz: float = 50.0,
     frequency_deadband_hz: float = 0.010,
@@ -179,8 +178,6 @@ def flexibility_commercialization(
             use_fcr = True
             m.S_FCR = pyo.RangeSet(0, n_fcr - 1)
 
-            m.fcr_acceptance_rate = pyo.Param(initialize=float(fcr_acceptance_rate))
-
             m.fcr_price_param = pyo.Param(
                 m.S_FCR,
                 initialize=lambda mdl, j_idx: float(fcr_prices.loc[fcr_slot_starts[j_idx]]),
@@ -262,11 +259,6 @@ def flexibility_commercialization(
 
         # commitment mode (0=no offer, 1=offer)
         m.y_fcr = pyo.Var(m.S_FCR, within=pyo.Binary)
-        
-        m.x_fcr_cleared = pyo.Expression(
-            m.S_FCR,
-            rule=lambda mdl, j: mdl.x_fcr[j] * mdl.fcr_acceptance_rate
-        )
 
     # Market positions (signed): +import (buy), -export (sell)
     m.p_market = pyo.Var(
@@ -315,7 +307,7 @@ def flexibility_commercialization(
         d_val = droop_signal_by_t[t]
         # d_val > 0 (low freq) -> upward FCR -> depot exports -> p_droop < 0
         # d_val < 0 (high freq) -> downward FCR -> depot imports -> p_droop > 0
-        return -d_val * mdl.x_fcr_cleared[j_for_t]
+        return -d_val * mdl.x_fcr[j_for_t]
 
     m.p_droop = pyo.Expression(m.T, rule=_p_droop_rule)
 
@@ -401,10 +393,10 @@ def flexibility_commercialization(
         m.FCR_JT = pyo.Set(initialize=fcr_jt_pairs, dimen=2)
 
         def fcr_headroom_up_rule(mdl, j, t):
-            return mdl.p_net[t] + mdl.x_fcr_cleared[j] <= mdl.P_upper[t]
+            return mdl.p_net[t] + mdl.x_fcr[j] <= mdl.P_upper[t]
 
         def fcr_headroom_dn_rule(mdl, j, t):
-            return mdl.p_net[t] - mdl.x_fcr_cleared[j] >= mdl.P_lower[t]
+            return mdl.p_net[t] - mdl.x_fcr[j] >= mdl.P_lower[t]
 
         m.fcr_headroom_up = pyo.Constraint(m.FCR_JT, rule=fcr_headroom_up_rule)
         m.fcr_headroom_dn = pyo.Constraint(m.FCR_JT, rule=fcr_headroom_dn_rule)
@@ -412,11 +404,11 @@ def flexibility_commercialization(
         m.fcr_energy_req_hours = pyo.Param(initialize=float(fcr_energy_req_hours))
 
         def fcr_energy_headroom_up_rule(mdl, j, t):
-            fcr_energy_needed_kwh = (mdl.x_fcr_cleared[j] * mdl.fcr_energy_req_hours) / mdl.eta_d
+            fcr_energy_needed_kwh = (mdl.x_fcr[j] * mdl.fcr_energy_req_hours) / mdl.eta_d
             return mdl.E[t] - fcr_energy_needed_kwh >= mdl.E_lower[t]
 
         def fcr_energy_headroom_dn_rule(mdl, j, t):
-            fcr_energy_incoming_kwh = mdl.x_fcr_cleared[j] * mdl.fcr_energy_req_hours * mdl.eta_c
+            fcr_energy_incoming_kwh = mdl.x_fcr[j] * mdl.fcr_energy_req_hours * mdl.eta_c
             return mdl.E[t] + fcr_energy_incoming_kwh <= mdl.E_upper[t]
 
         m.fcr_energy_cap_up = pyo.Constraint(m.FCR_JT, rule=fcr_energy_headroom_up_rule)
@@ -523,7 +515,7 @@ def flexibility_commercialization(
         fcr_revenue = 0.0
         if use_fcr:
             fcr_revenue = sum(
-                (mdl.fcr_price_param[j] / 1000.0) * mdl.x_fcr_cleared[j] * (mdl.fcr_slot_hours[j] / 4.0)
+                (mdl.fcr_price_param[j] / 1000.0) * mdl.x_fcr[j] * (mdl.fcr_slot_hours[j] / 4.0)
                 for j in mdl.S_FCR
             )
 

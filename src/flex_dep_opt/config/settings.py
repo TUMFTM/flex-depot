@@ -35,6 +35,7 @@ class FCRSettings(BaseModel):
     energy_req_hours: float
     frequency_source: Optional[str] = None
     acceptance_rate: Annotated[float, Field(gt=0.0, le=1.0)] = 1.0
+    acceptance_seed: Optional[int] = None
     # frequency droop settings, currently unused
     frequency_nominal_hz: float = 50.0
     deadband_hz: float = 0.010

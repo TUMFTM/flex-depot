@@ -31,6 +31,7 @@ prices_source = "data/prices/RESULT_OVERVIEW_CAPACITY_MARKET_FCR_2025-01-01_2025
 frequency_source = "data/prices/Frequenz_20250101_20251231_15min.csv"
 energy_req_hours = 1.5
 acceptance_rate = 1.0
+acceptance_seed = 1
 
 [optimization.imbalance]
 enabled = true

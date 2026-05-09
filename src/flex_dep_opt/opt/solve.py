@@ -233,7 +233,7 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index: pd.DatetimeIndex) -> 
             for j in model.S_FCR:
                 slot_start = model._fcr_slot_starts[j]
                 slot_end   = slot_start + slot_duration
-                x_cleared  = float(pyo.value(model.x_fcr_cleared[j]))
+                x_cleared  = float(pyo.value(model.x_fcr[j]))
                 if x_cleared <= 0.0:
                     continue
                 for t, ts in enumerate(time_index):
@@ -241,7 +241,7 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index: pd.DatetimeIndex) -> 
                         t_to_cleared[t] = x_cleared
         elif hasattr(model, "FCR_JT"):
             for j, t in model.FCR_JT:
-                x_cleared = float(pyo.value(model.x_fcr_cleared[j]))
+                x_cleared = float(pyo.value(model.x_fcr[j]))
                 if x_cleared > 0.0:
                     t_to_cleared[t] = x_cleared
 

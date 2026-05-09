@@ -1,4 +1,5 @@
 import logging
+import random
 from pathlib import Path
 
 from flex_dep_opt.market.fcr import get_fcr_prices, get_fcr_frequency_data
@@ -98,6 +99,9 @@ def run_mpc(settings: Settings) -> None:
     fcr_prices_full = get_fcr_prices(opt_cfg.trading.fcr.prices_source) if opt_cfg.trading.fcr.enabled else pd.Series(dtype=float)
     fcr_energy_req_hours = opt_cfg.trading.fcr.energy_req_hours
     fcr_acceptance_rate = opt_cfg.trading.fcr.acceptance_rate
+    fcr_acceptance_seed = opt_cfg.trading.fcr.acceptance_seed
+    if fcr_acceptance_seed is not None:
+        random.seed(fcr_acceptance_seed)
 
     fcr_freq_source = opt_cfg.trading.fcr.frequency_source
     fcr_frequency_data_full: pd.DataFrame | None = None
@@ -286,7 +290,6 @@ def run_mpc(settings: Settings) -> None:
                     imbalance_volume_penalty_eur_per_kwh=imb_penalty,
                     fcr_prices=window_fcr_prices if not window_fcr_prices.empty else None,
                     fcr_energy_req_hours=fcr_energy_req_hours,
-                    fcr_acceptance_rate=fcr_acceptance_rate,
                     fcr_frequency_data=window_freq_data,
                     frequency_nominal_hz=frequency_nominal_hz,
                     frequency_deadband_hz=frequency_deadband_hz,
@@ -456,7 +459,9 @@ def run_mpc(settings: Settings) -> None:
                     slot_now_closed = next_time >= gate_ts
 
                     if slot_was_open and slot_now_closed:
-                        committed_val = pyo.value(model.x_fcr[j])
+                        bid_val = pyo.value(model.x_fcr[j])
+                        accepted = bid_val > 0 and random.random() < fcr_acceptance_rate
+                        committed_val = bid_val if accepted else 0.0
                         committed_fcr_slots[slot] = committed_val
                         fcr_price_val = float(window_fcr_prices.loc[slot])
 
@@ -464,16 +469,24 @@ def run_mpc(settings: Settings) -> None:
                             "slot_start": slot,
                             "gate_closure_time": gate_ts,
                             "committed_at": current_time,
+                            "bid_kw": bid_val,
                             "x_fcr_kw": committed_val,
                             "x_fcr_mw": committed_val / 1000.0,
+                            "accepted": accepted,
                             "fcr_price": fcr_price_val,
                             "fcr_revenue_eur": (committed_val / 1000.0) * fcr_price_val,
                         })
 
-                        logger.info(
-                            f"FCR slot committed: {slot} - {committed_val:.1f} kW "
-                            f"@ {fcr_price_val:.2f} €/MW"
-                        )
+                        if bid_val > 0:
+                            if accepted:
+                                logger.info(
+                                    f"FCR slot accepted: {slot} - {committed_val:.1f} kW "
+                                    f"@ {fcr_price_val:.2f} €/MW"
+                                )
+                            else:
+                                logger.info(
+                                    f"FCR slot rejected: {slot} - bid {bid_val:.1f} kW not accepted"
+                                )
 
             # --------------------------------------------------------
             # 9.8) Roll energy state forward
