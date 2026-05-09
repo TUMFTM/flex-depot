@@ -1,20 +1,26 @@
 import pandas as pd
 import warnings
 
-import pandas as pd
-import warnings
-
 FCR_FREQ_DATETIME_COL = "DATETIME"
-FCR_FREQ_COL          = "FREQ_MAX_HZ"
+FCR_FREQ_COL          = "FREQ_WORST_DEV_HZ"
+_FREQ_MIN_COL         = "FREQ_MIN_HZ"
+_FREQ_MAX_COL         = "FREQ_MAX_HZ"
 
 def get_fcr_frequency_data(file_path: str, tz: str = "Europe/Berlin") -> pd.DataFrame:
     df = pd.read_csv(file_path)
+
     if FCR_FREQ_COL not in df.columns:
-        freq_col = next((c for c in df.columns if "FREQ" in c.upper()), None)
-        if freq_col:
-            df = df.rename(columns={freq_col: FCR_FREQ_COL})
+        if _FREQ_MIN_COL in df.columns and _FREQ_MAX_COL in df.columns:
+            # Derive worst-case deviation: pick the value furthest from nominal, preserving sign
+            dev_max = (df[_FREQ_MAX_COL] - FREQUENCY_NOMINAL_HZ).abs()
+            dev_min = (df[_FREQ_MIN_COL] - FREQUENCY_NOMINAL_HZ).abs()
+            df[FCR_FREQ_COL] = df[_FREQ_MAX_COL].where(dev_max >= dev_min, df[_FREQ_MIN_COL])
         else:
-            raise ValueError(f"FCR frequency CSV missing required column: {FCR_FREQ_COL}")
+            freq_col = next((c for c in df.columns if "FREQ" in c.upper()), None)
+            if freq_col:
+                df = df.rename(columns={freq_col: FCR_FREQ_COL})
+            else:
+                raise ValueError(f"FCR frequency CSV missing required column: {FCR_FREQ_COL}")
 
     if FCR_FREQ_DATETIME_COL not in df.columns:
         if not isinstance(df.index, pd.DatetimeIndex):
