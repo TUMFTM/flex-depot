@@ -251,6 +251,7 @@ def plot_mpc_dispatch_plotly(
     prices_by_market: Mapping[str, pd.Series] | None = None,
     *,
     commit_df: pd.DataFrame | None = None,
+    fcr_commit_df: pd.DataFrame | None = None,
     title: str = "MPC Flexband Dispatch and Market Positions",
     fcr_energy_req_hours: float = 1.5,
     eta_c: float = 1.0,
@@ -514,6 +515,27 @@ def plot_mpc_dispatch_plotly(
         )
 
     if has_fcr and x_fcr_dense is not None:
+        fcr_commit_times = pd.Series("not committed", index=dispatch.index)
+        if fcr_commit_df is not None and not fcr_commit_df.empty:
+            tmp_fcr = fcr_commit_df.copy()
+            if "slot_start" in tmp_fcr.columns:
+                tmp_fcr["slot_start"] = pd.to_datetime(tmp_fcr["slot_start"], utc=False)
+                if tmp_fcr["slot_start"].dt.tz is None:
+                    tmp_fcr["slot_start"] = tmp_fcr["slot_start"].dt.tz_localize(dispatch.index.tz)
+                else:
+                    tmp_fcr["slot_start"] = tmp_fcr["slot_start"].dt.tz_convert(dispatch.index.tz)
+            if "committed_at" in tmp_fcr.columns:
+                tmp_fcr["committed_at"] = pd.to_datetime(tmp_fcr["committed_at"], utc=False)
+                if tmp_fcr["committed_at"].dt.tz is None:
+                    tmp_fcr["committed_at"] = tmp_fcr["committed_at"].dt.tz_localize(dispatch.index.tz)
+                else:
+                    tmp_fcr["committed_at"] = tmp_fcr["committed_at"].dt.tz_convert(dispatch.index.tz)
+                for _, fcr_row in tmp_fcr.iterrows():
+                    slot_end = fcr_row["slot_start"] + pd.Timedelta(hours=4)
+                    mask = (dispatch.index >= fcr_row["slot_start"]) & (dispatch.index < slot_end)
+                    fcr_commit_times[mask] = fcr_row["committed_at"].strftime("%Y-%m-%d %H:%M")
+
+        custom_fcr = list(zip(x_fcr_dense.values, fcr_commit_times.values))
         fig.add_trace(
             go.Scatter(
                 x=dispatch.index,
@@ -521,9 +543,13 @@ def plot_mpc_dispatch_plotly(
                 mode="lines",
                 name="FCR committed [kW]",
                 line=dict(width=2, color=FCR_GREEN),
-                hovertemplate="FCR: %{y:.0f} kW<extra></extra>",
+                customdata=custom_fcr,
+                hovertemplate=(
+                    "FCR: ±%{customdata[0]:.0f} kW<br>"
+                    "Committed at: %{customdata[1]}<extra></extra>"
+                ),
             ),
-            row=4, col=1
+            row=4, col=1,
         )
         fig.add_trace(
             go.Scatter(
@@ -531,10 +557,17 @@ def plot_mpc_dispatch_plotly(
                 y=-x_fcr_dense,
                 mode="lines",
                 name="FCR committed [-kW]",
+                fill="tonexty",
+                fillcolor=FCR_GREEN_MID,
                 line=dict(width=2, color=FCR_GREEN, dash="dot"),
+                customdata=custom_fcr,
+                hovertemplate=(
+                    "FCR: ±%{customdata[0]:.0f} kW<br>"
+                    "Committed at: %{customdata[1]}<extra></extra>"
+                ),
                 showlegend=False,
             ),
-            row=4, col=1
+            row=4, col=1,
         )
 
     # Imbalance net position

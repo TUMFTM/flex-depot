@@ -75,6 +75,16 @@ def postprocess_mpc_results(settings: Settings) -> None:
     if "delivery_time" in commit_df.columns:
         commit_df = commit_df[(commit_df["delivery_time"] >= start) & (commit_df["delivery_time"] <= end)]
 
+    fcr_commit_df: pd.DataFrame | None = None
+    fcr_commit_csv = run_dir / "fcr_commit.csv"
+    if fcr_commit_csv.exists():
+        fcr_cdf = pd.read_csv(fcr_commit_csv)
+        if "slot_start" in fcr_cdf.columns:
+            fcr_cdf["slot_start"] = pd.to_datetime(fcr_cdf["slot_start"], utc=True).dt.tz_convert("Europe/Berlin")
+        if "committed_at" in fcr_cdf.columns:
+            fcr_cdf["committed_at"] = pd.to_datetime(fcr_cdf["committed_at"], utc=True).dt.tz_convert("Europe/Berlin")
+        fcr_commit_df = fcr_cdf
+
     # -------------------------------------------------------------------------
     # Prices + fees
     # -------------------------------------------------------------------------
@@ -150,6 +160,7 @@ def postprocess_mpc_results(settings: Settings) -> None:
         dispatch=dispatch,
         prices_by_market=prices_by_market,
         commit_df=commit_df,
+        fcr_commit_df=fcr_commit_df,
         title="MPC Flexband Dispatch and Market Positions",
         fcr_energy_req_hours=float(fcr_cfg.energy_req_hours),
         fcr_frequency_data=fcr_frequency_data_pp,
