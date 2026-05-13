@@ -36,7 +36,9 @@ class FCRSettings(BaseModel):
     frequency_source: Optional[str] = None
     acceptance_rate: Annotated[float, Field(gt=0.0, le=1.0)] = 1.0
     acceptance_seed: Optional[int] = None
-    # frequency droop settings, currently unused
+    gate_closure_hour: str = "08:00"
+    gate_closure_closes_previous_day: bool = True
+    gate_closure_timezone: str = "Europe/Berlin"
     frequency_nominal_hz: float = 50.0
     deadband_hz: float = 0.010
     full_activation_hz: float = 0.200

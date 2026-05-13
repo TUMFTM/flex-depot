@@ -1,4 +1,5 @@
 import warnings
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -10,6 +11,23 @@ FCR_FREQ_DATETIME_COL = "DATETIME"
 FCR_FREQ_COL          = "FREQ_WORST_DEV_HZ"
 _FREQ_MIN_COL         = "FREQ_MIN_HZ"
 _FREQ_MAX_COL         = "FREQ_MAX_HZ"
+
+
+def fcr_gate_closure_timestamp(
+    slot_start: pd.Timestamp,
+    *,
+    hour: str = "08:00",
+    closes_previous_day: bool = True,
+    timezone: str = "Europe/Berlin",
+) -> pd.Timestamp:
+    """
+    Capacity-market gate-closure timestamp for an FCR 4 h slot.
+    """
+    hh, mm = (int(x) for x in hour.split(":"))
+    day = slot_start.normalize()
+    if closes_previous_day:
+        day = day - pd.Timedelta(days=1)
+    return day.replace(hour=hh, minute=mm, tzinfo=ZoneInfo(timezone))
 
 
 def droop_signal(

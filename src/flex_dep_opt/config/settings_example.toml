@@ -32,6 +32,9 @@ frequency_source = "data/prices/Frequenz_20250101_20251231_15min.csv"
 energy_req_hours = 1.5
 acceptance_rate = 1.0
 acceptance_seed = 1
+gate_closure_hour = "08:00"
+gate_closure_closes_previous_day = true
+gate_closure_timezone = "Europe/Berlin"
 
 [optimization.imbalance]
 enabled = true

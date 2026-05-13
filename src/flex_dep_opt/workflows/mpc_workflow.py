@@ -1,7 +1,7 @@
 import logging
 import random
 
-from flex_dep_opt.market.fcr import get_fcr_prices, get_fcr_frequency_data
+from flex_dep_opt.market.fcr import get_fcr_prices, get_fcr_frequency_data, fcr_gate_closure_timestamp
 import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
@@ -31,12 +31,6 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger("gurobipy").setLevel(logging.WARNING)
 logging.getLogger("pyomo").setLevel(logging.WARNING)
 logging.getLogger("pyomo.core").setLevel(logging.ERROR)
-
-def _fcr_gate_closure_timestamp(slot_start: pd.Timestamp) -> pd.Timestamp:
-    # d-1 08:00 CET gate closure for slot
-    d_minus_1 = slot_start.normalize() - pd.Timedelta(days=1)
-    return d_minus_1.replace(hour=8, tzinfo=ZoneInfo("Europe/Berlin"))
-
 
 def _extract_fcr_from_model(model, window_idx: pd.DatetimeIndex) -> pd.Series:
     result = pd.Series(0.0, index=window_idx, name="x_fcr_kw")
@@ -111,6 +105,14 @@ def run_mpc(settings: Settings) -> None:
     frequency_nominal_hz = opt_cfg.trading.fcr.frequency_nominal_hz
     frequency_deadband_hz = opt_cfg.trading.fcr.deadband_hz
     frequency_full_activation_hz = opt_cfg.trading.fcr.full_activation_hz
+
+    def _fcr_gate_ts(slot_start: pd.Timestamp) -> pd.Timestamp:
+        return fcr_gate_closure_timestamp(
+            slot_start,
+            hour=opt_cfg.trading.fcr.gate_closure_hour,
+            closes_previous_day=opt_cfg.trading.fcr.gate_closure_closes_previous_day,
+            timezone=opt_cfg.trading.fcr.gate_closure_timezone,
+        )
 
     # ============================================================
     # 3) Time settings
@@ -263,7 +265,7 @@ def run_mpc(settings: Settings) -> None:
             # a slot is still open if its D-1 08:00 gate closure is in the future
             fcr_gate_open_window: dict[pd.Timestamp, bool] = {}
             for slot in window_fcr_prices.index:
-                gate_ts = _fcr_gate_closure_timestamp(slot)
+                gate_ts = _fcr_gate_ts(slot)
                 fcr_gate_open_window[slot] = current_time < gate_ts
 
             # --------------------------------------------------------
@@ -483,7 +485,7 @@ def run_mpc(settings: Settings) -> None:
             if hasattr(model, "S_FCR"):
                 for j in model.S_FCR:
                     slot = model._fcr_slot_starts[j]
-                    gate_ts = _fcr_gate_closure_timestamp(slot)
+                    gate_ts = _fcr_gate_ts(slot)
                     slot_was_open = current_time < gate_ts
                     slot_now_closed = next_time >= gate_ts
 
