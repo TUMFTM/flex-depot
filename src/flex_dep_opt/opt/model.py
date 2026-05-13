@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import Dict, Iterable, Optional
+from typing import Dict, Optional
 
+import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
 
 from ..domain.depot import Depot
-from flex_dep_opt.market.fcr import droop_signal, FCR_FREQ_COL
+from flex_dep_opt.market.fcr import FCR_FREQ_COL, droop_signal
 
 
 def flexibility_commercialization(
@@ -66,28 +67,38 @@ def flexibility_commercialization(
     # ============================================================
     # 1) Time axis and derived constants (assumed aligned upstream)
     # ============================================================
-    markets: Iterable[str] = list(prices_by_market.keys())
-    ref = prices_by_market[next(iter(markets))].sort_index()
+    markets = list(prices_by_market.keys())
+    ref = prices_by_market[markets[0]].sort_index()
     time_index = ref.index
     N = len(time_index)
 
     if timestep_hours is None:
         timestep_hours = (time_index[1] - time_index[0]).total_seconds() / 3600.0
+    timestep_hours = float(timestep_hours)
 
     fee_eur_per_kwh_by_market = fee_eur_per_kwh_by_market or {}
+    fee_value = {mk: float(fee_eur_per_kwh_by_market.get(mk, 0.0)) for mk in markets}
+    any_fee = any(v > 0.0 for v in fee_value.values())
 
-    # Flexibility bands (states: N+1 rows)
-    P_lower_ser = flexibility_bounds["Power_lower_kW"]
-    P_upper_ser = flexibility_bounds["Power_upper_kW"]
-    E_lower_ser = flexibility_bounds["Capacity_lower_kWh"]
-    E_upper_ser = flexibility_bounds["Capacity_upper_kWh"]
+    price_arr = {mk: prices_by_market[mk].to_numpy(dtype=float) for mk in markets}
+    mask_arr = {mk: np.asarray(market_activity_mask[mk].to_numpy(), dtype=bool) for mk in markets}
+    committed_arr = {mk: committed_positions[mk].to_numpy(dtype=float) for mk in markets}
+
+    P_lower_arr = flexibility_bounds["Power_lower_kW"].to_numpy(dtype=float)
+    P_upper_arr = flexibility_bounds["Power_upper_kW"].to_numpy(dtype=float)
+    E_lower_arr = flexibility_bounds["Capacity_lower_kWh"].to_numpy(dtype=float)
+    E_upper_arr = flexibility_bounds["Capacity_upper_kWh"].to_numpy(dtype=float)
 
     # Tight per-timestep import/export maxima (Big-M values in MILP constraints)
-    P_ch_max_ser = P_upper_ser.clip(lower=0.0)         # max import (>=0)
-    P_dis_max_ser = (-P_lower_ser).clip(lower=0.0)     # max export (>=0)
+    P_ch_max_arr = np.clip(P_upper_arr, 0.0, None)      # max import (>=0)
+    P_dis_max_arr = np.clip(-P_lower_arr, 0.0, None)    # max export (>=0)
+
+    if allow_imbalance:
+        imb_pos_arr = imbalance_prices_pos.to_numpy(dtype=float)
+        imb_neg_arr = imbalance_prices_neg.to_numpy(dtype=float)
 
     # Global symmetric bound for market positions derived from fleet power bands
-    p_market_max_value = float(max(P_upper_ser.max(), (-P_lower_ser).max()))
+    p_market_max_value = float(max(P_upper_arr.max(), (-P_lower_arr).max()))
 
     # ============================================================
     # 2) Pyomo model structure (Sets / Params)
@@ -97,49 +108,39 @@ def flexibility_commercialization(
     m.T = pyo.RangeSet(0, N - 1)  # decisions
     m.S = pyo.RangeSet(0, N)      # states (N+1)
 
-    m.MARKETS = pyo.Set(initialize=list(markets))
-    m.dt = pyo.Param(initialize=float(timestep_hours))
+    m.MARKETS = pyo.Set(initialize=markets)
+    m.dt = pyo.Param(initialize=timestep_hours)
 
     # --- Market prices & fees (EUR/kWh) ---
-    m.price = pyo.Param(
-        m.MARKETS,
-        m.T,
-        initialize=lambda mdl, mk, t: float(prices_by_market[mk].iloc[int(t)]),
-    )
-    m.fee = pyo.Param(
-        m.MARKETS,
-        initialize=lambda mdl, mk: float(fee_eur_per_kwh_by_market.get(mk, 0.0)),
-        within=pyo.NonNegativeReals,
-    )
+    m.price = pyo.Param(m.MARKETS, m.T, initialize=lambda mdl, mk, t: float(price_arr[mk][t]))
+    m.fee = pyo.Param(m.MARKETS, initialize=lambda mdl, mk: fee_value[mk], within=pyo.NonNegativeReals)
 
     # --- Flexibility bands ---
-    m.P_lower = pyo.Param(m.T, initialize=lambda mdl, t: float(P_lower_ser.iloc[int(t)]))
-    m.P_upper = pyo.Param(m.T, initialize=lambda mdl, t: float(P_upper_ser.iloc[int(t)]))
-    m.E_lower = pyo.Param(m.S, initialize=lambda mdl, s: float(E_lower_ser.iloc[int(s)]))
-    m.E_upper = pyo.Param(m.S, initialize=lambda mdl, s: float(E_upper_ser.iloc[int(s)]))
+    m.P_lower = pyo.Param(m.T, initialize=lambda mdl, t: float(P_lower_arr[t]))
+    m.P_upper = pyo.Param(m.T, initialize=lambda mdl, t: float(P_upper_arr[t]))
+    m.E_lower = pyo.Param(m.S, initialize=lambda mdl, s: float(E_lower_arr[s]))
+    m.E_upper = pyo.Param(m.S, initialize=lambda mdl, s: float(E_upper_arr[s]))
 
-    # Tight Big-M bounds per timestep (for MILP mode)
-    m.P_ch_max_t = pyo.Param(m.T, initialize=lambda mdl, t: float(P_ch_max_ser.iloc[int(t)]))
-    m.P_dis_max_t = pyo.Param(m.T, initialize=lambda mdl, t: float(P_dis_max_ser.iloc[int(t)]))
-    # Big-M bounds:
-    # Tight per-timestep upper bounds used in MILP mode to link continuous power/market
-    # variables with a binary import/export mode. The Big-M technique "switches"
-    # constraints on or off via a binary variable, preventing simultaneous import
-    # and export within the same timestep. Here, M is chosen as the physically
-    # feasible maximum power derived from the flexibility bands (not an arbitrary
-    # large constant), which keeps the LP relaxation tight and numerically stable.
+    # Tight Big-M bounds per timestep (for MILP mode):
+    # per-timestep upper bounds used to link continuous power/market variables
+    # with a binary import/export mode. M is the physically feasible maximum
+    # power derived from the flexibility bands (not an arbitrary large constant),
+    # which keeps the LP relaxation tight and numerically stable.
+    m.P_ch_max_t = pyo.Param(m.T, initialize=lambda mdl, t: float(P_ch_max_arr[t]))
+    m.P_dis_max_t = pyo.Param(m.T, initialize=lambda mdl, t: float(P_dis_max_arr[t]))
 
     # --- Depot parameters ---
+    grid_limit_value = float(depot.grid_connection_limit)
     m.eta_c = pyo.Param(initialize=float(depot.eta_grid2depot))
     m.eta_d = pyo.Param(initialize=float(depot.eta_depot2grid))
-    m.grid_limit = pyo.Param(initialize=float(depot.grid_connection_limit))
+    m.grid_limit = pyo.Param(initialize=grid_limit_value)
 
     # --- Cost coefficients ---
     m.c_deg = pyo.Param(initialize=float(cycling_cost_eur_per_kwh))
     m.c_imb_vol = pyo.Param(initialize=float(imbalance_volume_penalty_eur_per_kwh))
 
     # Global symmetric bound for market power
-    m.p_market_max = pyo.Param(initialize=float(p_market_max_value))
+    m.p_market_max = pyo.Param(initialize=p_market_max_value)
 
     # Initial energy state (set by MPC workflow)
     m.E0 = pyo.Param(initialize=0.0, mutable=True)
@@ -148,98 +149,86 @@ def flexibility_commercialization(
     m.Eterm = pyo.Param(initialize=0.0, mutable=True)
     m.w_term = pyo.Param(initialize=0.0, mutable=True, within=pyo.NonNegativeReals)
 
-    # Committed market positions (fixed schedule after gate closure)
+    # Committed market positions (fixed schedule after gate closure). Only the
+    # closed (market, timestep) pairs are constrained, so we index those only.
+    closed_pairs = [
+        (mk, t) for mk in markets for t in range(N) if not bool(mask_arr[mk][t])
+    ]
+    m.MARKET_CLOSED = pyo.Set(initialize=closed_pairs, dimen=2)
     m.p_market_committed = pyo.Param(
-        m.MARKETS,
-        m.T,
-        initialize=lambda mdl, mk, t: float(committed_positions[mk].iloc[int(t)]),
+        m.MARKET_CLOSED,
+        initialize={(mk, t): float(committed_arr[mk][t]) for (mk, t) in closed_pairs},
     )
 
-    # setup fcr slots
+    # ============================================================
+    # FCR slot setup
+    # ============================================================
     use_fcr = False
+    slot_steps: dict[int, list[int]] = {}
+    fcr_slot_starts: list = []
     if fcr_prices is not None and not fcr_prices.empty:
-        fcr_slot_starts = []
-        slot_steps: dict[int, list[int]] = {}
-        
+        fcr_slot_price: list = []
         j = 0
         for slot_start in fcr_prices.index:
             slot_end = slot_start + pd.Timedelta(hours=4)
-            idxs = [
-                i for i, ts in enumerate(time_index)
-                if slot_start <= ts < slot_end
-            ]
-            if idxs:
+            mask = np.asarray((time_index >= slot_start) & (time_index < slot_end))
+            steps = np.flatnonzero(mask).tolist()
+            if steps:
+                slot_steps[j] = steps
                 fcr_slot_starts.append(slot_start)
-                slot_steps[j] = idxs
+                fcr_slot_price.append(float(fcr_prices.loc[slot_start]))
                 j += 1
-                
+
         n_fcr = len(fcr_slot_starts)
         if n_fcr > 0:
             use_fcr = True
+
+            # Tightest symmetric power headroom across each slot bounds the offer,
+            # and the covered hours scale the (4 h) capacity-product revenue.
+            fcr_cap_max_vals: dict[int, float] = {}
+            fcr_slot_hours_vals: dict[int, float] = {}
+            for j, steps in slot_steps.items():
+                idx = np.asarray(steps)
+                cap = float(np.minimum(P_upper_arr[idx], -P_lower_arr[idx]).min())
+                fcr_cap_max_vals[j] = max(cap, 0.0)
+                fcr_slot_hours_vals[j] = len(steps) * timestep_hours
+
             m.S_FCR = pyo.RangeSet(0, n_fcr - 1)
+            m.fcr_price_param = pyo.Param(m.S_FCR, initialize=lambda mdl, j: fcr_slot_price[j])
+            m.fcr_cap_max_kw = pyo.Param(m.S_FCR, initialize=lambda mdl, j: fcr_cap_max_vals[j])
+            m.fcr_slot_hours = pyo.Param(m.S_FCR, initialize=lambda mdl, j: fcr_slot_hours_vals[j])
+            m.fcr_energy_req_hours = pyo.Param(initialize=float(fcr_energy_req_hours))
 
-            m.fcr_price_param = pyo.Param(
-                m.S_FCR,
-                initialize=lambda mdl, j_idx: float(fcr_prices.loc[fcr_slot_starts[j_idx]]),
-            )
+            m.x_fcr_committed = pyo.Param(m.S_FCR, initialize=0.0, mutable=True)
+            m.fcr_gate_open = pyo.Param(m.S_FCR, initialize=1, mutable=True, within=pyo.Binary)
 
-            # use flex power bounds to compute max available fcr capacity per slot
-            # tightest power headroom across the slot determines the max fcr offer
-            def get_fcr_cap_max(j_idx):
-                i_list = slot_steps[j_idx]
-                if not i_list:
-                    return 0.0
-                caps = []
-                for i in i_list:
-                    # symmetric headroom
-                    upward_available_kw = float(P_upper_ser.iloc[i])
-                    downward_available_kw = float(-P_lower_ser.iloc[i])
-                    caps.append(min(upward_available_kw, downward_available_kw))
-                return float(min(caps))
+            fcr_jt_pairs = [(j, t) for j, steps in slot_steps.items() for t in steps]
+            m.FCR_JT = pyo.Set(initialize=fcr_jt_pairs, dimen=2)
 
-            m.fcr_cap_max_kw = pyo.Param(
-                m.S_FCR,
-                initialize=lambda mdl, j_idx: get_fcr_cap_max(j_idx),
-            )
+            # Exposed for result extraction (filtered to slots overlapping this window).
+            m._fcr_slot_starts = list(fcr_slot_starts)
 
-            # covered hours per slot
-            fcr_slot_hours = {
-                j_idx: len(slot_steps[j_idx]) * float(timestep_hours)
-                for j_idx in range(n_fcr)
-            }
-            m.fcr_slot_hours = pyo.Param(
-                m.S_FCR,
-                initialize=lambda mdl, j_idx: fcr_slot_hours[j_idx],
-            )
+    # Reverse map: decision step -> FCR slot index (used by the forced droop power).
+    t_to_fcr_slot: dict[int, int] = {}
+    for j, steps in slot_steps.items():
+        for t in steps:
+            t_to_fcr_slot[t] = j
 
-            m.x_fcr_committed = pyo.Param(
-                m.S_FCR,
-                initialize=0.0,
-                mutable=True,
-            )
-
-            m.fcr_gate_open = pyo.Param(
-                m.S_FCR,
-                initialize=1,
-                mutable=True,
-                within=pyo.Binary,
-            )
-
+    # Forced droop activation fraction per decision step (0 outside FCR slots).
     droop_signal_by_t: dict[int, float] = {t: 0.0 for t in range(N)}
-
     if use_fcr and fcr_frequency_data is not None and not fcr_frequency_data.empty:
-        freq_series = fcr_frequency_data[FCR_FREQ_COL]
-        locs = freq_series.index.get_indexer(time_index, method="nearest")
+        freq_vals = fcr_frequency_data[FCR_FREQ_COL].to_numpy(dtype=float)
+        locs = fcr_frequency_data.index.get_indexer(time_index, method="nearest")
         for t, loc in enumerate(locs):
-            if loc >= 0:
-                val = float(freq_series.iloc[loc])
-                droop_signal_by_t[t] = droop_signal(val)
+            if loc >= 0 and t in t_to_fcr_slot:
+                droop_signal_by_t[t] = droop_signal(
+                    freq_vals[loc],
+                    nominal_hz=frequency_nominal_hz,
+                    deadband_hz=frequency_deadband_hz,
+                    full_activation_hz=frequency_full_activation_hz,
+                )
 
-    m.fcr_droop_signal = pyo.Param(
-        m.T,
-        initialize=lambda mdl, t: droop_signal_by_t[t],
-        mutable=True,
-    )
+    m.fcr_droop_signal = pyo.Param(m.T, initialize=lambda mdl, t: droop_signal_by_t[t], mutable=True)
 
     # ============================================================
     # 3) Decision variables
@@ -249,31 +238,27 @@ def flexibility_commercialization(
     m.p_net = pyo.Var(m.T, within=pyo.Reals)             # net power (+import / -export) [kW]
     m.E = pyo.Var(m.S, within=pyo.Reals)                 # energy state [kWh] (band model)
 
-    # fcr variables
+    # FCR variables. Offering in a 1 MW integer grid (z_fcr) makes x_fcr take
+    # values {0, 1000, 2000, ...} kW, which already encodes the 1 MW minimum
+    # bid — no separate commitment binary is required.
     if use_fcr:
-        # offered kW
-        m.x_fcr = pyo.Var(m.S_FCR, within=pyo.NonNegativeReals)
-
-        # offered MW (in 1MW resolution)
-        m.z_fcr = pyo.Var(m.S_FCR, within=pyo.NonNegativeIntegers)
-
-        # commitment mode (0=no offer, 1=offer)
-        m.y_fcr = pyo.Var(m.S_FCR, within=pyo.Binary)
+        m.x_fcr = pyo.Var(m.S_FCR, within=pyo.NonNegativeReals)  # offered kW
+        m.z_fcr = pyo.Var(
+            m.S_FCR,
+            within=pyo.NonNegativeIntegers,
+            bounds=lambda mdl, j: (0, int(fcr_cap_max_vals[j] // 1000.0)),
+        )
 
     # Market positions (signed): +import (buy), -export (sell)
-    m.p_market = pyo.Var(
-        m.MARKETS,
-        m.T,
-        bounds=lambda mdl, mk, t: (-mdl.p_market_max, mdl.p_market_max),
-    )
+    m.p_market = pyo.Var(m.MARKETS, m.T, bounds=(-p_market_max_value, p_market_max_value))
 
     # Optional imbalance variables
     if allow_imbalance:
         m.p_imb_pos = pyo.Var(m.T, within=pyo.NonNegativeReals)
         m.p_imb_neg = pyo.Var(m.T, within=pyo.NonNegativeReals)
 
-        m.price_imb_pos = pyo.Param(m.T, initialize=lambda mdl, t: float(imbalance_prices_pos.iloc[int(t)]))
-        m.price_imb_neg = pyo.Param(m.T, initialize=lambda mdl, t: float(imbalance_prices_neg.iloc[int(t)]))
+        m.price_imb_pos = pyo.Param(m.T, initialize=lambda mdl, t: float(imb_pos_arr[t]))
+        m.price_imb_neg = pyo.Param(m.T, initialize=lambda mdl, t: float(imb_neg_arr[t]))
 
     # Terminal deviation (absolute) for soft terminal objective
     m.e_term_dev = pyo.Var(within=pyo.NonNegativeReals)
@@ -296,18 +281,15 @@ def flexibility_commercialization(
     m.grid_lb = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] >= -mdl.grid_limit)
 
     # Forced FCR droop power at the grid connection (signed; positive = into depot).
-    # This is wired into market_balance below so droop activations must be settled
-    # against scheduled trades / imbalance instead of bypassing through E.
+    # Wired into market_balance below so droop activations must be settled against
+    # scheduled trades / imbalance instead of bypassing through E.
     def _p_droop_rule(mdl, t):
-        if not use_fcr:
+        j = t_to_fcr_slot.get(t)
+        if j is None:
             return 0.0
-        j_for_t = next((j for j, steps in slot_steps.items() if t in steps), None)
-        if j_for_t is None:
-            return 0.0
-        d_val = droop_signal_by_t[t]
-        # d_val > 0 (low freq) -> upward FCR -> depot exports -> p_droop < 0
-        # d_val < 0 (high freq) -> downward FCR -> depot imports -> p_droop > 0
-        return -d_val * mdl.x_fcr[j_for_t]
+        # signal > 0 (low freq)  -> upward FCR   -> depot exports -> p_droop < 0
+        # signal < 0 (high freq) -> downward FCR -> depot imports -> p_droop > 0
+        return -mdl.fcr_droop_signal[t] * mdl.x_fcr[j]
 
     m.p_droop = pyo.Expression(m.T, rule=_p_droop_rule)
 
@@ -337,79 +319,61 @@ def flexibility_commercialization(
     # ============================================================
     # 5) Market coupling + gate-closure commitments
     # ============================================================
-    # Gate closure: if a slot is closed, fix p_market to committed position
-    def market_activity_rule(mdl, mk, t):
-        allowed = bool(market_activity_mask[mk].iloc[int(t)])
-        if allowed:
-            return pyo.Constraint.Skip
-        return mdl.p_market[mk, t] == mdl.p_market_committed[mk, t]
+    # Gate closure: closed (market, timestep) pairs are fixed to committed values.
+    m.market_activity = pyo.Constraint(
+        m.MARKET_CLOSED,
+        rule=lambda mdl, mk, t: mdl.p_market[mk, t] == mdl.p_market_committed[mk, t],
+    )
 
-    m.market_activity = pyo.Constraint(m.MARKETS, m.T, rule=market_activity_rule)
-
-    # Balance markets to physical net power.
-    # Forced FCR droop power adds to the grid flow that must be settled by
-    # scheduled trades and imbalance, so droop cannot bypass markets via E.
+    # Balance markets to physical net power. The forced FCR droop power adds to
+    # the grid flow that must be settled by scheduled trades and imbalance, so
+    # droop cannot bypass markets via E.
     def balance_rule(mdl, t):
-        base = sum(mdl.p_market[mk, t] for mk in mdl.MARKETS)
+        base = pyo.quicksum(mdl.p_market[mk, t] for mk in mdl.MARKETS) + mdl.p_droop[t]
         if allow_imbalance:
-            return base + mdl.p_imb_pos[t] - mdl.p_imb_neg[t] + mdl.p_droop[t] == mdl.p_net[t]
-        return base + mdl.p_droop[t] == mdl.p_net[t]
+            return base + mdl.p_imb_pos[t] - mdl.p_imb_neg[t] == mdl.p_net[t]
+        return base == mdl.p_net[t]
 
     m.market_balance = pyo.Constraint(m.T, rule=balance_rule)
 
-    # fcr constraints
+    # ============================================================
+    # FCR constraints
+    # ============================================================
     if use_fcr:
-        _fcr_M = float(p_market_max_value) * 2.0
+        # 1 MW resolution: x_fcr = 1000 * z_fcr (=> implicit 1 MW minimum bid)
+        m.fcr_resolution = pyo.Constraint(m.S_FCR, rule=lambda mdl, j: mdl.x_fcr[j] == 1000.0 * mdl.z_fcr[j])
 
-        def fcr_gate_ub_rule(mdl, j):
-            return mdl.x_fcr[j] <= mdl.x_fcr_committed[j] + _fcr_M * mdl.fcr_gate_open[j]
+        # Available power headroom limit (also implied by the z_fcr bounds).
+        m.fcr_cap_limit = pyo.Constraint(m.S_FCR, rule=lambda mdl, j: mdl.x_fcr[j] <= mdl.fcr_cap_max_kw[j])
 
-        def fcr_gate_lb_rule(mdl, j):
-            return mdl.x_fcr[j] >= mdl.x_fcr_committed[j] - _fcr_M * mdl.fcr_gate_open[j]
-
-        m.fcr_gate_ub = pyo.Constraint(m.S_FCR, rule=fcr_gate_ub_rule)
-        m.fcr_gate_lb = pyo.Constraint(m.S_FCR, rule=fcr_gate_lb_rule)
-
-        # 1MW resolution steps 
-        m.fcr_resolution = pyo.Constraint(
+        # Gate closure: once a slot's gate is closed, fix the offer to the committed
+        # value. fcr_cap_max_kw is a sufficient bound on |x_fcr - committed| so it
+        # serves as a tight Big-M while the gate is open.
+        m.fcr_gate_ub = pyo.Constraint(
             m.S_FCR,
-            rule=lambda mdl, j: mdl.x_fcr[j] == 1000.0 * mdl.z_fcr[j]
+            rule=lambda mdl, j: mdl.x_fcr[j] <= mdl.x_fcr_committed[j] + fcr_cap_max_vals[j] * mdl.fcr_gate_open[j],
+        )
+        m.fcr_gate_lb = pyo.Constraint(
+            m.S_FCR,
+            rule=lambda mdl, j: mdl.x_fcr[j] >= mdl.x_fcr_committed[j] - fcr_cap_max_vals[j] * mdl.fcr_gate_open[j],
         )
 
-        # 1MW min bid
-        m.fcr_min_bid = pyo.Constraint(
-            m.S_FCR,
-            rule=lambda mdl, j: mdl.z_fcr[j] >= 1.0 * mdl.y_fcr[j],
+        # Reserve symmetric power headroom for a full activation in every covered step.
+        m.fcr_headroom_up = pyo.Constraint(
+            m.FCR_JT, rule=lambda mdl, j, t: mdl.p_net[t] + mdl.x_fcr[j] <= mdl.P_upper[t]
+        )
+        m.fcr_headroom_dn = pyo.Constraint(
+            m.FCR_JT, rule=lambda mdl, j, t: mdl.p_net[t] - mdl.x_fcr[j] >= mdl.P_lower[t]
         )
 
-        m.fcr_cap_limit = pyo.Constraint(
-            m.S_FCR,
-            rule=lambda mdl, j: mdl.x_fcr[j] <= mdl.fcr_cap_max_kw[j] * mdl.y_fcr[j],
-        )
-
-        fcr_jt_pairs = [
-            (j, t) for j, steps in slot_steps.items() for t in steps
-        ]
-        m.FCR_JT = pyo.Set(initialize=fcr_jt_pairs, dimen=2)
-
-        def fcr_headroom_up_rule(mdl, j, t):
-            return mdl.p_net[t] + mdl.x_fcr[j] <= mdl.P_upper[t]
-
-        def fcr_headroom_dn_rule(mdl, j, t):
-            return mdl.p_net[t] - mdl.x_fcr[j] >= mdl.P_lower[t]
-
-        m.fcr_headroom_up = pyo.Constraint(m.FCR_JT, rule=fcr_headroom_up_rule)
-        m.fcr_headroom_dn = pyo.Constraint(m.FCR_JT, rule=fcr_headroom_dn_rule)
-
-        m.fcr_energy_req_hours = pyo.Param(initialize=float(fcr_energy_req_hours))
-
+        # Reserve enough energy / energy-headroom for a sustained activation.
         def fcr_energy_headroom_up_rule(mdl, j, t):
-            fcr_energy_needed_kwh = (mdl.x_fcr[j] * mdl.fcr_energy_req_hours) / mdl.eta_d
-            return mdl.E[t] - fcr_energy_needed_kwh >= mdl.E_lower[t]
+            need_kwh = (mdl.x_fcr[j] * mdl.fcr_energy_req_hours) / mdl.eta_d
+            return mdl.E[t] - need_kwh >= mdl.E_lower[t]
 
         def fcr_energy_headroom_dn_rule(mdl, j, t):
-            fcr_energy_incoming_kwh = mdl.x_fcr[j] * mdl.fcr_energy_req_hours * mdl.eta_c
-            return mdl.E[t] + fcr_energy_incoming_kwh <= mdl.E_upper[t]
+            incoming_kwh = mdl.x_fcr[j] * mdl.fcr_energy_req_hours * mdl.eta_c
+            return mdl.E[t] + incoming_kwh <= mdl.E_upper[t]
 
         m.fcr_energy_cap_up = pyo.Constraint(m.FCR_JT, rule=fcr_energy_headroom_up_rule)
         m.fcr_energy_cap_dn = pyo.Constraint(m.FCR_JT, rule=fcr_energy_headroom_dn_rule)
@@ -420,15 +384,19 @@ def flexibility_commercialization(
     # - MILP mode: prevent simultaneous import/export using binary mode and Big-M
     # ------------------------------------------------------------
     if virtual_arbitrage:
-        # Absolute market volume for fee calculation (LP-safe linearization)
-        m.p_market_abs = pyo.Var(m.MARKETS, m.T, within=pyo.NonNegativeReals)
-        m.p_market_abs_pos = pyo.Constraint(
-            m.MARKETS, m.T, rule=lambda mdl, mk, t: mdl.p_market_abs[mk, t] >= mdl.p_market[mk, t]
-        )
-        m.p_market_abs_neg = pyo.Constraint(
-            m.MARKETS, m.T, rule=lambda mdl, mk, t: mdl.p_market_abs[mk, t] >= -mdl.p_market[mk, t]
-        )
-        m.p_market_vol = pyo.Expression(m.MARKETS, m.T, rule=lambda mdl, mk, t: mdl.p_market_abs[mk, t])
+        if any_fee:
+            # Absolute market volume for fee calculation (LP-safe linearization)
+            m.p_market_abs = pyo.Var(m.MARKETS, m.T, within=pyo.NonNegativeReals)
+            m.p_market_abs_pos = pyo.Constraint(
+                m.MARKETS, m.T, rule=lambda mdl, mk, t: mdl.p_market_abs[mk, t] >= mdl.p_market[mk, t]
+            )
+            m.p_market_abs_neg = pyo.Constraint(
+                m.MARKETS, m.T, rule=lambda mdl, mk, t: mdl.p_market_abs[mk, t] >= -mdl.p_market[mk, t]
+            )
+            m.p_market_vol = pyo.Expression(m.MARKETS, m.T, rule=lambda mdl, mk, t: mdl.p_market_abs[mk, t])
+        else:
+            # No transaction fees -> no need to linearize the absolute volume.
+            m.p_market_vol = pyo.Expression(m.MARKETS, m.T, rule=lambda mdl, mk, t: 0.0)
 
     else:
         # MILP: prevent simultaneous import/export within a timestep
@@ -448,10 +416,10 @@ def flexibility_commercialization(
         )
 
         def total_export(mdl, t):
-            return sum(mdl.p_market_neg[mk, t] for mk in mdl.MARKETS)
+            return pyo.quicksum(mdl.p_market_neg[mk, t] for mk in mdl.MARKETS)
 
         def total_import(mdl, t):
-            return sum(mdl.p_market_pos[mk, t] for mk in mdl.MARKETS)
+            return pyo.quicksum(mdl.p_market_pos[mk, t] for mk in mdl.MARKETS)
 
         # Enforce either export or import using tight Big-M from bands
         m.export_mode_limit = pyo.Constraint(
@@ -477,36 +445,35 @@ def flexibility_commercialization(
     # 6) Objective: revenue - fees - degradation - imbalance penalty - terminal dev
     # ============================================================
     def obj_expr(mdl):
+        dt = mdl.dt
+
         # Market cashflow (EUR)
-        energy_cashflow = sum(
-            -mdl.price[mk, t] * mdl.p_market[mk, t] * mdl.dt
+        energy_cashflow = pyo.quicksum(
+            -mdl.price[mk, t] * mdl.p_market[mk, t] * dt
             for mk in mdl.MARKETS for t in mdl.T
         )
 
         # Transaction fees on absolute volume (EUR)
-        fee_cost = sum(
-            mdl.fee[mk] * mdl.p_market_vol[mk, t] * mdl.dt
-            for mk in mdl.MARKETS for t in mdl.T
-        )
+        fee_cost = 0.0
+        if any_fee:
+            fee_cost = pyo.quicksum(
+                mdl.fee[mk] * mdl.p_market_vol[mk, t] * dt
+                for mk in mdl.MARKETS for t in mdl.T
+            )
 
         # Cycling / degradation cost on throughput (EUR)
-        deg_cost = mdl.c_deg * sum(
-            (mdl.p_ch[t] + mdl.p_dis[t]) * mdl.dt
-            for t in mdl.T
-        )
+        deg_cost = mdl.c_deg * pyo.quicksum((mdl.p_ch[t] + mdl.p_dis[t]) * dt for t in mdl.T)
 
         # Optional imbalance cashflow and volume penalty
         imb_cash = 0.0
         imb_vol_pen = 0.0
         if allow_imbalance:
-            imb_cash = sum(
-                -mdl.price_imb_pos[t] * mdl.p_imb_pos[t] * mdl.dt
-                + mdl.price_imb_neg[t] * mdl.p_imb_neg[t] * mdl.dt
+            imb_cash = pyo.quicksum(
+                (-mdl.price_imb_pos[t] * mdl.p_imb_pos[t] + mdl.price_imb_neg[t] * mdl.p_imb_neg[t]) * dt
                 for t in mdl.T
             )
-            imb_vol_pen = mdl.c_imb_vol * sum(
-                (mdl.p_imb_pos[t] + mdl.p_imb_neg[t]) * mdl.dt
-                for t in mdl.T
+            imb_vol_pen = mdl.c_imb_vol * pyo.quicksum(
+                (mdl.p_imb_pos[t] + mdl.p_imb_neg[t]) * dt for t in mdl.T
             )
 
         # Soft terminal objective (weight set by MPC)
@@ -514,7 +481,7 @@ def flexibility_commercialization(
 
         fcr_revenue = 0.0
         if use_fcr:
-            fcr_revenue = sum(
+            fcr_revenue = pyo.quicksum(
                 (mdl.fcr_price_param[j] / 1000.0) * mdl.x_fcr[j] * (mdl.fcr_slot_hours[j] / 4.0)
                 for j in mdl.S_FCR
             )

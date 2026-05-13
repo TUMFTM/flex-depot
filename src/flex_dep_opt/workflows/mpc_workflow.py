@@ -1,6 +1,5 @@
 import logging
 import random
-from pathlib import Path
 
 from flex_dep_opt.market.fcr import get_fcr_prices, get_fcr_frequency_data
 import pandas as pd
@@ -255,22 +254,21 @@ def run_mpc(settings: Settings) -> None:
 
             id_horizon_end = current_time + pd.Timedelta(hours=id_horizon_hours)
             if "ID" in decision_masks:
-                id_mask = decision_masks["ID"].copy()
-                id_mask[window_idx > id_horizon_end] = False
-                decision_masks["ID"] = id_mask
+                decision_masks["ID"][window_idx > id_horizon_end] = False
+
+            # frequency data covering this window
+            if fcr_frequency_data_full is not None:
+                window_freq_data = fcr_frequency_data_full.loc[
+                    (fcr_frequency_data_full.index >= window_idx[0])
+                    & (fcr_frequency_data_full.index <= window_idx[-1] + pd.Timedelta(hours=1))
+                ]
+            else:
+                window_freq_data = None
 
             # --------------------------------------------------------
             # 9.4) Build and parameterize optimization model
             # --------------------------------------------------------
             def _build_model(allow_imbalance: bool, imb_penalty: float) -> object:
-                if fcr_frequency_data_full is not None:
-                    window_freq_data = fcr_frequency_data_full.loc[
-                        (fcr_frequency_data_full.index >= window_idx[0]) &
-                        (fcr_frequency_data_full.index <= window_idx[-1] + pd.Timedelta(hours=1))
-                    ]
-                else:
-                    window_freq_data = None
-
                 _m = flexibility_commercialization(
                     depot=Depot(dep_cfg.eta_grid2depot, dep_cfg.eta_depot2grid, dep_cfg.grid_connection_limit),
                     prices_by_market=window_prices,
@@ -297,7 +295,8 @@ def run_mpc(settings: Settings) -> None:
                 )
 
                 if hasattr(_m, "S_FCR"):
-                    _m._fcr_slot_starts = list(window_fcr_prices.index)
+                    # _m._fcr_slot_starts is set inside the model (only the slots
+                    # that actually overlap this window), so S_FCR indices map to it.
                     for j in _m.S_FCR:
                         slot = _m._fcr_slot_starts[j]
                         is_open = fcr_gate_open_window.get(slot, False)
@@ -503,7 +502,7 @@ def run_mpc(settings: Settings) -> None:
         # --- Read simulation "name" from settings ---
         name = sim_cfg.name.strip()
         if not name:
-            raise ValueError("settings.yaml: simulation.name must be set (e.g. 'illustrative_example').")
+            raise ValueError("simulation.name must be set in the settings file (e.g. 'illustrative_example').")
 
         # --- Create per-run output directory (Option A: name + timestamp) ---
         run_dir = make_run_dir("results", name, tz="Europe/Berlin")
