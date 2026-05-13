@@ -26,7 +26,8 @@ def flexibility_commercialization(
     imbalance_prices_neg: pd.Series | None = None,
     imbalance_volume_penalty_eur_per_kwh: float = 0.0,
     fcr_prices: pd.Series | None = None,
-    fcr_energy_req_hours: float = 1.5,
+    fcr_energy_req_hours: float | None = 1.5,
+    fcr_enforce_power_headroom: bool = True,
     fcr_frequency_data: pd.DataFrame | None = None,
     frequency_nominal_hz: float = 50.0,
     frequency_deadband_hz: float = 0.010,
@@ -211,7 +212,9 @@ def flexibility_commercialization(
             m.fcr_price_param = pyo.Param(m.S_FCR, initialize=lambda mdl, j: fcr_slot_price[j])
             m.fcr_cap_max_kw = pyo.Param(m.S_FCR, initialize=lambda mdl, j: fcr_cap_max_vals[j])
             m.fcr_slot_hours = pyo.Param(m.S_FCR, initialize=lambda mdl, j: fcr_slot_hours_vals[j])
-            m.fcr_energy_req_hours = pyo.Param(initialize=float(fcr_energy_req_hours))
+            m.fcr_energy_req_hours = pyo.Param(
+                initialize=float(fcr_energy_req_hours) if fcr_energy_req_hours else 0.0
+            )
 
             m.x_fcr_committed = pyo.Param(m.S_FCR, initialize=0.0, mutable=True)
             m.fcr_gate_open = pyo.Param(m.S_FCR, initialize=1, mutable=True, within=pyo.Binary)
@@ -396,24 +399,31 @@ def flexibility_commercialization(
         )
 
         # Reserve symmetric power headroom for a full activation in every covered step.
-        m.fcr_headroom_up = pyo.Constraint(
-            m.FCR_JT, rule=lambda mdl, j, t: mdl.p_net[t] + mdl.x_fcr[j] <= mdl.P_upper[t]
-        )
-        m.fcr_headroom_dn = pyo.Constraint(
-            m.FCR_JT, rule=lambda mdl, j, t: mdl.p_net[t] - mdl.x_fcr[j] >= mdl.P_lower[t]
-        )
+        # When disabled, rely on the droop-signal-based p_droop already wired into the
+        # market balance instead of a worst-case full-activation reservation.
+        if fcr_enforce_power_headroom:
+            m.fcr_headroom_up = pyo.Constraint(
+                m.FCR_JT, rule=lambda mdl, j, t: mdl.p_net[t] + mdl.x_fcr[j] <= mdl.P_upper[t]
+            )
+            m.fcr_headroom_dn = pyo.Constraint(
+                m.FCR_JT, rule=lambda mdl, j, t: mdl.p_net[t] - mdl.x_fcr[j] >= mdl.P_lower[t]
+            )
 
         # Reserve enough energy / energy-headroom for a sustained activation.
-        def fcr_energy_headroom_up_rule(mdl, j, t):
-            need_kwh = (mdl.x_fcr[j] * mdl.fcr_energy_req_hours) / mdl.eta_d
-            return mdl.E[t] - need_kwh >= mdl.E_lower[t]
+        # When fcr_energy_req_hours is None or 0, skip the sustained-activation
+        # reservation entirely and rely on the droop-based energy throughput
+        # (already folded into the energy state) plus the regular E band.
+        if fcr_energy_req_hours:
+            def fcr_energy_headroom_up_rule(mdl, j, t):
+                need_kwh = (mdl.x_fcr[j] * mdl.fcr_energy_req_hours) / mdl.eta_d
+                return mdl.E[t] - need_kwh >= mdl.E_lower[t]
 
-        def fcr_energy_headroom_dn_rule(mdl, j, t):
-            incoming_kwh = mdl.x_fcr[j] * mdl.fcr_energy_req_hours * mdl.eta_c
-            return mdl.E[t] + incoming_kwh <= mdl.E_upper[t]
+            def fcr_energy_headroom_dn_rule(mdl, j, t):
+                incoming_kwh = mdl.x_fcr[j] * mdl.fcr_energy_req_hours * mdl.eta_c
+                return mdl.E[t] + incoming_kwh <= mdl.E_upper[t]
 
-        m.fcr_energy_cap_up = pyo.Constraint(m.FCR_JT, rule=fcr_energy_headroom_up_rule)
-        m.fcr_energy_cap_dn = pyo.Constraint(m.FCR_JT, rule=fcr_energy_headroom_dn_rule)
+            m.fcr_energy_cap_up = pyo.Constraint(m.FCR_JT, rule=fcr_energy_headroom_up_rule)
+            m.fcr_energy_cap_dn = pyo.Constraint(m.FCR_JT, rule=fcr_energy_headroom_dn_rule)
 
     # ------------------------------------------------------------
     # Virtual arbitrage handling:

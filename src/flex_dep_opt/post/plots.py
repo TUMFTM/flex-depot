@@ -253,7 +253,8 @@ def plot_mpc_dispatch_plotly(
     commit_df: pd.DataFrame | None = None,
     fcr_commit_df: pd.DataFrame | None = None,
     title: str = "MPC Flexband Dispatch and Market Positions",
-    fcr_energy_req_hours: float = 1.5,
+    fcr_energy_req_hours: float | None = 1.5,
+    fcr_enforce_power_headroom: bool = True,
     eta_c: float = 1.0,
     eta_d: float = 1.0,
     fcr_frequency_data: Optional[pd.DataFrame] = None,
@@ -405,7 +406,7 @@ def plot_mpc_dispatch_plotly(
             row=2, col=1,
         )
 
-    if has_fcr and x_fcr_dense is not None:
+    if has_fcr and x_fcr_dense is not None and fcr_enforce_power_headroom:
         headroom_upper = dispatch["p_net_kw"] + x_fcr_dense
         headroom_lower = dispatch["p_net_kw"] - x_fcr_dense
 
@@ -457,7 +458,7 @@ def plot_mpc_dispatch_plotly(
         row=3, col=1
     )
 
-    if has_fcr and x_fcr_dense is not None:
+    if has_fcr and x_fcr_dense is not None and fcr_energy_req_hours:
         buffer_dn_kwh = x_fcr_dense * fcr_energy_req_hours * eta_c
         buffer_up_kwh = (x_fcr_dense * fcr_energy_req_hours) / eta_d
 
