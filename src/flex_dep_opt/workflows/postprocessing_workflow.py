@@ -11,6 +11,8 @@ from flex_dep_opt.post.metrics import (
     compute_cashflows_per_step,
     compute_market_aggregates,
     compute_kpis,
+    compute_fcr_cashflow_per_slot,
+    compute_fcr_activation_energy,
 )
 from flex_dep_opt.post.plots import plot_market_cashflows_plotly, plot_mpc_dispatch_plotly
 from flex_dep_opt.io.results_io import save_dispatch_to_csv, save_summary_to_csv, read_latest_run_pointer
@@ -96,28 +98,63 @@ def postprocess_mpc_results(settings: Settings) -> None:
 
     dt = sim.timestep_hours
 
+    # FCR KPIs are sourced from fcr_commit.csv (per-slot EUR, computed at gate
+    # closure). The previous implementation multiplied per-step x_fcr by per-step
+    # FCR price, which double-counted by the number of steps per slot.
     fcr_kpis: dict = {}
-    if "x_fcr_kw" in dispatch.columns and "fcr" in prices_by_market:
-        x_fcr_kw = dispatch["x_fcr_kw"]
-        fcr_prices = prices_by_market["fcr"]
-
-        committed_mw = x_fcr_kw / 1000.0
-        slot_revenue = committed_mw * fcr_prices.reindex(committed_mw.index, method="ffill")
-
+    if fcr_commit_df is not None and not fcr_commit_df.empty:
+        accepted = (
+            fcr_commit_df[fcr_commit_df["accepted"].astype(bool)]
+            if "accepted" in fcr_commit_df.columns else fcr_commit_df
+        )
+        committed_mask = accepted["x_fcr_kw"] > 0 if "x_fcr_kw" in accepted.columns else pd.Series(False, index=accepted.index)
         fcr_kpis = {
-            "fcr_revenue_eur": float(slot_revenue.sum()),
-            "fcr_slots_committed": int((committed_mw > 0).sum()),
-            "fcr_avg_capacity_mw": float(committed_mw[committed_mw > 0].mean())
-            if (committed_mw > 0).any() else 0.0,
+            "fcr_revenue_eur": float(accepted["fcr_revenue_eur"].sum()) if "fcr_revenue_eur" in accepted.columns else 0.0,
+            "fcr_slots_committed": int(committed_mask.sum()),
+            "fcr_avg_capacity_mw": (
+                float(accepted.loc[committed_mask, "x_fcr_mw"].mean())
+                if "x_fcr_mw" in accepted.columns and committed_mask.any() else 0.0
+            ),
         }
 
     # -------------------------------------------------------------------------
     # Compute metrics
     # -------------------------------------------------------------------------
     cf_df = compute_cashflows_per_step(dispatch, prices_by_market, timestep_hours=dt)
+
+    # Add FCR cashflow column (one entry per slot, at the slot start) so the
+    # cashflow plot shows one bar per 4 h FCR slot and the gross-profit KPI
+    # includes FCR.
+    fcr_cf_series = compute_fcr_cashflow_per_slot(cf_df.index, fcr_commit_df)
+    if fcr_cf_series is not None:
+        total_col = "Total Cashflow [€/step]"
+        cum_col = "Cumulative Profit [€]"
+        cf_df = cf_df.drop(columns=[c for c in (total_col, cum_col) if c in cf_df.columns])
+        cf_df["FCR Cashflow [€/step]"] = fcr_cf_series
+        cf_df[total_col] = cf_df.sum(axis=1)
+        cf_df[cum_col] = cf_df[total_col].cumsum()
+
     energy_by_mk, cash_by_mk, energy_data, cash_data = compute_market_aggregates(
         dispatch, prices_by_market, timestep_hours=dt
     )
+
+    # Surface FCR revenue in the cash sunburst.
+    if fcr_kpis.get("fcr_revenue_eur", 0.0) > 0:
+        cash_data.append(("FCR", "Sell", float(fcr_kpis["fcr_revenue_eur"])))
+
+    # Surface FCR *activation* energy (actually used capacity) in the energy
+    # sunburst — committed MW alone is just an offered headroom; what hit the
+    # battery is what's worth showing on the energy chart.
+    fcr_act = compute_fcr_activation_energy(dispatch, timestep_hours=dt)
+    if fcr_act is not None:
+        fcr_buy_kwh, fcr_sell_kwh = fcr_act
+        if fcr_buy_kwh > 0:
+            energy_data.append(("FCR", "Buy", fcr_buy_kwh))
+        if fcr_sell_kwh > 0:
+            energy_data.append(("FCR", "Sell", fcr_sell_kwh))
+        # Intentionally not added to `energy_by_mk` so the headline
+        # buy_kwh / sell_kwh KPIs stay pure scheduled-market volumes.
+
     kpis = compute_kpis(cf_df, energy_by_mk, fees_by_market, commit=commit_df)
     kpis.update(fcr_kpis)
 

@@ -220,6 +220,66 @@ def compute_market_aggregates(
     return energy_by_mk, cash_by_mk, energy_data, cash_data
 
 
+def compute_fcr_cashflow_per_slot(
+    index: pd.DatetimeIndex,
+    fcr_commit_df: Optional[pd.DataFrame],
+) -> Optional[pd.Series]:
+    """
+    Book per-slot FCR revenue (EUR, from fcr_commit.csv) as a single value at the
+    first index inside each slot window. The bar chart shows one bar per 4 h slot
+    instead of a low-height bar repeated across 16 quarter-hour steps, which is
+    far more readable; cumulative profit steps up at slot start and is flat in
+    between. Returns None when there is no accepted FCR revenue to report.
+    """
+    if fcr_commit_df is None or fcr_commit_df.empty:
+        return None
+    if "slot_start" not in fcr_commit_df.columns or "fcr_revenue_eur" not in fcr_commit_df.columns:
+        return None
+
+    cf = pd.Series(0.0, index=index)
+    any_revenue = False
+    for _, row in fcr_commit_df.iterrows():
+        rev = float(row["fcr_revenue_eur"])
+        if rev == 0.0:
+            continue
+        slot_start = row["slot_start"]
+        # Place the full slot revenue at the first dispatch step inside the slot.
+        in_slot = index[index >= slot_start]
+        if in_slot.empty:
+            continue
+        cf.loc[in_slot[0]] = cf.loc[in_slot[0]] + rev
+        any_revenue = True
+
+    return cf if any_revenue else None
+
+
+def compute_fcr_activation_energy(
+    dispatch: pd.DataFrame,
+    *,
+    timestep_hours: float,
+) -> Optional[tuple[float, float]]:
+    """
+    Total activation energy moved by FCR over the horizon, split into:
+      buy_kwh  = energy taken in (downward FCR activations, depot charges)
+      sell_kwh = energy delivered out (upward FCR activations, depot discharges)
+
+    Returns None if the dispatch has no FCR column.
+
+    Sign convention in dispatch (`p_fcr_actual_kw = signal * x_fcr`):
+      p_fcr > 0 -> depot exports (Sell)
+      p_fcr < 0 -> depot imports (Buy)
+    """
+    if "p_fcr_actual_kw" not in dispatch.columns:
+        return None
+    dt = float(timestep_hours)
+    p = dispatch["p_fcr_actual_kw"].astype(float)
+    sell_kwh = float(p[p > 0].sum()) * dt
+    buy_kwh = float(-p[p < 0].sum()) * dt
+    if buy_kwh == 0.0 and sell_kwh == 0.0:
+        return None
+    return buy_kwh, sell_kwh
+
+
 def compute_kpis(
     cf_df: pd.DataFrame,
     energy_by_mk: Mapping[str, tuple[float, float]],

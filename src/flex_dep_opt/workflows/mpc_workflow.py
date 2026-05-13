@@ -2,6 +2,7 @@ import logging
 import random
 
 from flex_dep_opt.market.fcr import get_fcr_prices, get_fcr_frequency_data
+import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
 import pyomo.environ as pyo
@@ -150,6 +151,33 @@ def run_mpc(settings: Settings) -> None:
 
     all_fcr_slot_starts = list(fcr_prices_full.index)
 
+    # Slot-local cap_max and slot_hours, computed against the *full* simulation
+    # horizon (not the rolling window) so:
+    #   - cap_max[j] reflects headroom over the whole 4 h slot (avoids
+    #     bidding more MW than later steps can physically deliver), and
+    #   - slot_hours[j] = 4 for slots fully covered by the sim, so the
+    #     optimizer does not under-bid partial-overlap slots that the next
+    #     rolling window will finish covering.
+    fcr_cap_max_by_slot: dict[pd.Timestamp, float] = {}
+    fcr_slot_hours_by_slot: dict[pd.Timestamp, float] = {}
+    if not fcr_prices_full.empty and flexibility_bounds_full is not None:
+        P_up_full = flexibility_bounds_full["Power_upper_kW"]
+        P_lo_full = flexibility_bounds_full["Power_lower_kW"]
+        for slot_start in all_fcr_slot_starts:
+            slot_end = slot_start + pd.Timedelta(hours=4)
+            slot_mask = (full_index >= slot_start) & (full_index < slot_end)
+            n_covered = int(slot_mask.sum())
+            if n_covered == 0:
+                fcr_cap_max_by_slot[slot_start] = 0.0
+                fcr_slot_hours_by_slot[slot_start] = 0.0
+                continue
+            covered_idx = full_index[slot_mask]
+            P_up = P_up_full.loc[covered_idx].to_numpy(dtype=float)
+            P_lo = P_lo_full.loc[covered_idx].to_numpy(dtype=float)
+            cap = float(np.minimum(P_up, -P_lo).min())
+            fcr_cap_max_by_slot[slot_start] = max(cap, 0.0)
+            fcr_slot_hours_by_slot[slot_start] = n_covered * step_hours
+
     # ============================================================
     # 5) Model options
     # ============================================================
@@ -292,6 +320,8 @@ def run_mpc(settings: Settings) -> None:
                     frequency_nominal_hz=frequency_nominal_hz,
                     frequency_deadband_hz=frequency_deadband_hz,
                     frequency_full_activation_hz=frequency_full_activation_hz,
+                    fcr_cap_max_by_slot=fcr_cap_max_by_slot or None,
+                    fcr_slot_hours_by_slot=fcr_slot_hours_by_slot or None,
                 )
 
                 if hasattr(_m, "S_FCR"):

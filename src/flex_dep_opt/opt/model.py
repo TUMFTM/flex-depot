@@ -31,6 +31,8 @@ def flexibility_commercialization(
     frequency_nominal_hz: float = 50.0,
     frequency_deadband_hz: float = 0.010,
     frequency_full_activation_hz: float = 0.200,
+    fcr_cap_max_by_slot: dict | None = None,
+    fcr_slot_hours_by_slot: dict | None = None,
 ) -> pyo.ConcreteModel:
     """
     Flex-band based multi-market commercialization model (Pyomo).
@@ -185,13 +187,25 @@ def flexibility_commercialization(
 
             # Tightest symmetric power headroom across each slot bounds the offer,
             # and the covered hours scale the (4 h) capacity-product revenue.
+            # When the caller supplies slot-local cap / hours (computed against the
+            # full simulation horizon, not just this window), prefer those — the
+            # window-local view underestimates cap for slots that extend past the
+            # horizon and over-prorates revenue for slots that the rolling MPC
+            # will fully cover in subsequent windows.
             fcr_cap_max_vals: dict[int, float] = {}
             fcr_slot_hours_vals: dict[int, float] = {}
             for j, steps in slot_steps.items():
-                idx = np.asarray(steps)
-                cap = float(np.minimum(P_upper_arr[idx], -P_lower_arr[idx]).min())
-                fcr_cap_max_vals[j] = max(cap, 0.0)
-                fcr_slot_hours_vals[j] = len(steps) * timestep_hours
+                slot_start = fcr_slot_starts[j]
+                if fcr_cap_max_by_slot is not None and slot_start in fcr_cap_max_by_slot:
+                    fcr_cap_max_vals[j] = max(float(fcr_cap_max_by_slot[slot_start]), 0.0)
+                else:
+                    idx = np.asarray(steps)
+                    cap = float(np.minimum(P_upper_arr[idx], -P_lower_arr[idx]).min())
+                    fcr_cap_max_vals[j] = max(cap, 0.0)
+                if fcr_slot_hours_by_slot is not None and slot_start in fcr_slot_hours_by_slot:
+                    fcr_slot_hours_vals[j] = float(fcr_slot_hours_by_slot[slot_start])
+                else:
+                    fcr_slot_hours_vals[j] = len(steps) * timestep_hours
 
             m.S_FCR = pyo.RangeSet(0, n_fcr - 1)
             m.fcr_price_param = pyo.Param(m.S_FCR, initialize=lambda mdl, j: fcr_slot_price[j])
@@ -229,6 +243,26 @@ def flexibility_commercialization(
                 )
 
     m.fcr_droop_signal = pyo.Param(m.T, initialize=lambda mdl, t: droop_signal_by_t[t], mutable=True)
+
+    # Per-step coefficients (computed at build time from the fixed droop signal):
+    #   E_change[t]    = fcr_throughput_coef[t] * x_fcr[j(t)] * dt
+    #   |p_droop[t]|   = fcr_activation_abs_coef[t] * x_fcr[j(t)]
+    # signal > 0 -> upward FCR  -> depot exports -> energy leaves at 1/eta_d
+    # signal < 0 -> downward FCR -> depot imports -> energy enters at eta_c
+    # Mutating fcr_droop_signal post-build would *not* update these coefficients;
+    # the MPC rebuilds the model every step, so this is consistent with the rest
+    # of the build-time precomputation here.
+    eta_c_val = float(depot.eta_grid2depot)
+    eta_d_val = float(depot.eta_depot2grid)
+    fcr_throughput_coef: dict[int, float] = {t: 0.0 for t in range(N)}
+    fcr_activation_abs_coef: dict[int, float] = {t: 0.0 for t in range(N)}
+    if use_fcr:
+        for t, sig in droop_signal_by_t.items():
+            if sig > 0.0:
+                fcr_throughput_coef[t] = -(1.0 / eta_d_val) * sig
+            elif sig < 0.0:
+                fcr_throughput_coef[t] = -eta_c_val * sig
+            fcr_activation_abs_coef[t] = abs(sig)
 
     # ============================================================
     # 3) Decision variables
@@ -294,12 +328,15 @@ def flexibility_commercialization(
     m.p_droop = pyo.Expression(m.T, rule=_p_droop_rule)
 
     def energy_state_rule(mdl, t):
-        return (
-            mdl.E[t + 1]
-            == mdl.E[t]
+        base = (
+            mdl.E[t]
             + mdl.eta_c * mdl.p_ch[t] * mdl.dt
             - (1.0 / mdl.eta_d) * mdl.p_dis[t] * mdl.dt
         )
+        j = t_to_fcr_slot.get(t)
+        if j is not None and fcr_throughput_coef[t] != 0.0:
+            base = base + fcr_throughput_coef[t] * mdl.x_fcr[j] * mdl.dt
+        return mdl.E[t + 1] == base
 
     m.energy_state = pyo.Constraint(m.T, rule=energy_state_rule)
 
@@ -461,8 +498,15 @@ def flexibility_commercialization(
                 for mk in mdl.MARKETS for t in mdl.T
             )
 
-        # Cycling / degradation cost on throughput (EUR)
+        # Cycling / degradation cost on throughput (EUR). FCR activations also
+        # cycle the battery — debit them at |p_droop[t]| = |signal[t]| * x_fcr[j].
         deg_cost = mdl.c_deg * pyo.quicksum((mdl.p_ch[t] + mdl.p_dis[t]) * dt for t in mdl.T)
+        if use_fcr:
+            deg_cost = deg_cost + mdl.c_deg * pyo.quicksum(
+                fcr_activation_abs_coef[t] * mdl.x_fcr[t_to_fcr_slot[t]] * dt
+                for t in t_to_fcr_slot
+                if fcr_activation_abs_coef[t] > 0.0
+            )
 
         # Optional imbalance cashflow and volume penalty
         imb_cash = 0.0
