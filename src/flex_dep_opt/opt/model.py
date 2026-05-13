@@ -343,9 +343,17 @@ def flexibility_commercialization(
 
     m.energy_state = pyo.Constraint(m.T, rule=energy_state_rule)
 
-    # Fleet energy band constraints (state index S)
-    m.E_lb = pyo.Constraint(m.S, rule=lambda mdl, s: mdl.E[s] >= mdl.E_lower[s])
-    m.E_ub = pyo.Constraint(m.S, rule=lambda mdl, s: mdl.E[s] <= mdl.E_upper[s])
+    # Fleet energy band constraints (state index S).
+    # In PASS2 (imbalance enabled) we add penalized slack so a locked FCR commit
+    # with adverse droop throughput can be absorbed instead of aborting.
+    if allow_imbalance:
+        m.e_slack_up = pyo.Var(m.S, within=pyo.NonNegativeReals)
+        m.e_slack_dn = pyo.Var(m.S, within=pyo.NonNegativeReals)
+        m.E_lb = pyo.Constraint(m.S, rule=lambda mdl, s: mdl.E[s] + mdl.e_slack_dn[s] >= mdl.E_lower[s])
+        m.E_ub = pyo.Constraint(m.S, rule=lambda mdl, s: mdl.E[s] - mdl.e_slack_up[s] <= mdl.E_upper[s])
+    else:
+        m.E_lb = pyo.Constraint(m.S, rule=lambda mdl, s: mdl.E[s] >= mdl.E_lower[s])
+        m.E_ub = pyo.Constraint(m.S, rule=lambda mdl, s: mdl.E[s] <= mdl.E_upper[s])
 
     # Terminal deviation |E[N] - Eterm| <= e_term_dev
     last_s = N
@@ -540,7 +548,14 @@ def flexibility_commercialization(
                 for j in mdl.S_FCR
             )
 
-        return energy_cashflow + fcr_revenue + imb_cash - fee_cost - deg_cost - imb_vol_pen - term_penalty
+        e_slack_pen = 0.0
+        if allow_imbalance:
+            # Heavy penalty — slack is a last resort to keep PASS2 feasible.
+            e_slack_pen = 1e6 * pyo.quicksum(
+                mdl.e_slack_up[s] + mdl.e_slack_dn[s] for s in mdl.S
+            )
+
+        return energy_cashflow + fcr_revenue + imb_cash - fee_cost - deg_cost - imb_vol_pen - term_penalty - e_slack_pen
 
     m.obj = pyo.Objective(rule=obj_expr, sense=pyo.maximize)
 
