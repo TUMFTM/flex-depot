@@ -528,12 +528,12 @@ def run_mpc(settings: Settings) -> None:
                         if bid_val > 0:
                             if accepted:
                                 logger.info(
-                                    f"FCR slot accepted: {slot} - {committed_val:.1f} kW "
+                                    f"[{current_time}] FCR slot accepted: {slot} - {committed_val:.1f} kW "
                                     f"@ {fcr_price_val:.2f} €/MW"
                                 )
                             else:
                                 logger.info(
-                                    f"FCR slot rejected: {slot} - bid {bid_val:.1f} kW not accepted"
+                                    f"[{current_time}] FCR slot rejected: {slot} - bid {bid_val:.1f} kW not accepted"
                                 )
 
             # --------------------------------------------------------
