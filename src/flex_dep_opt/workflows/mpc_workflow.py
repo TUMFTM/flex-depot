@@ -27,7 +27,24 @@ from flex_dep_opt.market.trading_rules import (
 from flex_dep_opt.config.settings import Settings
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+
+
+class _TqdmLoggingHandler(logging.Handler):
+    def emit(self, record):
+        try:
+            tqdm.write(self.format(record))
+        except Exception:
+            self.handleError(record)
+
+
+_root_logger = logging.getLogger()
+if not any(isinstance(h, _TqdmLoggingHandler) for h in _root_logger.handlers):
+    for h in list(_root_logger.handlers):
+        _root_logger.removeHandler(h)
+    _handler = _TqdmLoggingHandler()
+    _handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+    _root_logger.addHandler(_handler)
+    _root_logger.setLevel(logging.INFO)
 logging.getLogger("gurobipy").setLevel(logging.WARNING)
 logging.getLogger("pyomo").setLevel(logging.WARNING)
 logging.getLogger("pyomo.core").setLevel(logging.ERROR)
