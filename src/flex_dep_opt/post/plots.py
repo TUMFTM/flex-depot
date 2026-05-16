@@ -384,24 +384,6 @@ def plot_mpc_dispatch_plotly(
         row=2, col=1
     )
 
-    if "p_fcr_actual_kw" in dispatch.columns:
-        p_fcr_actual = dispatch["p_fcr_actual_kw"]
-        fcr_actual_colors = [
-            "rgba(214,39,40,0.75)" if v > 0 else "rgba(31,119,180,0.75)"
-            for v in p_fcr_actual
-        ]
-        fig.add_trace(
-            go.Bar(
-                x=dispatch.index,
-                y=p_fcr_actual.values,
-                name="FCR actual power [kW]",
-                marker_color=fcr_actual_colors,
-                hovertemplate="FCR actual: %{y:.1f} kW<br>(+discharge / -charge)<extra></extra>",
-                opacity=0.7,
-            ),
-            row=2, col=1,
-        )
-
     # Row 3: Energy band + E
     fig.add_trace(
         go.Scatter(x=dispatch.index, y=dispatch["E_upper_kWh"], mode="lines", name="E upper [kWh]",
