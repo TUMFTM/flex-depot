@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict, Optional
-
 import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
@@ -12,14 +10,14 @@ from flex_dep_opt.market.fcr import FCR_FREQ_COL, droop_signal
 
 def flexibility_commercialization(
     depot: Depot,
-    prices_by_market: Dict[str, pd.Series],
-    fee_eur_per_kwh_by_market: Optional[Dict[str, float]] = None,
+    prices_by_market: dict[str, pd.Series],
+    fee_eur_per_kwh_by_market: dict[str, float] | None = None,
     *,
     timestep_hours: float | None = None,
     virtual_arbitrage: bool = True,
     cycling_cost_eur_per_kwh: float = 0.0,
-    market_activity_mask: Dict[str, pd.Series],
-    committed_positions: Dict[str, pd.Series],
+    market_activity_mask: dict[str, pd.Series],
+    committed_positions: dict[str, pd.Series],
     flexibility_bounds: pd.DataFrame,
     allow_imbalance: bool = False,
     imbalance_prices_pos: pd.Series | None = None,
@@ -52,7 +50,8 @@ def flexibility_commercialization(
 
     Market coupling
     ---------------
-    - Market positions are optimized per market and summed to match p_net.
+    - Market positions are optimized per market and summed to match the physical
+      grid flow `p_net + p_droop` (scheduled net plus forced FCR activation).
     - Gate closures are enforced by fixing closed positions to committed values.
     - If virtual_arbitrage=False, a MILP prevents simultaneous import/export
       within a timestep using a binary mode variable and tight Big-M bounds.
@@ -90,10 +89,6 @@ def flexibility_commercialization(
     E_lower_arr = flexibility_bounds["Capacity_lower_kWh"].to_numpy(dtype=float)
     E_upper_arr = flexibility_bounds["Capacity_upper_kWh"].to_numpy(dtype=float)
 
-    # Tight per-timestep import/export maxima (Big-M values in MILP constraints)
-    P_ch_max_arr = np.clip(P_upper_arr, 0.0, None)      # max import (>=0)
-    P_dis_max_arr = np.clip(-P_lower_arr, 0.0, None)    # max export (>=0)
-
     if allow_imbalance:
         imb_pos_arr = imbalance_prices_pos.to_numpy(dtype=float)
         imb_neg_arr = imbalance_prices_neg.to_numpy(dtype=float)
@@ -122,26 +117,14 @@ def flexibility_commercialization(
     m.E_lower = pyo.Param(m.S, initialize=lambda mdl, s: float(E_lower_arr[s]))
     m.E_upper = pyo.Param(m.S, initialize=lambda mdl, s: float(E_upper_arr[s]))
 
-    # Tight Big-M bounds per timestep (for MILP mode):
-    # per-timestep upper bounds used to link continuous power/market variables
-    # with a binary import/export mode. M is the physically feasible maximum
-    # power derived from the flexibility bands (not an arbitrary large constant),
-    # which keeps the LP relaxation tight and numerically stable.
-    m.P_ch_max_t = pyo.Param(m.T, initialize=lambda mdl, t: float(P_ch_max_arr[t]))
-    m.P_dis_max_t = pyo.Param(m.T, initialize=lambda mdl, t: float(P_dis_max_arr[t]))
-
     # --- Depot parameters ---
-    grid_limit_value = float(depot.grid_connection_limit)
     m.eta_c = pyo.Param(initialize=float(depot.eta_grid2depot))
     m.eta_d = pyo.Param(initialize=float(depot.eta_depot2grid))
-    m.grid_limit = pyo.Param(initialize=grid_limit_value)
+    m.grid_limit = pyo.Param(initialize=float(depot.grid_connection_limit))
 
     # --- Cost coefficients ---
     m.c_deg = pyo.Param(initialize=float(cycling_cost_eur_per_kwh))
     m.c_imb_vol = pyo.Param(initialize=float(imbalance_volume_penalty_eur_per_kwh))
-
-    # Global symmetric bound for market power
-    m.p_market_max = pyo.Param(initialize=p_market_max_value)
 
     # Initial energy state (set by MPC workflow)
     m.E0 = pyo.Param(initialize=0.0, mutable=True)
@@ -237,27 +220,22 @@ def flexibility_commercialization(
                     full_activation_hz=frequency_full_activation_hz,
                 )
 
-    m.fcr_droop_signal = pyo.Param(m.T, initialize=lambda mdl, t: droop_signal_by_t[t], mutable=True)
+    # Exposed for result extraction in solve.py (signal value per t).
+    m.fcr_droop_signal = pyo.Param(m.T, initialize=lambda mdl, t: droop_signal_by_t[t])
 
-    # Per-step coefficients (computed at build time from the fixed droop signal):
-    #   E_change[t]    = fcr_throughput_coef[t] * x_fcr[j(t)] * dt
-    #   |p_droop[t]|   = fcr_activation_abs_coef[t] * x_fcr[j(t)]
+    # Per-step throughput coefficient (computed at build time from the fixed droop
+    # signal): E_change[t] = fcr_throughput_coef[t] * x_fcr[j(t)] * dt
     # signal > 0 -> upward FCR  -> depot exports -> energy leaves at 1/eta_d
     # signal < 0 -> downward FCR -> depot imports -> energy enters at eta_c
-    # Mutating fcr_droop_signal post-build would *not* update these coefficients;
-    # the MPC rebuilds the model every step, so this is consistent with the rest
-    # of the build-time precomputation here.
     eta_c_val = float(depot.eta_grid2depot)
     eta_d_val = float(depot.eta_depot2grid)
     fcr_throughput_coef: dict[int, float] = {t: 0.0 for t in range(N)}
-    fcr_activation_abs_coef: dict[int, float] = {t: 0.0 for t in range(N)}
     if use_fcr:
         for t, sig in droop_signal_by_t.items():
             if sig > 0.0:
                 fcr_throughput_coef[t] = -(1.0 / eta_d_val) * sig
             elif sig < 0.0:
                 fcr_throughput_coef[t] = -eta_c_val * sig
-            fcr_activation_abs_coef[t] = abs(sig)
 
     # ============================================================
     # 3) Decision variables
@@ -420,7 +398,15 @@ def flexibility_commercialization(
             m.p_market_vol = pyo.Expression(m.MARKETS, m.T, rule=lambda mdl, mk, t: 0.0)
 
     else:
-        # MILP: prevent simultaneous import/export within a timestep
+        # MILP: prevent simultaneous import/export within a timestep.
+        # Tight Big-M per timestep: the physically feasible max power from the
+        # flexibility bands (not an arbitrary large constant), which keeps the
+        # LP relaxation tight and numerically stable.
+        P_ch_max_arr = np.clip(P_upper_arr, 0.0, None)      # max import (>=0)
+        P_dis_max_arr = np.clip(-P_lower_arr, 0.0, None)    # max export (>=0)
+        m.P_ch_max_t = pyo.Param(m.T, initialize=lambda mdl, t: float(P_ch_max_arr[t]))
+        m.P_dis_max_t = pyo.Param(m.T, initialize=lambda mdl, t: float(P_dis_max_arr[t]))
+
         m.u_state = pyo.Var(m.T, within=pyo.Binary)  # 1=export mode, 0=import mode
 
         # Split signed market position into positive (buy/import) and negative (sell/export) parts
@@ -487,9 +473,9 @@ def flexibility_commercialization(
         deg_cost = mdl.c_deg * pyo.quicksum((mdl.p_ch[t] + mdl.p_dis[t]) * dt for t in mdl.T)
         if use_fcr:
             deg_cost = deg_cost + mdl.c_deg * pyo.quicksum(
-                fcr_activation_abs_coef[t] * mdl.x_fcr[t_to_fcr_slot[t]] * dt
+                abs(droop_signal_by_t[t]) * mdl.x_fcr[t_to_fcr_slot[t]] * dt
                 for t in t_to_fcr_slot
-                if fcr_activation_abs_coef[t] > 0.0
+                if droop_signal_by_t[t] != 0.0
             )
 
         # Optional imbalance cashflow and volume penalty
