@@ -199,8 +199,6 @@ def postprocess_mpc_results(settings: Settings) -> None:
         commit_df=commit_df,
         fcr_commit_df=fcr_commit_df,
         title="MPC Flexband Dispatch and Market Positions",
-        fcr_energy_req_hours=float(fcr_cfg.energy_req_hours) if fcr_cfg.energy_req_hours else None,
-        fcr_enforce_power_headroom=bool(fcr_cfg.enforce_power_headroom),
         fcr_frequency_data=fcr_frequency_data_pp,
     )
     fig_dispatch.write_html(dispatch_html, include_plotlyjs="cdn")

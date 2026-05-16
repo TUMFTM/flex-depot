@@ -253,10 +253,6 @@ def plot_mpc_dispatch_plotly(
     commit_df: pd.DataFrame | None = None,
     fcr_commit_df: pd.DataFrame | None = None,
     title: str = "MPC Flexband Dispatch and Market Positions",
-    fcr_energy_req_hours: float | None = 1.5,
-    fcr_enforce_power_headroom: bool = True,
-    eta_c: float = 1.0,
-    eta_d: float = 1.0,
     fcr_frequency_data: Optional[pd.DataFrame] = None,
 ) -> go.Figure:
     """
@@ -406,39 +402,6 @@ def plot_mpc_dispatch_plotly(
             row=2, col=1,
         )
 
-    if has_fcr and x_fcr_dense is not None and fcr_enforce_power_headroom:
-        headroom_upper = dispatch["p_net_kw"] + x_fcr_dense
-        headroom_lower = dispatch["p_net_kw"] - x_fcr_dense
-
-        fig.add_trace(
-            go.Scatter(
-                x=dispatch.index,
-                y=headroom_upper,
-                mode="lines",
-                name="FCR headroom upper",
-                line=dict(width=1, color=FCR_GREEN, dash="dot"),
-                showlegend=True,
-            ),
-            row=2, col=1
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=dispatch.index,
-                y=headroom_lower,
-                mode="lines",
-                name="FCR headroom lower / window",
-                fill="tonexty",
-                fillcolor=FCR_GREEN_LIGHT,
-                line=dict(width=1, color=FCR_GREEN, dash="dot"),
-                hovertemplate=(
-                    "FCR window: %{customdata[0]:.0f} → %{customdata[1]:.0f} kW<br>"
-                    "Reserved: %{customdata[2]:.0f} kW<extra></extra>"
-                ),
-                customdata=list(zip(headroom_upper, headroom_lower, x_fcr_dense)),
-            ),
-            row=2, col=1
-        )
-
     # Row 3: Energy band + E
     fig.add_trace(
         go.Scatter(x=dispatch.index, y=dispatch["E_upper_kWh"], mode="lines", name="E upper [kWh]",
@@ -457,31 +420,6 @@ def plot_mpc_dispatch_plotly(
                    line=dict(width=3, color="rgb(162,173,0)")),
         row=3, col=1
     )
-
-    if has_fcr and x_fcr_dense is not None and fcr_energy_req_hours:
-        buffer_dn_kwh = x_fcr_dense * fcr_energy_req_hours * eta_c
-        buffer_up_kwh = (x_fcr_dense * fcr_energy_req_hours) / eta_d
-
-        fcr_potential_e_max = dispatch["E_kWh"] + buffer_dn_kwh
-        fcr_potential_e_min = dispatch["E_kWh"] - buffer_up_kwh
-
-        fig.add_trace(
-            go.Scatter(
-                x=dispatch.index, y=fcr_potential_e_max, mode="lines", name="Max Potential E (FCR Down)",
-                line=dict(width=1, color=FCR_GREEN, dash="dot"),
-                hovertemplate="Max Potential SoC: %{y:.1f} kWh<extra></extra>"
-            ),
-            row=3, col=1
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=dispatch.index, y=fcr_potential_e_min, mode="lines", name="Min Potential E (FCR Up)",
-                fill="tonexty", fillcolor=FCR_GREEN_LIGHT, line=dict(width=1, color=FCR_GREEN, dash="dot"),
-                hovertemplate="Min Potential SoC: %{y:.1f} kWh<extra></extra>"
-            ),
-            row=3, col=1
-        )
 
     # Row 4: Market positions
     for col in market_cols:

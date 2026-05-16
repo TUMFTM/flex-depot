@@ -108,8 +108,6 @@ def run_mpc(settings: Settings) -> None:
     flexibility_bounds_full = read_flexibility_bounds_csv(flex_cfg.bounds_file)
 
     fcr_prices_full = get_fcr_prices(opt_cfg.trading.fcr.prices_source) if opt_cfg.trading.fcr.enabled else pd.Series(dtype=float)
-    fcr_energy_req_hours = opt_cfg.trading.fcr.energy_req_hours
-    fcr_enforce_power_headroom = opt_cfg.trading.fcr.enforce_power_headroom
     fcr_acceptance_rate = opt_cfg.trading.fcr.acceptance_rate
     fcr_acceptance_seed = opt_cfg.trading.fcr.acceptance_seed
     if fcr_acceptance_seed is not None:
@@ -335,8 +333,6 @@ def run_mpc(settings: Settings) -> None:
                     imbalance_prices_neg=window_imb_neg,
                     imbalance_volume_penalty_eur_per_kwh=imb_penalty,
                     fcr_prices=window_fcr_prices if not window_fcr_prices.empty else None,
-                    fcr_energy_req_hours=fcr_energy_req_hours,
-                    fcr_enforce_power_headroom=fcr_enforce_power_headroom,
                     fcr_frequency_data=window_freq_data,
                     frequency_nominal_hz=frequency_nominal_hz,
                     frequency_deadband_hz=frequency_deadband_hz,
