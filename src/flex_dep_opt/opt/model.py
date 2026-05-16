@@ -301,17 +301,9 @@ def flexibility_commercialization(
     # Net power definition: p_net = p_ch - p_dis
     m.p_net_def = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] == mdl.p_ch[t] - mdl.p_dis[t])
 
-    # Fleet power band constraints
-    m.p_net_lb = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] >= mdl.P_lower[t])
-    m.p_net_ub = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] <= mdl.P_upper[t])
-
-    # Symmetric grid connection limit (additional depot constraint)
-    m.grid_ub = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] <= mdl.grid_limit)
-    m.grid_lb = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] >= -mdl.grid_limit)
-
     # Forced FCR droop power at the grid connection (signed; positive = into depot).
-    # Wired into market_balance below so droop activations must be settled against
-    # scheduled trades / imbalance instead of bypassing through E.
+    # The actual grid flow at the coupling is p_net + p_droop, so band/grid limits
+    # and the market balance below all apply to this combined quantity.
     def _p_droop_rule(mdl, t):
         j = t_to_fcr_slot.get(t)
         if j is None:
@@ -321,6 +313,14 @@ def flexibility_commercialization(
         return -mdl.fcr_droop_signal[t] * mdl.x_fcr[j]
 
     m.p_droop = pyo.Expression(m.T, rule=_p_droop_rule)
+
+    # Fleet power band constraints (applied to physical grid flow incl. droop)
+    m.p_net_lb = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] + mdl.p_droop[t] >= mdl.P_lower[t])
+    m.p_net_ub = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] + mdl.p_droop[t] <= mdl.P_upper[t])
+
+    # Symmetric grid connection limit (applied to physical grid flow incl. droop)
+    m.grid_ub = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] + mdl.p_droop[t] <= mdl.grid_limit)
+    m.grid_lb = pyo.Constraint(m.T, rule=lambda mdl, t: mdl.p_net[t] + mdl.p_droop[t] >= -mdl.grid_limit)
 
     def energy_state_rule(mdl, t):
         base = (
@@ -365,14 +365,15 @@ def flexibility_commercialization(
         rule=lambda mdl, mk, t: mdl.p_market[mk, t] == mdl.p_market_committed[mk, t],
     )
 
-    # Balance markets to physical net power. The forced FCR droop power adds to
-    # the grid flow that must be settled by scheduled trades and imbalance, so
-    # droop cannot bypass markets via E.
+    # Balance markets to physical grid flow (= p_net + p_droop). The forced FCR
+    # droop activation contributes to the actual flow at the coupling, so it must
+    # be settled by scheduled market positions and imbalance — droop cannot bypass
+    # markets via E.
     def balance_rule(mdl, t):
-        base = pyo.quicksum(mdl.p_market[mk, t] for mk in mdl.MARKETS) + mdl.p_droop[t]
+        base = pyo.quicksum(mdl.p_market[mk, t] for mk in mdl.MARKETS)
         if allow_imbalance:
-            return base + mdl.p_imb_pos[t] - mdl.p_imb_neg[t] == mdl.p_net[t]
-        return base == mdl.p_net[t]
+            return base + mdl.p_imb_pos[t] - mdl.p_imb_neg[t] == mdl.p_net[t] + mdl.p_droop[t]
+        return base == mdl.p_net[t] + mdl.p_droop[t]
 
     m.market_balance = pyo.Constraint(m.T, rule=balance_rule)
 
