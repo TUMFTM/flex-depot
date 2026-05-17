@@ -49,26 +49,6 @@ logging.getLogger("gurobipy").setLevel(logging.WARNING)
 logging.getLogger("pyomo").setLevel(logging.WARNING)
 logging.getLogger("pyomo.core").setLevel(logging.ERROR)
 
-def _extract_fcr_from_model(model, window_idx: pd.DatetimeIndex) -> pd.Series:
-    result = pd.Series(0.0, index=window_idx, name="x_fcr_kw")
-
-    if not hasattr(model, "S_FCR"):
-        return result
-
-    if not hasattr(model, "_fcr_slot_starts"):
-        return result
-
-    fcr_slot_starts = model._fcr_slot_starts
-    for j in model.S_FCR:
-        slot_start = fcr_slot_starts[j]
-        slot_end = slot_start + pd.Timedelta(hours=4)
-        committed_kw = pyo.value(model.x_fcr[j])
-        mask = (window_idx >= slot_start) & (window_idx < slot_end)
-        result.loc[mask] = committed_kw
-
-    return result
-
-
 def run_mpc(settings: Settings) -> None:
     """
     Rolling-horizon Model Predictive Control (MPC).
@@ -272,8 +252,13 @@ def run_mpc(settings: Settings) -> None:
             window_start = window_idx[0]
             window_end_ts = window_idx[-1] + pd.Timedelta(hours=4)  # last slot may start up to 4h before window end
 
+            # Include any slot that *overlaps* the window, not only those starting
+            # inside it. An already-running slot (gate closed, bid committed) still
+            # needs its droop activation applied to every step it covers — otherwise
+            # only the slot-start step ever sees nonzero p_droop.
+            slot_duration = pd.Timedelta(hours=4)
             window_fcr_prices = fcr_prices_full.loc[
-                (fcr_prices_full.index >= window_start) &
+                (fcr_prices_full.index + slot_duration > window_start) &
                 (fcr_prices_full.index < window_end_ts)
             ]
 
@@ -440,8 +425,6 @@ def run_mpc(settings: Settings) -> None:
             # 9.6) Extract first-step dispatch
             # --------------------------------------------------------
             dispatch_window = extract_dispatch(model, window_idx)
-            fcr_kw_window = _extract_fcr_from_model(model, window_idx)
-            dispatch_window["x_fcr_kw"] = fcr_kw_window
             first_row = dispatch_window.iloc[0].copy()
             first_row["used_rebap"] = used_rebap
             first_row.name = window_idx[0]

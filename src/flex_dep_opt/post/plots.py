@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from flex_dep_opt.post.metrics import infer_market_position_columns, has_imbalance
-from flex_dep_opt.market.fcr import droop_signal, FCR_FREQ_COL, FREQUENCY_DEADBAND_HZ, FREQUENCY_NOMINAL_HZ, FREQUENCY_FULL_ACTIVATION_HZ
+from flex_dep_opt.market.fcr import FCR_FREQ_COL, FREQUENCY_DEADBAND_HZ, FREQUENCY_NOMINAL_HZ, FREQUENCY_FULL_ACTIVATION_HZ
 
 # =============================================================================
 # Color conventions
@@ -22,18 +22,6 @@ MARKET_COLORS: Dict[str, Tuple[int, int, int]] = {
 FCR_GREEN = "rgb(44,160,44)"
 FCR_GREEN_LIGHT = "rgba(44,160,44,0.12)"
 FCR_GREEN_MID = "rgba(44,160,44,0.25)"
-
-def _expand_slots_to_step(
-    slot_series: pd.Series,
-    dense_index: pd.DatetimeIndex,
-    slot_duration: pd.Timedelta = pd.Timedelta(hours=4),
-) -> pd.Series:
-    result = pd.Series(0.0, index=dense_index)
-    for slot_start, val in slot_series.items():
-        slot_end = slot_start + slot_duration
-        mask = (dense_index >= slot_start) & (dense_index < slot_end)
-        result.loc[mask] = val
-    return result
 
 
 def _rgb(market: str) -> str:
@@ -277,16 +265,20 @@ def plot_mpc_dispatch_plotly(
     has_imb = has_imbalance(dispatch)
     has_used_flag = "used_rebap" in dispatch.columns
 
+    # All FCR series come pre-computed from extract_dispatch:
+    #   - x_fcr_kw   : per-step bid power (kW, slot value broadcast across steps)
+    #   - fcr_droop  : per-step droop signal in [-1, +1] (signed; + = up-reg)
+    #   - p_droop_kw : per-step activation power (kW, import-positive, matches p_net)
     has_fcr = "x_fcr_kw" in dispatch.columns
-    x_fcr_dense = None
-    if has_fcr:
-        x_fcr_slots = dispatch["x_fcr_kw"].replace(0.0, float("nan")).dropna()
-        x_fcr_dense = _expand_slots_to_step(x_fcr_slots, dispatch.index)
+    x_fcr_dense: Optional[pd.Series] = dispatch["x_fcr_kw"].astype(float) if has_fcr else None
+    p_droop_kw: Optional[pd.Series] = (
+        dispatch["p_droop_kw"].astype(float) if has_fcr and "p_droop_kw" in dispatch.columns else None
+    )
 
-
+    # Grid-frequency subplot is rendered straight from the raw input series — no
+    # derived quantities are computed here.
     has_freq_subplot = has_fcr and fcr_frequency_data is not None and not fcr_frequency_data.empty
     freq_resampled: Optional[pd.Series] = None
-    droop_power_kw: Optional[pd.Series] = None
 
     if has_freq_subplot:
         freq_df = fcr_frequency_data.copy()
@@ -302,17 +294,10 @@ def plot_mpc_dispatch_plotly(
                 freq_series = freq_df[freq_col].sort_index()
                 aligned_idx = dispatch.index
                 locs = freq_series.index.get_indexer(aligned_idx, method="nearest")
-                freq_vals = pd.Series(
+                freq_resampled = pd.Series(
                     [float(freq_series.iloc[loc]) if loc >= 0 else FREQUENCY_NOMINAL_HZ for loc in locs],
                     index=aligned_idx,
                 )
-                freq_resampled = freq_vals
-
-                droop_sig = freq_vals.map(droop_signal)
-                if x_fcr_dense is not None:
-                    droop_power_kw = droop_sig * x_fcr_dense
-                else:
-                    droop_power_kw = pd.Series(0.0, index=aligned_idx)
 
     # Commit times (for hover annotation)
     commit_time_by_market: dict[str, pd.Series] = {}
@@ -336,7 +321,7 @@ def plot_mpc_dispatch_plotly(
         "Market Positions",
     ]
     if has_freq_subplot:
-        subplot_titles_list.append("FCR Droop Activation")
+        subplot_titles_list.append("FCR Activation Power (droop · bid)")
         subplot_titles_list.append("Grid Frequency")
 
     fig = make_subplots(
@@ -559,21 +544,22 @@ def plot_mpc_dispatch_plotly(
     fig.update_yaxes(title_text="Energy [kWh]", row=3, col=1)
     fig.update_yaxes(title_text="Position [kW]", row=4, col=1)
 
-    if has_freq_subplot and freq_resampled is not None and droop_power_kw is not None:
+    if has_freq_subplot and freq_resampled is not None and p_droop_kw is not None:
+        # Import-positive convention: + = depot charges (downward FCR), - = depot discharges.
         bar_colors = [
-            "rgba(214,39,40,0.75)" if v > 0 else "rgba(31,119,180,0.75)"
-            for v in droop_power_kw
+            "rgba(31,119,180,0.75)" if v > 0 else "rgba(214,39,40,0.75)"
+            for v in p_droop_kw
         ]
         fig.add_trace(
             go.Bar(
-                x=droop_power_kw.index,
-                y=droop_power_kw.values,
-                name="FCR Droop Power [kW]",
+                x=p_droop_kw.index,
+                y=p_droop_kw.values,
+                name="FCR Activation Power [kW]",
                 marker_color=bar_colors,
                 yaxis="y5",
                 hovertemplate=(
-                    "Droop power: %{y:.1f} kW<br>"
-                    "(+discharge / -charge)<extra></extra>"
+                    "FCR power: %{y:.1f} kW<br>"
+                    "(+charge / -discharge)<extra></extra>"
                 ),
                 opacity=0.85,
             ),

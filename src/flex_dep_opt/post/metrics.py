@@ -265,16 +265,16 @@ def compute_fcr_activation_energy(
 
     Returns None if the dispatch has no FCR column.
 
-    Sign convention in dispatch (`p_fcr_actual_kw = signal * x_fcr`):
-      p_fcr > 0 -> depot exports (Sell)
-      p_fcr < 0 -> depot imports (Buy)
+    Sign convention in dispatch (`p_droop_kw = -droop * x_fcr`, import-positive):
+      p_droop > 0 -> depot imports (Buy, downward FCR)
+      p_droop < 0 -> depot exports (Sell, upward FCR)
     """
-    if "p_fcr_actual_kw" not in dispatch.columns:
+    if "p_droop_kw" not in dispatch.columns:
         return None
     dt = float(timestep_hours)
-    p = dispatch["p_fcr_actual_kw"].astype(float)
-    sell_kwh = float(p[p > 0].sum()) * dt
-    buy_kwh = float(-p[p < 0].sum()) * dt
+    p = dispatch["p_droop_kw"].astype(float)
+    buy_kwh = float(p[p > 0].sum()) * dt
+    sell_kwh = float(-p[p < 0].sum()) * dt
     if buy_kwh == 0.0 and sell_kwh == 0.0:
         return None
     return buy_kwh, sell_kwh
