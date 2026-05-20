@@ -103,7 +103,7 @@ def get_fcr_prices(file_path: str) -> pd.Series:
     )
 
     price_col = "GERMANY_SETTLEMENTCAPACITY_PRICE_[EUR/MW]"
-    return (
+    prices = (
         df[price_col]
         .astype(str)
         .str.replace(",", ".", regex=False)
@@ -111,3 +111,8 @@ def get_fcr_prices(file_path: str) -> pd.Series:
         .rename("fcr_price")
         .sort_index()
     )
+
+    if prices.index.has_duplicates:
+        prices = prices.groupby(level=0).first()
+
+    return prices
