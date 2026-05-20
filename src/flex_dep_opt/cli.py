@@ -10,19 +10,24 @@ def main():
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_mpc = sub.add_parser("run-sim")
-    p_mpc.add_argument("--config", default="settings_example.yaml")
+    p_mpc.add_argument(
+        "--config", default=None,
+        help="Path to a TOML config file (default: bundled settings_example.toml).",
+    )
 
     p_plot_mpc = sub.add_parser("run-post")
-    p_plot_mpc.add_argument("--config", default="settings_example.yaml")
+    p_plot_mpc.add_argument(
+        "--config", default=None,
+        help="Path to a TOML config file (default: the settings.toml saved in the latest run directory).",
+    )
 
     args = parser.parse_args()
 
-    settings = Settings()
-
     if args.cmd == "run-sim":
-        run_mpc(settings)
+        run_mpc(Settings.load(args.config))
         return
 
     if args.cmd == "run-post":
+        settings = Settings.load(args.config) if args.config else None
         postprocess_mpc_results(settings)
         return

@@ -18,7 +18,7 @@ from flex_dep_opt.post.plots import plot_market_cashflows_plotly, plot_mpc_dispa
 from flex_dep_opt.io.results_io import save_dispatch_to_csv, save_summary_to_csv, read_latest_run_pointer
 from flex_dep_opt.market.fcr import get_fcr_frequency_data
 
-def postprocess_mpc_results(settings: Settings) -> None:
+def postprocess_mpc_results(settings: Settings | None = None) -> None:
     """
     Postprocessing workflow for MPC results.
 
@@ -30,11 +30,21 @@ def postprocess_mpc_results(settings: Settings) -> None:
     4) Export optional postprocessing CSVs (cashflows + KPI summary)
     5) Generate interactive Plotly HTML plots
     """
-    sim = settings.simulation
-
-
     results_root = Path("results")
     run_dir = read_latest_run_pointer(results_root)
+
+    if settings is None:
+        run_settings_path = run_dir / "settings.toml"
+        if not run_settings_path.exists():
+            raise FileNotFoundError(
+                f"No settings.toml found in {run_dir}. "
+                "Pass an explicit config with --config."
+            )
+        settings = Settings.load(run_settings_path)
+
+    print(f"Settings file used: {settings.get_source_path()}")
+
+    sim = settings.simulation
 
     dispatch_csv = run_dir / "dispatch.csv"
     commit_csv = run_dir / "commit.csv"

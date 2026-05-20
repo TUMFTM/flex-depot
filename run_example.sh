@@ -10,4 +10,4 @@ CONFIG="src/flex_dep_opt/config/settings_example.toml"
 
 # --- Run the simulations ---
 python -m flex_dep_opt run-sim --config "$CONFIG"
-python -m flex_dep_opt run-post --config "$CONFIG"
+python -m flex_dep_opt run-post

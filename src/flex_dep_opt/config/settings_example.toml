@@ -1,6 +1,6 @@
 [simulation]
 start = "2025-10-01 00:00"
-end = "2025-11-01 00:00"
+end = "2025-10-02 00:00"
 timestep_hours = 0.25
 name = "illustrative_example"
 solver = "cbc"
@@ -37,7 +37,6 @@ gate_closure_timezone = "Europe/Berlin"
 
 [optimization.imbalance]
 enabled = true
-only_on_infeasible = true
 source_pos = "data/prices/prices_reBAPpos_example.csv"
 source_neg = "data/prices/prices_reBAPneg_example.csv"
 imbalance_volume_penalty_eur_per_kwh = 1000.0

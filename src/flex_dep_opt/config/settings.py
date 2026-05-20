@@ -50,7 +50,6 @@ class TradingSettings(BaseModel):
 
 class ImbalanceSettings(BaseModel):
     enabled: bool = False
-    only_on_infeasible: bool
     source_pos: str
     source_neg: str
     imbalance_volume_penalty_eur_per_kwh: float = 1000.0
@@ -105,6 +104,17 @@ class Settings(BaseSettings):
     ):
         return (TomlConfigSettingsSource(settings_cls),)
     
+    @classmethod
+    def load(cls, config_path: Optional[str | Path] = None) -> "Settings":
+        if config_path is None:
+            cls.model_config["toml_file"] = BASE_DIR / "settings_example.toml"
+        else:
+            path = Path(config_path)
+            if not path.is_file():
+                raise FileNotFoundError(f"Config file not found: {path}")
+            cls.model_config["toml_file"] = path
+        return cls()
+
     def save_to_toml(self, path: Optional[str | Path] = None):
         save_path = path or self.model_config.get("toml_file")
         
