@@ -394,7 +394,10 @@ def plot_mpc_dispatch_plotly(
         values = dispatch[col]
 
         colors = [_rgba(mk_code, 0.3 if v < 0 else 1.0) for v in values]
-        labels = ["Buy" if v > 0 else "Sell" if v < 0 else "Neutral" for v in values]
+        labels = [
+            f"{mk_code} Buy" if v > 0 else f"{mk_code} Sell" if v < 0 else f"{mk_code} Neutral"
+            for v in values
+        ]
 
         if mk_code in commit_time_by_market:
             ct = commit_time_by_market[mk_code].reindex(dispatch.index)
