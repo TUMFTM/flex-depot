@@ -57,6 +57,8 @@ class ImbalanceSettings(BaseModel):
 class MpcSettings(BaseModel):
     da_horizon_hours: int
     id_horizon_hours: int
+    fcr_price_horizon_hours: int
+    fcr_frequency_horizon_minutes: int
     terminal_condition: bool
     terminal_weight_eur_per_kwh: float
 

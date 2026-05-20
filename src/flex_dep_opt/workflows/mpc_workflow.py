@@ -1,7 +1,12 @@
 import logging
 import random
 
-from flex_dep_opt.market.fcr import get_fcr_prices, get_fcr_frequency_data, fcr_gate_closure_timestamp
+from flex_dep_opt.market.fcr import (
+    FCR_FREQ_COL,
+    get_fcr_prices,
+    get_fcr_frequency_data,
+    fcr_gate_closure_timestamp,
+)
 import numpy as np
 import pandas as pd
 from tqdm.auto import tqdm
@@ -116,6 +121,8 @@ def run_mpc(settings: Settings) -> None:
     step_hours = float(sim_cfg.timestep_hours)
     da_horizon_hours = float(mpc_cfg.da_horizon_hours)
     id_horizon_hours = float(mpc_cfg.id_horizon_hours)
+    fcr_price_horizon_hours = float(mpc_cfg.fcr_price_horizon_hours)
+    fcr_frequency_horizon_minutes = float(mpc_cfg.fcr_frequency_horizon_minutes)
     da_horizon_steps = int(da_horizon_hours / step_hours)
 
     # ============================================================
@@ -263,11 +270,16 @@ def run_mpc(settings: Settings) -> None:
             ]
 
             # gate-open mask for slots in this window
-            # a slot is still open if its D-1 08:00 gate closure is in the future
+            # a slot is biddable if (a) its D-1 08:00 gate closure is still in
+            # the future and (b) it starts within the FCR price foresight
+            # horizon. Slots beyond the horizon are pinned to their committed
+            # value (0 if never committed), i.e. not biddable yet.
+            fcr_price_horizon_end = current_time + pd.Timedelta(hours=fcr_price_horizon_hours)
             fcr_gate_open_window: dict[pd.Timestamp, bool] = {}
             for slot in window_fcr_prices.index:
                 gate_ts = _fcr_gate_ts(slot)
-                fcr_gate_open_window[slot] = current_time < gate_ts
+                within_horizon = slot <= fcr_price_horizon_end
+                fcr_gate_open_window[slot] = (current_time < gate_ts) and bool(within_horizon)
 
             # --------------------------------------------------------
             # 9.3) Build market activity masks (gate-closures enforced here)
@@ -292,7 +304,17 @@ def run_mpc(settings: Settings) -> None:
                 window_freq_data = fcr_frequency_data_full.loc[
                     (fcr_frequency_data_full.index >= window_idx[0])
                     & (fcr_frequency_data_full.index <= window_idx[-1] + pd.Timedelta(hours=1))
-                ]
+                ].copy()
+                # FCR frequency foresight: grid frequency is unpredictable, so
+                # only the near term is treated as known. Beyond the frequency
+                # horizon the signal is reset to nominal (zero droop) so the
+                # optimizer plans for no FCR activation there. The current step
+                # (at current_time) always keeps its real value.
+                fcr_freq_horizon_end = current_time + pd.Timedelta(
+                    minutes=fcr_frequency_horizon_minutes
+                )
+                beyond_horizon = window_freq_data.index > fcr_freq_horizon_end
+                window_freq_data.loc[beyond_horizon, FCR_FREQ_COL] = frequency_nominal_hz
             else:
                 window_freq_data = None
 

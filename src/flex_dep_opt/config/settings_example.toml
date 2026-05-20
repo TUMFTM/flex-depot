@@ -47,6 +47,8 @@ virtual_arbitrage = false
 [optimization.mpc]
 da_horizon_hours = 48
 id_horizon_hours = 1
+fcr_price_horizon_hours = 48
+fcr_frequency_horizon_minutes = 0
 terminal_condition = true
 terminal_weight_eur_per_kwh = 50.0
 
