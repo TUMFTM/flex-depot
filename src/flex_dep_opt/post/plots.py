@@ -174,14 +174,18 @@ def plot_market_cashflows_plotly(
         row=3, col=2
     )
 
+    # Indented rows decompose Gross Profit:
+    #   Gross = Trading Profit + FCR Revenue + Trading Fees + Imbalance Cost
     kpi_rows = [
         ("Gross Profit", f"{float(kpis['gross_profit_eur']):.1f} €"),
         ("      Trading Profit", f"{float(kpis['trading_profit_eur']):.1f} €"),
-        ("      Trading Fees", f"{float(kpis['fees_eur']):.1f} €"),
-        ("      Imbalance Cost", f"{float(kpis['imb_cost_eur']):.1f} €"),
     ]
     if "fcr_revenue_eur" in kpis:
         kpi_rows.append(("      FCR Revenue", f"{float(kpis['fcr_revenue_eur']):.1f} €"))
+    kpi_rows += [
+        ("      Trading Fees", f"{float(kpis['fees_eur']):.1f} €"),
+        ("      Imbalance Cost", f"{float(kpis['imb_cost_eur']):.1f} €"),
+    ]
     if "fcr_slots_committed" in kpis:
         kpi_rows.append(("      FCR Slots Committed", f"{int(kpis['fcr_slots_committed']):d}"))
     if "fcr_avg_capacity_mw" in kpis:

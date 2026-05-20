@@ -493,6 +493,10 @@ def run_mpc(settings: Settings) -> None:
                         committed_val = bid_val if accepted else 0.0
                         committed_fcr_slots[slot] = committed_val
                         fcr_price_val = float(window_fcr_prices.loc[slot])
+                        # Hours of this 4 h slot covered by the sim horizon;
+                        # revenue is prorated to match the optimizer's
+                        # fcr_revenue term (price is for the full 4 h product).
+                        slot_hours = float(fcr_slot_hours_by_slot.get(slot, 4.0))
 
                         fcr_commit_rows.append({
                             "slot_start": slot,
@@ -503,7 +507,8 @@ def run_mpc(settings: Settings) -> None:
                             "x_fcr_mw": committed_val / 1000.0,
                             "accepted": accepted,
                             "fcr_price": fcr_price_val,
-                            "fcr_revenue_eur": (committed_val / 1000.0) * fcr_price_val,
+                            "slot_hours": slot_hours,
+                            "fcr_revenue_eur": (committed_val / 1000.0) * fcr_price_val * (slot_hours / 4.0),
                         })
 
                         if bid_val > 0:

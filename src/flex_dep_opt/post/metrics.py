@@ -295,7 +295,8 @@ def compute_kpis(
     - gross_profit_eur:
         Total cashflow plus fee term (fees are negative).
     - trading_profit_eur:
-        Profit excluding fees and imbalance cost.
+        Scheduled-market (DA/ID) cashflow only — excludes fees, imbalance
+        cost, and FCR revenue.
     - fees_eur:
         Applied to absolute traded energy volume in DA/ID.
     - imb_cost_eur:
@@ -328,8 +329,14 @@ def compute_kpis(
     if "IMB Cashflow [€/step]" in cf_df.columns:
         imb_cost_eur = float(cf_df["IMB Cashflow [€/step]"].sum())
 
-    gross_profit_eur = float(cf_df["Total Cashflow [€/step]"].sum()) + fees_eur                             # (market CF + IMB CF (neg)) + fees (neg)
-    trading_profit_eur = float(cf_df["Total Cashflow [€/step]"].sum()) - imb_cost_eur                       # (market CF + IMB CF (neg)) - IMB CF (neg) = market CF
+    fcr_cf_eur = 0.0
+    if "FCR Cashflow [€/step]" in cf_df.columns:
+        fcr_cf_eur = float(cf_df["FCR Cashflow [€/step]"].sum())
+
+    total_cf_eur = float(cf_df["Total Cashflow [€/step]"].sum())
+
+    gross_profit_eur = total_cf_eur + fees_eur                             # total CF (DA/ID + IMB + FCR) plus fees (negative)
+    trading_profit_eur = total_cf_eur - imb_cost_eur - fcr_cf_eur                       # total CF less IMB and FCR -> pure scheduled-market (DA/ID) CF
 
 
     return {
