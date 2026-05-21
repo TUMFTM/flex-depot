@@ -92,7 +92,11 @@ def run_mpc(settings: Settings) -> None:
     # ============================================================
     flexibility_bounds_full = read_flexibility_bounds_csv(flex_cfg.bounds_file)
 
-    fcr_prices_full = get_fcr_prices(opt_cfg.trading.fcr.prices_source) if opt_cfg.trading.fcr.enabled else pd.Series(dtype=float)
+    fcr_prices_full = (
+        get_fcr_prices(opt_cfg.trading.fcr.prices_source)
+        if opt_cfg.trading.fcr.enabled
+        else pd.Series(dtype=float, index=pd.DatetimeIndex([], tz="Europe/Berlin"))
+    )
     fcr_acceptance_rate = opt_cfg.trading.fcr.acceptance_rate
     fcr_acceptance_seed = opt_cfg.trading.fcr.acceptance_seed
     if fcr_acceptance_seed is not None:
