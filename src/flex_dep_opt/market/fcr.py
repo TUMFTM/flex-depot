@@ -76,7 +76,7 @@ def get_fcr_frequency_data(file_path: str, tz: str = "Europe/Berlin") -> pd.Data
         df.index = pd.DatetimeIndex(ts)
         df = df.drop(columns=[FCR_FREQ_DATETIME_COL])
 
-    if df[FCR_FREQ_COL].dtype == object:
+    if not pd.api.types.is_numeric_dtype(df[FCR_FREQ_COL]):
         df[FCR_FREQ_COL] = (
             df[FCR_FREQ_COL].astype(str)
             .str.replace(",", ".", regex=False)
