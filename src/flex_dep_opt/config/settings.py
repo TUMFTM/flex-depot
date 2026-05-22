@@ -1,10 +1,11 @@
-import toml
-from typing import Annotated, Literal, Optional
 from datetime import datetime
-from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic_settings import TomlConfigSettingsSource
 from pathlib import Path
+from typing import Annotated, Literal, Optional
+
+import toml
+from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict, TomlConfigSettingsSource
+
 
 class SimulationSettings(BaseModel):
     start: datetime
@@ -15,7 +16,7 @@ class SimulationSettings(BaseModel):
 
 class MarketDetail(BaseModel):
     enabled: bool = False
-    source: str 
+    source: str
     fee_eur_per_kwh: float
 
 class Markets(BaseModel):
@@ -108,7 +109,7 @@ class Settings(BaseSettings):
         file_secret_settings,
     ):
         return (TomlConfigSettingsSource(settings_cls),)
-    
+
     @classmethod
     def load(cls, config_path: Optional[str | Path] = None) -> "Settings":
         if config_path is None:
@@ -122,7 +123,7 @@ class Settings(BaseSettings):
 
     def save_to_toml(self, path: Optional[str | Path] = None):
         save_path = path or self.model_config.get("toml_file")
-        
+
         if not save_path:
             raise ValueError("no save path provided or configured")
 

@@ -1,22 +1,22 @@
 from __future__ import annotations
 
 from pathlib import Path
-import webbrowser
 
-from flex_dep_opt.config.settings import Settings
 import pandas as pd
 
-from flex_dep_opt.io.prices_io import build_prices_from_settings, build_fees_from_settings
+from flex_dep_opt.config.settings import Settings
+from flex_dep_opt.io.prices_io import build_fees_from_settings, build_prices_from_settings
+from flex_dep_opt.io.results_io import read_latest_run_pointer, save_dispatch_to_csv, save_summary_to_csv
+from flex_dep_opt.market.fcr import get_fcr_frequency_data
 from flex_dep_opt.post.metrics import (
     compute_cashflows_per_step,
-    compute_market_aggregates,
-    compute_kpis,
-    compute_fcr_cashflow_per_slot,
     compute_fcr_activation_energy,
+    compute_fcr_cashflow_per_slot,
+    compute_kpis,
+    compute_market_aggregates,
 )
 from flex_dep_opt.post.plots import plot_market_cashflows_plotly, plot_mpc_dispatch_plotly
-from flex_dep_opt.io.results_io import save_dispatch_to_csv, save_summary_to_csv, read_latest_run_pointer
-from flex_dep_opt.market.fcr import get_fcr_frequency_data
+
 
 def postprocess_mpc_results(settings: Settings | None = None) -> None:
     """
@@ -229,4 +229,4 @@ def postprocess_mpc_results(settings: Settings | None = None) -> None:
 
     print(f"Result CSV files saved → {run_dir.as_posix()}")
     print(f"Result HTML plots saved → {run_dir.as_posix()}")
-    print(f"Postprocessing finished")
+    print("Postprocessing finished")

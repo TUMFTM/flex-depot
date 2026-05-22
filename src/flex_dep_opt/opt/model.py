@@ -4,8 +4,9 @@ import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
 
-from ..domain.depot import Depot
 from flex_dep_opt.market.fcr import FCR_FREQ_COL, droop_signal
+
+from ..domain.depot import Depot
 
 
 def flexibility_commercialization(
@@ -331,7 +332,7 @@ def flexibility_commercialization(
         # capacity, carved out of both ends of the band.
         #
         # SOFT constraint: E is allowed into the reserve buffer, but
-        # every kWh of intrusion is penalised in the objective. 
+        # every kWh of intrusion is penalised in the objective.
         #
         # The reserve constrains the planned trajectory E[1..N]; E[0] is the
         # realized starting SoC (fixed by energy_init) and is skipped.

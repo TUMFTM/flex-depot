@@ -1,9 +1,9 @@
 import argparse
 
 from flex_dep_opt.config.settings import Settings
-
 from flex_dep_opt.workflows.mpc_workflow import run_mpc
 from flex_dep_opt.workflows.postprocessing_workflow import postprocess_mpc_results
+
 
 def main():
     parser = argparse.ArgumentParser(prog="flex-dep-opt")

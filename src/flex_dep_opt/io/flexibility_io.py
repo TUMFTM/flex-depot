@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from typing import List
-import pandas as pd
 
+import pandas as pd
 
 REQUIRED_COLS: List[str] = [
     "time",

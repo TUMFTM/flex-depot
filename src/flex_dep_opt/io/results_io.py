@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any, Mapping
-
-import pandas as pd
-import shutil
-
 import re
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Mapping
 from zoneinfo import ZoneInfo
+
+import pandas as pd
 
 
 def _as_path(path: str | Path) -> Path:

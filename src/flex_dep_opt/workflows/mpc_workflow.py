@@ -1,35 +1,39 @@
 import logging
 import random
-
-from flex_dep_opt.market.fcr import (
-    FCR_FREQ_COL,
-    get_fcr_prices,
-    get_fcr_frequency_data,
-    fcr_gate_closure_timestamp,
-)
-import numpy as np
-import pandas as pd
-from tqdm.auto import tqdm
-import pyomo.environ as pyo
-
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import numpy as np
+import pandas as pd
+import pyomo.environ as pyo
+from tqdm.auto import tqdm
+
+from flex_dep_opt.config.settings import Settings
 from flex_dep_opt.domain.depot import Depot
-from flex_dep_opt.io.prices_io import build_prices_from_settings, build_fees_from_settings
 from flex_dep_opt.io.flexibility_io import (
-    read_flexibility_bounds_csv,
     align_and_validate_flexibility_bounds,
+    read_flexibility_bounds_csv,
 )
-from flex_dep_opt.io.results_io import save_dispatch_to_csv, save_table_to_csv, make_run_dir, write_latest_run_pointer, save_run_info_txt
-from flex_dep_opt.opt.model import flexibility_commercialization
-from flex_dep_opt.opt.solve import solve_model, extract_dispatch
+from flex_dep_opt.io.prices_io import build_fees_from_settings, build_prices_from_settings
+from flex_dep_opt.io.results_io import (
+    make_run_dir,
+    save_dispatch_to_csv,
+    save_run_info_txt,
+    save_table_to_csv,
+    write_latest_run_pointer,
+)
+from flex_dep_opt.market.fcr import (
+    FCR_FREQ_COL,
+    fcr_gate_closure_timestamp,
+    get_fcr_frequency_data,
+    get_fcr_prices,
+)
 from flex_dep_opt.market.trading_rules import (
     build_market_activity_mask_for_time,
     gate_closure_timestamp,
 )
-
-from flex_dep_opt.config.settings import Settings
+from flex_dep_opt.opt.model import flexibility_commercialization
+from flex_dep_opt.opt.solve import extract_dispatch, solve_model
 
 logger = logging.getLogger(__name__)
 
@@ -224,7 +228,7 @@ def run_mpc(settings: Settings) -> None:
     rows = []
     commit_rows = []
     fcr_commit_rows = []
-    
+
     # ============================================================
     # 9) Rolling-horizon MPC loop
     # ============================================================
@@ -613,5 +617,5 @@ def run_mpc(settings: Settings) -> None:
             tz="Europe/Berlin",
         )
 
-        print(f"MPC finished → Postprocessing starts")
+        print("MPC finished → Postprocessing starts")
 

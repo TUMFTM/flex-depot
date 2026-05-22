@@ -6,8 +6,13 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from flex_dep_opt.post.metrics import infer_market_position_columns, has_imbalance
-from flex_dep_opt.market.fcr import FCR_FREQ_COL, FREQUENCY_DEADBAND_HZ, FREQUENCY_NOMINAL_HZ, FREQUENCY_FULL_ACTIVATION_HZ
+from flex_dep_opt.market.fcr import (
+    FCR_FREQ_COL,
+    FREQUENCY_DEADBAND_HZ,
+    FREQUENCY_FULL_ACTIVATION_HZ,
+    FREQUENCY_NOMINAL_HZ,
+)
+from flex_dep_opt.post.metrics import has_imbalance, infer_market_position_columns
 
 # =============================================================================
 # Color conventions
@@ -311,7 +316,7 @@ def plot_mpc_dispatch_plotly(
         tmp["current_time"] = pd.to_datetime(tmp["current_time"])
         if "market" in tmp.columns and "commit_now" in tmp.columns:
             for mk in tmp["market"].unique():
-                mk_rows = tmp[(tmp["market"] == mk) & (tmp["commit_now"] == True)]
+                mk_rows = tmp[(tmp["market"] == mk) & tmp["commit_now"].astype(bool)]
                 if mk_rows.empty:
                     continue
                 s = mk_rows.sort_values("current_time").drop_duplicates("delivery_time")

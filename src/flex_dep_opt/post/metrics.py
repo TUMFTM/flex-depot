@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, Tuple
+from typing import List, Mapping, Optional
 
 import pandas as pd
 
@@ -322,7 +322,7 @@ def compute_kpis(
     if commit is not None and not commit.empty:
         if ("committed_new" in commit.columns) and ("commit_now" in commit.columns):
             trade_steps = int(
-                commit[(commit["committed_new"] != 0.0) & (commit["commit_now"] == True)].shape[0]
+                commit[(commit["committed_new"] != 0.0) & commit["commit_now"].astype(bool)].shape[0]
             )
 
     imb_cost_eur = 0.0
