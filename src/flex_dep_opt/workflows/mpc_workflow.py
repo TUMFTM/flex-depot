@@ -111,6 +111,10 @@ def run_mpc(settings: Settings) -> None:
     frequency_deadband_hz = opt_cfg.trading.fcr.deadband_hz
     frequency_full_activation_hz = opt_cfg.trading.fcr.full_activation_hz
 
+    fcr_energy_reserve_kwh_per_kw = float(opt_cfg.trading.fcr.energy_reserve_minutes) / 60.0
+    fcr_reserve_penalty = float(opt_cfg.trading.fcr.reserve_penalty_eur_per_kwh)
+    fcr_balance_penalty = float(opt_cfg.trading.fcr.balance_penalty_eur_per_kwh)
+
     def _fcr_gate_ts(slot_start: pd.Timestamp) -> pd.Timestamp:
         return fcr_gate_closure_timestamp(
             slot_start,
@@ -350,6 +354,9 @@ def run_mpc(settings: Settings) -> None:
                     frequency_full_activation_hz=frequency_full_activation_hz,
                     fcr_cap_max_by_slot=fcr_cap_max_by_slot or None,
                     fcr_slot_hours_by_slot=fcr_slot_hours_by_slot or None,
+                    fcr_energy_reserve_kwh_per_kw=fcr_energy_reserve_kwh_per_kw,
+                    fcr_reserve_penalty_eur_per_kwh=fcr_reserve_penalty,
+                    fcr_balance_penalty_eur_per_kwh=fcr_balance_penalty,
                 )
 
                 if hasattr(_m, "S_FCR"):

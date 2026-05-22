@@ -41,6 +41,9 @@ class FCRSettings(BaseModel):
     frequency_nominal_hz: float = 50.0
     deadband_hz: float = 0.010
     full_activation_hz: float = 0.200
+    energy_reserve_minutes: float = 15.0
+    reserve_penalty_eur_per_kwh: float = 10.0
+    balance_penalty_eur_per_kwh: float = 0.0001
 
 class TradingSettings(BaseModel):
     mode: Literal["none", "realistic"] = "none"

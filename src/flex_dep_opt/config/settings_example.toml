@@ -3,7 +3,7 @@ start = "2025-10-01 00:00"
 end = "2025-10-08 00:00"
 timestep_hours = 0.25
 name = "illustrative_example"
-solver = "cbc"
+solver = "gurobi"
 
 [optimization.markets.dayahead]
 enabled = true
@@ -34,6 +34,9 @@ acceptance_seed = 1
 gate_closure_hour = "08:00"
 gate_closure_closes_previous_day = true
 gate_closure_timezone = "Europe/Berlin"
+energy_reserve_minutes = 15.0
+reserve_penalty_eur_per_kwh = 10.0
+balance_penalty_eur_per_kwh = 0.0001
 
 [optimization.imbalance]
 enabled = true
@@ -48,7 +51,7 @@ virtual_arbitrage = false
 da_horizon_hours = 48
 id_horizon_hours = 1
 fcr_price_horizon_hours = 48
-fcr_frequency_horizon_minutes = 0
+fcr_frequency_horizon_minutes = 15
 terminal_condition = true
 terminal_weight_eur_per_kwh = 50.0
 

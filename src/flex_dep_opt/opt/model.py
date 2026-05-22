@@ -30,6 +30,9 @@ def flexibility_commercialization(
     frequency_full_activation_hz: float = 0.200,
     fcr_cap_max_by_slot: dict | None = None,
     fcr_slot_hours_by_slot: dict | None = None,
+    fcr_energy_reserve_kwh_per_kw: float = 0.0,
+    fcr_reserve_penalty_eur_per_kwh: float = 0.0,
+    fcr_balance_penalty_eur_per_kwh: float = 0.0,
 ) -> pyo.ConcreteModel:
     """
     Flex-band based multi-market commercialization model (Pyomo).
@@ -319,6 +322,81 @@ def flexibility_commercialization(
             >= mdl.x_fcr_committed[j] - fcr_cap_max_vals[j] * mdl.fcr_gate_open[j],
         )
 
+        # --------------------------------------------------------
+        # 8b) FCR energy reserve — soft SoC headroom for droop
+        # --------------------------------------------------------
+        # Steps covered by an FCR slot need SoC headroom so unforeseen droop
+        # activation does not push E through its bounds (which would otherwise
+        # cascade into imbalance). The reserve is r kWh per kW of committed FCR
+        # capacity, carved out of both ends of the band.
+        #
+        # SOFT constraint: E is allowed into the reserve buffer, but
+        # every kWh of intrusion is penalised in the objective. 
+        #
+        # The reserve constrains the planned trajectory E[1..N]; E[0] is the
+        # realized starting SoC (fixed by energy_init) and is skipped.
+        if fcr_energy_reserve_kwh_per_kw > 0.0:
+            r = float(fcr_energy_reserve_kwh_per_kw)
+            m.T_FCR = pyo.Set(initialize=sorted(t_to_fcr_slot.keys()))
+
+            m.fcr_reserve_slack_up = pyo.Var(m.T_FCR, within=pyo.NonNegativeReals)
+            m.fcr_reserve_slack_dn = pyo.Var(m.T_FCR, within=pyo.NonNegativeReals)
+
+            def _reserve_up(mdl, t):
+                if t == 0:  # E[0] is realized, not planned — skip
+                    return pyo.Constraint.Skip
+                return (
+                    mdl.E[t]
+                    <= mdl.E_upper[t] - r * mdl.x_fcr[t_to_fcr_slot[t]]
+                    + mdl.fcr_reserve_slack_up[t]
+                )
+
+            def _reserve_dn(mdl, t):
+                if t == 0:  # E[0] is realized, not planned — skip
+                    return pyo.Constraint.Skip
+                return (
+                    mdl.E[t]
+                    >= mdl.E_lower[t] + r * mdl.x_fcr[t_to_fcr_slot[t]]
+                    - mdl.fcr_reserve_slack_dn[t]
+                )
+
+            m.fcr_E_reserve_up = pyo.Constraint(m.T_FCR, rule=_reserve_up)
+            m.fcr_E_reserve_dn = pyo.Constraint(m.T_FCR, rule=_reserve_dn)
+            m.fcr_E_reserve_up_next = pyo.Constraint(
+                m.T_FCR,
+                rule=lambda mdl, t: mdl.E[t + 1]
+                <= mdl.E_upper[t + 1] - r * mdl.x_fcr[t_to_fcr_slot[t]]
+                + mdl.fcr_reserve_slack_up[t],
+            )
+            m.fcr_E_reserve_dn_next = pyo.Constraint(
+                m.T_FCR,
+                rule=lambda mdl, t: mdl.E[t + 1]
+                >= mdl.E_lower[t + 1] + r * mdl.x_fcr[t_to_fcr_slot[t]]
+                - mdl.fcr_reserve_slack_dn[t],
+            )
+
+        # Soft mid-band pull on FCR-covered states: discourages E from sitting
+        # right at the (tightened) reserve edge. Objective term only, so it can
+        # never cause infeasibility — active in both passes.
+        if fcr_balance_penalty_eur_per_kwh > 0.0:
+            fcr_states = sorted({s for t in t_to_fcr_slot for s in (t, t + 1)})
+            if fcr_states:
+                m.S_FCR_BAL = pyo.Set(initialize=fcr_states)
+                m.E_mid = pyo.Param(
+                    m.S_FCR_BAL,
+                    initialize=lambda mdl, s: 0.5
+                    * (float(E_lower_arr[s]) + float(E_upper_arr[s])),
+                )
+                m.e_balance_dev = pyo.Var(m.S_FCR_BAL, within=pyo.NonNegativeReals)
+                m.fcr_bal_up = pyo.Constraint(
+                    m.S_FCR_BAL,
+                    rule=lambda mdl, s: mdl.e_balance_dev[s] >= mdl.E[s] - mdl.E_mid[s],
+                )
+                m.fcr_bal_dn = pyo.Constraint(
+                    m.S_FCR_BAL,
+                    rule=lambda mdl, s: mdl.e_balance_dev[s] >= mdl.E_mid[s] - mdl.E[s],
+                )
+
     # ============================================================
     # 9) Virtual arbitrage handling (LP vs MILP)
     # ============================================================
@@ -430,7 +508,26 @@ def flexibility_commercialization(
                 mdl.e_slack_up[s] + mdl.e_slack_dn[s] for s in mdl.S
             )
 
-        return energy_cashflow + fcr_revenue + imb_cash - fee_cost - deg_cost - imb_vol_pen - term_penalty - e_slack_pen
+        # Soft FCR energy-reserve penalty: cost per kWh that planned E intrudes
+        # into the droop headroom buffer. Sits well above arbitrage value and
+        # well below the imbalance penalties, so the reserve is held whenever
+        # that is cheaper than the imbalance it would otherwise prevent.
+        reserve_pen = 0.0
+        if fcr_reserve_penalty_eur_per_kwh > 0.0 and hasattr(mdl, "fcr_reserve_slack_up"):
+            reserve_pen = fcr_reserve_penalty_eur_per_kwh * pyo.quicksum(
+                mdl.fcr_reserve_slack_up[t] + mdl.fcr_reserve_slack_dn[t]
+                for t in mdl.T_FCR
+            )
+
+        # Soft FCR mid-band penalty (pulls E toward the centre of its band on
+        # FCR-covered steps); dt-scaled so it is timestep-resolution independent.
+        bal_pen = 0.0
+        if fcr_balance_penalty_eur_per_kwh > 0.0 and hasattr(mdl, "e_balance_dev"):
+            bal_pen = fcr_balance_penalty_eur_per_kwh * dt * pyo.quicksum(
+                mdl.e_balance_dev[s] for s in mdl.S_FCR_BAL
+            )
+
+        return energy_cashflow + fcr_revenue + imb_cash - fee_cost - deg_cost - imb_vol_pen - term_penalty - e_slack_pen - reserve_pen - bal_pen
 
     m.obj = pyo.Objective(rule=obj_expr, sense=pyo.maximize)
 
