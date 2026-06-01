@@ -224,3 +224,5 @@ __marimo__/
 /data/prices/epex_prices_DA_Sep25.csv
 /src/flex_dep_opt/config/settings.yaml
 /src/flex_dep_opt/cli_paper.py
+
+.vscode/
