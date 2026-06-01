@@ -460,6 +460,7 @@ def plot_mpc_dispatch_plotly(
                 y=x_fcr_dense,
                 mode="lines",
                 name="FCR committed [kW]",
+                legendgroup="fcr_committed",
                 line=dict(width=2, color=FCR_GREEN),
                 customdata=custom_fcr,
                 hovertemplate=(
@@ -475,6 +476,7 @@ def plot_mpc_dispatch_plotly(
                 y=-x_fcr_dense,
                 mode="lines",
                 name="FCR committed [-kW]",
+                legendgroup="fcr_committed",
                 fill="tonexty",
                 fillcolor=FCR_GREEN_MID,
                 line=dict(width=2, color=FCR_GREEN, dash="dot"),
