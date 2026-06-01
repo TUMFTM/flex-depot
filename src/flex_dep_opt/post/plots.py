@@ -224,11 +224,11 @@ def plot_market_cashflows_plotly(
     )
 
     fig.update_layout(
-        title=title,
+        title=dict(text=title, x=0.01, xanchor="left", y=0.99, yanchor="top", yref="container"),
         template="plotly_white",
         height=1150,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(l=60, r=60, t=80, b=60),
+        legend=dict(orientation="h", yanchor="bottom", y=1.04, xanchor="right", x=1),
+        margin=dict(l=60, r=60, t=150, b=60),
         barmode="relative",
         hovermode="x unified",
     )
@@ -624,11 +624,11 @@ def plot_mpc_dispatch_plotly(
     plot_height = 1450 if has_freq_subplot else 1200
 
     fig.update_layout(
-        title=title,
+        title=dict(text=title, x=0.01, xanchor="left", y=0.99, yanchor="top", yref="container"),
         template="plotly_white",
         height=plot_height,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        margin=dict(l=60, r=60, t=80, b=60),
+        legend=dict(orientation="h", yanchor="bottom", y=1.04, xanchor="right", x=1),
+        margin=dict(l=60, r=60, t=150, b=60),
         barmode="relative",
         hovermode="x unified",
     )
