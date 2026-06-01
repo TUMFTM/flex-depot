@@ -29,6 +29,8 @@ def flexibility_commercialization(
     frequency_nominal_hz: float = 50.0,
     frequency_deadband_hz: float = 0.010,
     frequency_full_activation_hz: float = 0.200,
+    fcr_product_hours: float = 4.0,
+    fcr_bid_block_kw: float = 1000.0,
     fcr_cap_max_by_slot: dict | None = None,
     fcr_slot_hours_by_slot: dict | None = None,
     fcr_energy_reserve_kwh_per_kw: float = 0.0,
@@ -106,7 +108,7 @@ def flexibility_commercialization(
     if fcr_prices is not None and not fcr_prices.empty:
         j = 0
         for slot_start in fcr_prices.index:
-            slot_end = slot_start + pd.Timedelta(hours=4)
+            slot_end = slot_start + pd.Timedelta(hours=fcr_product_hours)
             mask = np.asarray((time_index >= slot_start) & (time_index < slot_end))
             steps = np.flatnonzero(mask).tolist()
             if not steps:
@@ -206,13 +208,14 @@ def flexibility_commercialization(
         m.x_fcr_committed = pyo.Param(m.S_FCR, initialize=0.0, mutable=True)
         m.fcr_gate_open = pyo.Param(m.S_FCR, initialize=1, mutable=True, within=pyo.Binary)
 
-        # Bid as integer multiples of 1 MW (= 1000 kW); x_fcr expressed in kW.
+        # Bid as integer multiples of the configured block size (default 1 MW =
+        # 1000 kW); x_fcr expressed in kW.
         m.z_fcr = pyo.Var(
             m.S_FCR,
             within=pyo.NonNegativeIntegers,
-            bounds=lambda mdl, j: (0, int(fcr_cap_max_vals[j] // 1000.0)),
+            bounds=lambda mdl, j: (0, int(fcr_cap_max_vals[j] // fcr_bid_block_kw)),
         )
-        m.x_fcr = pyo.Expression(m.S_FCR, rule=lambda mdl, j: 1000.0 * mdl.z_fcr[j])
+        m.x_fcr = pyo.Expression(m.S_FCR, rule=lambda mdl, j: fcr_bid_block_kw * mdl.z_fcr[j])
 
         # Per-step FCR activation power as a market position (import-positive):
         # p_droop[t] = -droop[t] * x_fcr[j(t)].
@@ -228,6 +231,7 @@ def flexibility_commercialization(
 
         # Exposed for result extraction.
         m._fcr_slot_starts = list(fcr_slot_starts)
+        m._fcr_product_hours = float(fcr_product_hours)
 
     # ============================================================
     # 5) Decision variables
@@ -498,7 +502,7 @@ def flexibility_commercialization(
         fcr_revenue = 0.0
         if use_fcr:
             fcr_revenue = pyo.quicksum(
-                (mdl.fcr_price_param[j] / 1000.0) * mdl.x_fcr[j] * (mdl.fcr_slot_hours[j] / 4.0)
+                (mdl.fcr_price_param[j] / 1000.0) * mdl.x_fcr[j] * (mdl.fcr_slot_hours[j] / fcr_product_hours)
                 for j in mdl.S_FCR
             )
 

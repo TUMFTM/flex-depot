@@ -115,6 +115,9 @@ def run_mpc(settings: Settings) -> None:
     frequency_deadband_hz = opt_cfg.trading.fcr.deadband_hz
     frequency_full_activation_hz = opt_cfg.trading.fcr.full_activation_hz
 
+    fcr_product_hours = float(opt_cfg.trading.fcr.product_hours)
+    fcr_bid_block_kw = float(opt_cfg.trading.fcr.bid_block_mw) * 1000.0
+
     fcr_energy_reserve_kwh_per_kw = float(opt_cfg.trading.fcr.energy_reserve_minutes) / 60.0
     fcr_reserve_penalty = float(opt_cfg.trading.fcr.reserve_penalty_eur_per_kwh)
     fcr_balance_penalty = float(opt_cfg.trading.fcr.balance_penalty_eur_per_kwh)
@@ -181,7 +184,7 @@ def run_mpc(settings: Settings) -> None:
         P_up_full = flexibility_bounds_full["Power_upper_kW"]
         P_lo_full = flexibility_bounds_full["Power_lower_kW"]
         for slot_start in all_fcr_slot_starts:
-            slot_end = slot_start + pd.Timedelta(hours=4)
+            slot_end = slot_start + pd.Timedelta(hours=fcr_product_hours)
             slot_mask = (full_index >= slot_start) & (full_index < slot_end)
             n_covered = int(slot_mask.sum())
             if n_covered == 0:
@@ -269,13 +272,13 @@ def run_mpc(settings: Settings) -> None:
 
             # fcr gates
             window_start = window_idx[0]
-            window_end_ts = window_idx[-1] + pd.Timedelta(hours=4)  # last slot may start up to 4h before window end
+            window_end_ts = window_idx[-1] + pd.Timedelta(hours=fcr_product_hours)  # last slot may start up to one product length before window end
 
             # Include any slot that *overlaps* the window, not only those starting
             # inside it. An already-running slot (gate closed, bid committed) still
             # needs its droop activation applied to every step it covers — otherwise
             # only the slot-start step ever sees nonzero p_droop.
-            slot_duration = pd.Timedelta(hours=4)
+            slot_duration = pd.Timedelta(hours=fcr_product_hours)
             window_fcr_prices = fcr_prices_full.loc[
                 (fcr_prices_full.index + slot_duration > window_start) &
                 (fcr_prices_full.index < window_end_ts)
@@ -356,6 +359,8 @@ def run_mpc(settings: Settings) -> None:
                     frequency_nominal_hz=frequency_nominal_hz,
                     frequency_deadband_hz=frequency_deadband_hz,
                     frequency_full_activation_hz=frequency_full_activation_hz,
+                    fcr_product_hours=fcr_product_hours,
+                    fcr_bid_block_kw=fcr_bid_block_kw,
                     fcr_cap_max_by_slot=fcr_cap_max_by_slot or None,
                     fcr_slot_hours_by_slot=fcr_slot_hours_by_slot or None,
                     fcr_energy_reserve_kwh_per_kw=fcr_energy_reserve_kwh_per_kw,
@@ -545,7 +550,7 @@ def run_mpc(settings: Settings) -> None:
                             "accepted": accepted,
                             "fcr_price": fcr_price_val,
                             "slot_hours": slot_hours,
-                            "fcr_revenue_eur": (committed_val / 1000.0) * fcr_price_val * (slot_hours / 4.0),
+                            "fcr_revenue_eur": (committed_val / 1000.0) * fcr_price_val * (slot_hours / fcr_product_hours),
                         })
 
                         if bid_val > 0:

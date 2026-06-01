@@ -3,7 +3,7 @@ start = "2025-10-01 00:00"
 end = "2025-10-08 00:00"
 timestep_hours = 0.25
 name = "illustrative_example"
-solver = "gurobi"
+solver = "cbc"
 
 [optimization.markets.dayahead]
 enabled = true
@@ -34,6 +34,11 @@ acceptance_seed = 1
 gate_closure_hour = "08:00"
 gate_closure_closes_previous_day = true
 gate_closure_timezone = "Europe/Berlin"
+frequency_nominal_hz = 50.0
+deadband_hz = 0.010
+full_activation_hz = 0.200
+product_hours = 4.0
+bid_block_mw = 1.0
 energy_reserve_minutes = 15.0
 reserve_penalty_eur_per_kwh = 10.0
 balance_penalty_eur_per_kwh = 0.0001

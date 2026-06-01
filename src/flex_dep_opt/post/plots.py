@@ -251,6 +251,10 @@ def plot_mpc_dispatch_plotly(
     fcr_commit_df: pd.DataFrame | None = None,
     title: str = "MPC Flexband Dispatch and Market Positions",
     fcr_frequency_data: Optional[pd.DataFrame] = None,
+    frequency_nominal_hz: float = FREQUENCY_NOMINAL_HZ,
+    frequency_deadband_hz: float = FREQUENCY_DEADBAND_HZ,
+    frequency_full_activation_hz: float = FREQUENCY_FULL_ACTIVATION_HZ,
+    fcr_product_hours: float = 4.0,
 ) -> go.Figure:
     """
     MPC Visualisierung für Flexband-Modell.
@@ -304,7 +308,7 @@ def plot_mpc_dispatch_plotly(
                 aligned_idx = dispatch.index
                 locs = freq_series.index.get_indexer(aligned_idx, method="nearest")
                 freq_resampled = pd.Series(
-                    [float(freq_series.iloc[loc]) if loc >= 0 else FREQUENCY_NOMINAL_HZ for loc in locs],
+                    [float(freq_series.iloc[loc]) if loc >= 0 else frequency_nominal_hz for loc in locs],
                     index=aligned_idx,
                 )
 
@@ -449,7 +453,7 @@ def plot_mpc_dispatch_plotly(
                 else:
                     tmp_fcr["committed_at"] = tmp_fcr["committed_at"].dt.tz_convert(dispatch.index.tz)
                 for _, fcr_row in tmp_fcr.iterrows():
-                    slot_end = fcr_row["slot_start"] + pd.Timedelta(hours=4)
+                    slot_end = fcr_row["slot_start"] + pd.Timedelta(hours=fcr_product_hours)
                     mask = (dispatch.index >= fcr_row["slot_start"]) & (dispatch.index < slot_end)
                     fcr_commit_times[mask] = fcr_row["committed_at"].strftime("%Y-%m-%d %H:%M")
 
@@ -595,14 +599,14 @@ def plot_mpc_dispatch_plotly(
         )
 
         fig.add_hline(
-            y=FREQUENCY_NOMINAL_HZ,
+            y=frequency_nominal_hz,
             line=dict(width=1, color="rgba(0,0,0,0.3)", dash="dash"),
             row=6, col=1,
         )
 
         fig.add_hrect(
-            y0=FREQUENCY_NOMINAL_HZ - FREQUENCY_DEADBAND_HZ,
-            y1=FREQUENCY_NOMINAL_HZ + FREQUENCY_DEADBAND_HZ,
+            y0=frequency_nominal_hz - frequency_deadband_hz,
+            y1=frequency_nominal_hz + frequency_deadband_hz,
             fillcolor="rgba(200,200,200,0.25)",
             line_width=0,
             row=6, col=1,
@@ -610,7 +614,7 @@ def plot_mpc_dispatch_plotly(
 
         for sign in (+1, -1):
             fig.add_hline(
-                y=FREQUENCY_NOMINAL_HZ + sign * FREQUENCY_FULL_ACTIVATION_HZ,
+                y=frequency_nominal_hz + sign * frequency_full_activation_hz,
                 line=dict(width=1, color="rgba(46,199,182,0.7)", dash="dot"),
                 row=6, col=1,
             )

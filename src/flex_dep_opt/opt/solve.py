@@ -227,7 +227,7 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index: pd.DatetimeIndex) -> 
     if hasattr(model, "S_FCR") and hasattr(model, "_fcr_slot_starts"):
         # Per-slot bid broadcast to every step inside the slot window.
         x_fcr_by_t = [0.0] * T_len
-        slot_duration = pd.Timedelta(hours=4)
+        slot_duration = pd.Timedelta(hours=getattr(model, "_fcr_product_hours", 4.0))
         for j in model.S_FCR:
             slot_start = model._fcr_slot_starts[j]
             slot_end = slot_start + slot_duration
