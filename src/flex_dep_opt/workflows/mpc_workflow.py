@@ -23,7 +23,7 @@ from flex_dep_opt.io.results_io import (
     write_latest_run_pointer,
 )
 from flex_dep_opt.market.fcr import (
-    FCR_FREQ_COL,
+    FCR_DROOP_COL,
     fcr_gate_closure_timestamp,
     get_fcr_frequency_data,
     get_fcr_prices,
@@ -107,9 +107,12 @@ def run_mpc(settings: Settings) -> None:
         random.seed(fcr_acceptance_seed)
 
     fcr_freq_source = opt_cfg.trading.fcr.frequency_source
+    fcr_frequency_column = opt_cfg.trading.fcr.frequency_column
     fcr_frequency_data_full: pd.DataFrame | None = None
     if opt_cfg.trading.fcr.enabled and fcr_freq_source:
-        fcr_frequency_data_full = get_fcr_frequency_data(fcr_freq_source)
+        fcr_frequency_data_full = get_fcr_frequency_data(
+            fcr_freq_source, column=fcr_frequency_column
+        )
 
     frequency_nominal_hz = opt_cfg.trading.fcr.frequency_nominal_hz
     frequency_deadband_hz = opt_cfg.trading.fcr.deadband_hz
@@ -322,14 +325,18 @@ def run_mpc(settings: Settings) -> None:
                 ].copy()
                 # FCR frequency foresight: grid frequency is unpredictable, so
                 # only the near term is treated as known. Beyond the frequency
-                # horizon the signal is reset to nominal (zero droop) so the
+                # horizon the signal is reset to a zero-droop value so the
                 # optimizer plans for no FCR activation there. The current step
-                # (at current_time) always keeps its real value.
+                # (at current_time) always keeps its real value. For a droop
+                # column zero droop is 0.0; for a frequency column it is nominal.
                 fcr_freq_horizon_end = current_time + pd.Timedelta(
                     minutes=fcr_frequency_horizon_minutes
                 )
                 beyond_horizon = window_freq_data.index > fcr_freq_horizon_end
-                window_freq_data.loc[beyond_horizon, FCR_FREQ_COL] = frequency_nominal_hz
+                zero_droop_value = (
+                    0.0 if fcr_frequency_column == FCR_DROOP_COL else frequency_nominal_hz
+                )
+                window_freq_data.loc[beyond_horizon, fcr_frequency_column] = zero_droop_value
             else:
                 window_freq_data = None
 
@@ -356,6 +363,7 @@ def run_mpc(settings: Settings) -> None:
                     imbalance_volume_penalty_eur_per_kwh=imb_penalty,
                     fcr_prices=window_fcr_prices if not window_fcr_prices.empty else None,
                     fcr_frequency_data=window_freq_data,
+                    fcr_frequency_column=fcr_frequency_column,
                     frequency_nominal_hz=frequency_nominal_hz,
                     frequency_deadband_hz=frequency_deadband_hz,
                     frequency_full_activation_hz=frequency_full_activation_hz,

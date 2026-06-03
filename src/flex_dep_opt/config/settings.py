@@ -34,6 +34,7 @@ class FCRSettings(BaseModel):
     enabled: bool = False
     prices_source: str
     frequency_source: Optional[str] = None
+    frequency_column: str = "FREQ_DROOP_MEAN"
     acceptance_rate: Annotated[float, Field(gt=0.0, le=1.0)] = 1.0
     acceptance_seed: Optional[int] = None
     gate_closure_hour: str = "08:00"

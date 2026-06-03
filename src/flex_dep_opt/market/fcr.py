@@ -9,6 +9,7 @@ FREQUENCY_FULL_ACTIVATION_HZ = 0.200
 
 FCR_FREQ_DATETIME_COL = "DATETIME"
 FCR_FREQ_COL          = "FREQ_WORST_DEV_HZ"
+FCR_DROOP_COL         = "FREQ_DROOP_MEAN"
 _FREQ_MIN_COL         = "FREQ_MIN_HZ"
 _FREQ_MAX_COL         = "FREQ_MAX_HZ"
 
@@ -42,20 +43,26 @@ def droop_signal(
     return max(-1.0, min(1.0, -delta_f / full_activation_hz))
 
 
-def get_fcr_frequency_data(file_path: str, tz: str = "Europe/Berlin") -> pd.DataFrame:
+def get_fcr_frequency_data(
+    file_path: str, tz: str = "Europe/Berlin", column: str = FCR_FREQ_COL
+) -> pd.DataFrame:
     df = pd.read_csv(file_path)
 
-    if FCR_FREQ_COL not in df.columns:
-        if _FREQ_MIN_COL in df.columns and _FREQ_MAX_COL in df.columns:
+    if column not in df.columns:
+        if column == FCR_FREQ_COL and _FREQ_MIN_COL in df.columns and _FREQ_MAX_COL in df.columns:
             dev_max = (df[_FREQ_MAX_COL] - FREQUENCY_NOMINAL_HZ).abs()
             dev_min = (df[_FREQ_MIN_COL] - FREQUENCY_NOMINAL_HZ).abs()
-            df[FCR_FREQ_COL] = df[_FREQ_MAX_COL].where(dev_max >= dev_min, df[_FREQ_MIN_COL])
-        else:
+            df[column] = df[_FREQ_MAX_COL].where(dev_max >= dev_min, df[_FREQ_MIN_COL])
+        elif column == FCR_FREQ_COL:
             freq_col = next((c for c in df.columns if "FREQ" in c.upper()), None)
             if freq_col:
-                df = df.rename(columns={freq_col: FCR_FREQ_COL})
+                df = df.rename(columns={freq_col: column})
             else:
-                raise ValueError(f"FCR frequency CSV missing required column: {FCR_FREQ_COL}")
+                raise ValueError(f"FCR frequency CSV missing required column: {column}")
+        else:
+            raise ValueError(
+                f"FCR frequency CSV missing required column: {column}."
+            )
 
     if FCR_FREQ_DATETIME_COL not in df.columns:
         if not isinstance(df.index, pd.DatetimeIndex):
@@ -76,20 +83,20 @@ def get_fcr_frequency_data(file_path: str, tz: str = "Europe/Berlin") -> pd.Data
         df.index = pd.DatetimeIndex(ts)
         df = df.drop(columns=[FCR_FREQ_DATETIME_COL])
 
-    if not pd.api.types.is_numeric_dtype(df[FCR_FREQ_COL]):
-        df[FCR_FREQ_COL] = (
-            df[FCR_FREQ_COL].astype(str)
+    if not pd.api.types.is_numeric_dtype(df[column]):
+        df[column] = (
+            df[column].astype(str)
             .str.replace(",", ".", regex=False)
         )
 
-    df[FCR_FREQ_COL] = pd.to_numeric(df[FCR_FREQ_COL], errors="coerce")
+    df[column] = pd.to_numeric(df[column], errors="coerce")
 
     df = df.sort_index()
     if df.index.has_duplicates:
         warnings.warn("Duplicate timestamps found; keeping first occurrence.", UserWarning)
         df = df[~df.index.duplicated(keep="first")]
 
-    return df[[FCR_FREQ_COL]]
+    return df[[column]]
 
 
 def get_fcr_prices(file_path: str) -> pd.Series:

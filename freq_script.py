@@ -48,6 +48,19 @@ def load_frequency_file(path: pathlib.Path) -> pd.DataFrame:
     return df
 
 _FREQ_NOMINAL_HZ = 50.0
+_FREQ_DEADBAND_HZ = 0.010
+_FREQ_FULL_ACTIVATION_HZ = 0.200
+
+def droop_signal_vec(
+    freq: pd.Series,
+    nominal_hz: float = _FREQ_NOMINAL_HZ,
+    deadband_hz: float = _FREQ_DEADBAND_HZ,
+    full_activation_hz: float = _FREQ_FULL_ACTIVATION_HZ,
+) -> pd.Series:
+    delta_f = freq - nominal_hz
+    droop = (-delta_f / full_activation_hz).clip(-1.0, 1.0)
+    return droop.where(delta_f.abs() >= deadband_hz, 0.0)
+
 
 def resample_to_15min(df: pd.DataFrame) -> pd.DataFrame:
     resampled = df["FREQUENCY_HZ"].resample("15min").agg(
@@ -62,6 +75,8 @@ def resample_to_15min(df: pd.DataFrame) -> pd.DataFrame:
     resampled["FREQ_WORST_DEV_HZ"] = resampled["FREQ_MAX_HZ"].where(
         dev_max >= dev_min, resampled["FREQ_MIN_HZ"]
     )
+    droop = droop_signal_vec(df["FREQUENCY_HZ"])
+    resampled["FREQ_DROOP_MEAN"] = droop.resample("15min").mean()
     resampled = resampled.round(6)
     resampled.index.name = "DATETIME"
     return resampled.reset_index()
