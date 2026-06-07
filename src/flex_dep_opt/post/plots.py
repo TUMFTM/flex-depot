@@ -6,12 +6,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from flex_dep_opt.market.fcr import (
-    FCR_FREQ_COL,
-    FREQUENCY_DEADBAND_HZ,
-    FREQUENCY_FULL_ACTIVATION_HZ,
-    FREQUENCY_NOMINAL_HZ,
-)
+from flex_dep_opt.market.fcr import FCR_DROOP_COL
 from flex_dep_opt.post.metrics import has_imbalance, infer_market_position_columns
 
 # =============================================================================
@@ -251,9 +246,6 @@ def plot_mpc_dispatch_plotly(
     fcr_commit_df: pd.DataFrame | None = None,
     title: str = "MPC Flexband Dispatch and Market Positions",
     fcr_frequency_data: Optional[pd.DataFrame] = None,
-    frequency_nominal_hz: float = FREQUENCY_NOMINAL_HZ,
-    frequency_deadband_hz: float = FREQUENCY_DEADBAND_HZ,
-    frequency_full_activation_hz: float = FREQUENCY_FULL_ACTIVATION_HZ,
     fcr_product_hours: float = 4.0,
 ) -> go.Figure:
     """
@@ -288,8 +280,6 @@ def plot_mpc_dispatch_plotly(
         dispatch["p_droop_kw"].astype(float) if has_fcr and "p_droop_kw" in dispatch.columns else None
     )
 
-    # Grid-frequency subplot is rendered straight from the raw input series — no
-    # derived quantities are computed here.
     has_freq_subplot = has_fcr and fcr_frequency_data is not None and not fcr_frequency_data.empty
     freq_resampled: Optional[pd.Series] = None
 
@@ -298,17 +288,17 @@ def plot_mpc_dispatch_plotly(
         if not isinstance(freq_df.index, pd.DatetimeIndex):
             has_freq_subplot = False
         else:
-            freq_col = FCR_FREQ_COL if FCR_FREQ_COL in freq_df.columns else next(
-                (c for c in freq_df.columns if "FREQ" in c.upper()), None
+            droop_col = FCR_DROOP_COL if FCR_DROOP_COL in freq_df.columns else next(
+                (c for c in freq_df.columns if "DROOP" in c.upper()), None
             )
-            if freq_col is None:
+            if droop_col is None:
                 has_freq_subplot = False
             else:
-                freq_series = freq_df[freq_col].sort_index()
+                freq_series = freq_df[droop_col].sort_index()
                 aligned_idx = dispatch.index
                 locs = freq_series.index.get_indexer(aligned_idx, method="nearest")
                 freq_resampled = pd.Series(
-                    [float(freq_series.iloc[loc]) if loc >= 0 else frequency_nominal_hz for loc in locs],
+                    [float(freq_series.iloc[loc]) if loc >= 0 else 0.0 for loc in locs],
                     index=aligned_idx,
                 )
 
@@ -335,7 +325,7 @@ def plot_mpc_dispatch_plotly(
     ]
     if has_freq_subplot:
         subplot_titles_list.append("FCR Activation Power (droop · bid)")
-        subplot_titles_list.append("Grid Frequency")
+        subplot_titles_list.append("FCR Droop Signal")
 
     fig = make_subplots(
         rows=n_rows,
@@ -591,35 +581,20 @@ def plot_mpc_dispatch_plotly(
                 x=freq_resampled.index,
                 y=freq_resampled.values,
                 mode="lines",
-                name="Grid Frequency [Hz]",
+                name="FCR Droop Signal",
                 line=dict(width=1.5, color="rgba(80,80,80,0.7)"),
-                hovertemplate="f = %{y:.4f} Hz<extra></extra>",
+                hovertemplate="droop = %{y:.3f}<extra></extra>",
             ),
             row=6, col=1,
         )
 
         fig.add_hline(
-            y=frequency_nominal_hz,
+            y=0.0,
             line=dict(width=1, color="rgba(0,0,0,0.3)", dash="dash"),
             row=6, col=1,
         )
 
-        fig.add_hrect(
-            y0=frequency_nominal_hz - frequency_deadband_hz,
-            y1=frequency_nominal_hz + frequency_deadband_hz,
-            fillcolor="rgba(200,200,200,0.25)",
-            line_width=0,
-            row=6, col=1,
-        )
-
-        for sign in (+1, -1):
-            fig.add_hline(
-                y=frequency_nominal_hz + sign * frequency_full_activation_hz,
-                line=dict(width=1, color="rgba(46,199,182,0.7)", dash="dot"),
-                row=6, col=1,
-            )
-
-        fig.update_yaxes(title_text="Frequency [Hz]", row=6, col=1)
+        fig.update_yaxes(title_text="Droop [-1, 1]", row=6, col=1)
 
     plot_height = 1450 if has_freq_subplot else 1200
 

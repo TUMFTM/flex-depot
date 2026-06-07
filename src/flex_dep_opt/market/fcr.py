@@ -3,15 +3,8 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-FREQUENCY_NOMINAL_HZ = 50.0
-FREQUENCY_DEADBAND_HZ = 0.010
-FREQUENCY_FULL_ACTIVATION_HZ = 0.200
-
 FCR_FREQ_DATETIME_COL = "DATETIME"
-FCR_FREQ_COL          = "FREQ_WORST_DEV_HZ"
 FCR_DROOP_COL         = "FREQ_DROOP_MEAN"
-_FREQ_MIN_COL         = "FREQ_MIN_HZ"
-_FREQ_MAX_COL         = "FREQ_MAX_HZ"
 
 
 def fcr_gate_closure_timestamp(
@@ -31,38 +24,13 @@ def fcr_gate_closure_timestamp(
     return day.replace(hour=hh, minute=mm, tzinfo=ZoneInfo(timezone))
 
 
-def droop_signal(
-    freq_hz: float,
-    nominal_hz: float = FREQUENCY_NOMINAL_HZ,
-    deadband_hz: float = FREQUENCY_DEADBAND_HZ,
-    full_activation_hz: float = FREQUENCY_FULL_ACTIVATION_HZ,
-) -> float:
-    delta_f = float(freq_hz) - nominal_hz
-    if abs(delta_f) < deadband_hz:
-        return 0.0
-    return max(-1.0, min(1.0, -delta_f / full_activation_hz))
-
-
-def get_fcr_frequency_data(
-    file_path: str, tz: str = "Europe/Berlin", column: str = FCR_FREQ_COL
-) -> pd.DataFrame:
+def get_fcr_frequency_data(file_path: str, tz: str = "Europe/Berlin") -> pd.DataFrame:
     df = pd.read_csv(file_path)
 
-    if column not in df.columns:
-        if column == FCR_FREQ_COL and _FREQ_MIN_COL in df.columns and _FREQ_MAX_COL in df.columns:
-            dev_max = (df[_FREQ_MAX_COL] - FREQUENCY_NOMINAL_HZ).abs()
-            dev_min = (df[_FREQ_MIN_COL] - FREQUENCY_NOMINAL_HZ).abs()
-            df[column] = df[_FREQ_MAX_COL].where(dev_max >= dev_min, df[_FREQ_MIN_COL])
-        elif column == FCR_FREQ_COL:
-            freq_col = next((c for c in df.columns if "FREQ" in c.upper()), None)
-            if freq_col:
-                df = df.rename(columns={freq_col: column})
-            else:
-                raise ValueError(f"FCR frequency CSV missing required column: {column}")
-        else:
-            raise ValueError(
-                f"FCR frequency CSV missing required column: {column}."
-            )
+    if FCR_DROOP_COL not in df.columns:
+        raise ValueError(f"FCR frequency CSV missing required column: {FCR_DROOP_COL}")
+
+    column = FCR_DROOP_COL
 
     if FCR_FREQ_DATETIME_COL not in df.columns:
         if not isinstance(df.index, pd.DatetimeIndex):

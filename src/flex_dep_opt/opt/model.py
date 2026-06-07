@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
 
-from flex_dep_opt.market.fcr import FCR_DROOP_COL, FCR_FREQ_COL, droop_signal
+from flex_dep_opt.market.fcr import FCR_DROOP_COL
 
 from ..domain.depot import Depot
 
@@ -26,10 +26,6 @@ def flexibility_commercialization(
     imbalance_volume_penalty_eur_per_kwh: float = 0.0,
     fcr_prices: pd.Series | None = None,
     fcr_frequency_data: pd.DataFrame | None = None,
-    fcr_frequency_column: str = FCR_FREQ_COL,
-    frequency_nominal_hz: float = 50.0,
-    frequency_deadband_hz: float = 0.010,
-    frequency_full_activation_hz: float = 0.200,
     fcr_product_hours: float = 4.0,
     fcr_bid_block_kw: float = 1000.0,
     fcr_cap_max_by_slot: dict | None = None,
@@ -152,22 +148,11 @@ def flexibility_commercialization(
     # d < 0  -> high frequency -> downward FCR -> depot imports
     droop_by_t = np.zeros(N, dtype=float)
     if use_fcr and fcr_frequency_data is not None and not fcr_frequency_data.empty:
-        col_vals = fcr_frequency_data[fcr_frequency_column].to_numpy(dtype=float)
+        col_vals = fcr_frequency_data[FCR_DROOP_COL].to_numpy(dtype=float)
         locs = fcr_frequency_data.index.get_indexer(time_index, method="nearest")
-        # FREQ_DROOP_MEAN is already a droop signal in [-1, 1] and is used
-        # directly; any other (frequency in Hz) column is converted via droop.
-        use_precomputed_droop = fcr_frequency_column == FCR_DROOP_COL
         for t, loc in enumerate(locs):
             if loc >= 0 and t in t_to_fcr_slot:
-                if use_precomputed_droop:
-                    droop_by_t[t] = float(np.clip(col_vals[loc], -1.0, 1.0))
-                else:
-                    droop_by_t[t] = droop_signal(
-                        col_vals[loc],
-                        nominal_hz=frequency_nominal_hz,
-                        deadband_hz=frequency_deadband_hz,
-                        full_activation_hz=frequency_full_activation_hz,
-                    )
+                droop_by_t[t] = float(np.clip(col_vals[loc], -1.0, 1.0))
 
     # ============================================================
     # 3) Pyomo model (Sets / Params)

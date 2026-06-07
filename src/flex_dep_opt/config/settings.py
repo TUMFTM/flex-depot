@@ -34,15 +34,11 @@ class FCRSettings(BaseModel):
     enabled: bool = False
     prices_source: str
     frequency_source: Optional[str] = None
-    frequency_column: str = "FREQ_DROOP_MEAN"
     acceptance_rate: Annotated[float, Field(gt=0.0, le=1.0)] = 1.0
     acceptance_seed: Optional[int] = None
     gate_closure_hour: str = "08:00"
     gate_closure_closes_previous_day: bool = True
     gate_closure_timezone: str = "Europe/Berlin"
-    frequency_nominal_hz: float = 50.0
-    deadband_hz: float = 0.010
-    full_activation_hz: float = 0.200
     product_hours: float = 4.0
     bid_block_mw: float = 1.0
     energy_reserve_minutes: float = 15.0

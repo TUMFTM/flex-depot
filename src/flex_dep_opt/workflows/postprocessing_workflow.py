@@ -214,9 +214,6 @@ def postprocess_mpc_results(settings: Settings | None = None) -> None:
         fcr_commit_df=fcr_commit_df,
         title="MPC Flexband Dispatch and Market Positions",
         fcr_frequency_data=fcr_frequency_data_pp,
-        frequency_nominal_hz=fcr_cfg.frequency_nominal_hz,
-        frequency_deadband_hz=fcr_cfg.deadband_hz,
-        frequency_full_activation_hz=fcr_cfg.full_activation_hz,
         fcr_product_hours=fcr_cfg.product_hours,
     )
     fig_dispatch.write_html(dispatch_html, include_plotlyjs="cdn")
