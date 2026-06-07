@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Annotated, Literal, Optional
 
 import toml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 from pydantic_settings import BaseSettings, SettingsConfigDict, TomlConfigSettingsSource
 
 
@@ -93,12 +93,17 @@ class OptimizationSettings(BaseModel):
 
 BASE_DIR = Path(__file__).resolve().parent
 
+_DEFAULT_TOML = BASE_DIR / "settings_example.toml"
+
+
 class Settings(BaseSettings):
     simulation: SimulationSettings
     optimization: OptimizationSettings
 
+    _source_path: Optional[Path] = PrivateAttr(default=None)
+
     model_config = SettingsConfigDict(
-        toml_file=BASE_DIR / "settings_example.toml",
+        toml_file=_DEFAULT_TOML,
         env_nested_delimiter="__"
     )
 
@@ -115,17 +120,21 @@ class Settings(BaseSettings):
 
     @classmethod
     def load(cls, config_path: Optional[str | Path] = None) -> "Settings":
-        if config_path is None:
-            cls.model_config["toml_file"] = BASE_DIR / "settings_example.toml"
-        else:
-            path = Path(config_path)
-            if not path.is_file():
-                raise FileNotFoundError(f"Config file not found: {path}")
-            cls.model_config["toml_file"] = path
-        return cls()
+        resolved = _DEFAULT_TOML if config_path is None else Path(config_path)
+        if config_path is not None and not resolved.is_file():
+            raise FileNotFoundError(f"Config file not found: {resolved}")
+
+        cls.model_config["toml_file"] = resolved
+        try:
+            instance = cls()
+        finally:
+            cls.model_config["toml_file"] = _DEFAULT_TOML
+
+        instance._source_path = resolved
+        return instance
 
     def save_to_toml(self, path: Optional[str | Path] = None):
-        save_path = path or self.model_config.get("toml_file")
+        save_path = path or self._source_path
 
         if not save_path:
             raise ValueError("no save path provided or configured")
@@ -135,5 +144,5 @@ class Settings(BaseSettings):
         with open(save_path, "w") as f:
             toml.dump(data, f)
 
-    def get_source_path(self) -> Optional[str]:
-        return self.model_config.get("toml_file")
+    def get_source_path(self) -> Optional[Path]:
+        return self._source_path

@@ -57,8 +57,12 @@ def postprocess_mpc_results(settings: Settings | None = None) -> None:
     # ------------------------------------------------------------------
     # Time window
     # ------------------------------------------------------------------
-    start = pd.to_datetime(sim.start).tz_localize("Europe/Berlin")
-    end = pd.to_datetime(sim.end).tz_localize("Europe/Berlin")
+    start = pd.to_datetime(sim.start).tz_localize(
+        "Europe/Berlin", ambiguous=True, nonexistent="shift_forward"
+    )
+    end = pd.to_datetime(sim.end).tz_localize(
+        "Europe/Berlin", ambiguous=True, nonexistent="shift_forward"
+    )
 
     # ------------------------------------------------------------------
     # Load dispatch

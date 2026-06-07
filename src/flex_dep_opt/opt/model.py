@@ -139,6 +139,14 @@ def flexibility_commercialization(
         for t in steps:
             t_to_fcr_slot[t] = j
 
+    # FCR activation is folded into the power balance (sum(p_market) + p_droop
+    # = p_net), so a single market position may have to carry both the net flow
+    # and the FCR offset: |p_market| can reach |p_net| + |p_droop| up to
+    # p_market_max_value + max(x_fcr). Widen the per-market variable bound by the
+    # largest biddable FCR capacity so this envelope never binds artificially.
+    fcr_headroom = max(fcr_cap_max_vals.values()) if (use_fcr and fcr_cap_max_vals) else 0.0
+    p_market_bound = p_market_max_value + fcr_headroom
+
     # Per-step signed droop d[t] in [-1, +1].
     # d > 0  -> low frequency  -> upward FCR   -> depot exports
     # d < 0  -> high frequency -> downward FCR -> depot imports
@@ -248,7 +256,7 @@ def flexibility_commercialization(
     m.p_net = pyo.Var(m.T, within=pyo.Reals)
     m.E = pyo.Var(m.S, within=pyo.Reals)
 
-    m.p_market = pyo.Var(m.MARKETS, m.T, bounds=(-p_market_max_value, p_market_max_value))
+    m.p_market = pyo.Var(m.MARKETS, m.T, bounds=(-p_market_bound, p_market_bound))
 
     if allow_imbalance:
         m.p_imb_pos = pyo.Var(m.T, within=pyo.NonNegativeReals)

@@ -149,8 +149,12 @@ def run_mpc(settings: Settings) -> None:
     prices_by_market = build_prices_from_settings(settings)
     fees_by_market = build_fees_from_settings(settings)
 
-    start = pd.to_datetime(sim_cfg.start).tz_localize("Europe/Berlin")
-    end = pd.to_datetime(sim_cfg.end).tz_localize("Europe/Berlin")
+    start = pd.to_datetime(sim_cfg.start).tz_localize(
+        "Europe/Berlin", ambiguous=True, nonexistent="shift_forward"
+    )
+    end = pd.to_datetime(sim_cfg.end).tz_localize(
+        "Europe/Berlin", ambiguous=True, nonexistent="shift_forward"
+    )
 
     for mk in prices_by_market:
         prices_by_market[mk] = prices_by_market[mk].loc[start:end]
@@ -162,7 +166,11 @@ def run_mpc(settings: Settings) -> None:
     full_state_index = full_index.append(pd.DatetimeIndex([full_index[-1] + dt]))
 
     if flexibility_bounds_full is not None:
-        flexibility_bounds_full = flexibility_bounds_full.loc[full_state_index]
+        flexibility_bounds_full = align_and_validate_flexibility_bounds(
+            bounds=flexibility_bounds_full,
+            time_index=full_state_index,
+            expected_len=len(full_state_index),
+        )
 
     imb_pos_full = prices_by_market.pop("IMB_POS", None)
     imb_neg_full = prices_by_market.pop("IMB_NEG", None)
