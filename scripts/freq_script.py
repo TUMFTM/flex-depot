@@ -77,6 +77,7 @@ def resample_to_15min(df: pd.DataFrame) -> pd.DataFrame:
     )
     droop = droop_signal_vec(df["FREQUENCY_HZ"])
     resampled["FREQ_DROOP_MEAN"] = droop.resample("15min").mean()
+    resampled["FREQ_DROOP_ABS_MEAN"] = droop.abs().resample("15min").mean()
     resampled = resampled.round(6)
     resampled.index.name = "DATETIME"
     return resampled.reset_index()

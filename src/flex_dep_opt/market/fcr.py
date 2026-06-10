@@ -5,6 +5,7 @@ import pandas as pd
 
 FCR_FREQ_DATETIME_COL = "DATETIME"
 FCR_DROOP_COL         = "FREQ_DROOP_MEAN"
+FCR_DROOP_ABS_COL     = "FREQ_DROOP_ABS_MEAN"
 
 
 def fcr_gate_closure_timestamp(
@@ -59,12 +60,21 @@ def get_fcr_frequency_data(file_path: str, tz: str = "Europe/Berlin") -> pd.Data
 
     df[column] = pd.to_numeric(df[column], errors="coerce")
 
+    cols = [column]
+    if FCR_DROOP_ABS_COL in df.columns:
+        if not pd.api.types.is_numeric_dtype(df[FCR_DROOP_ABS_COL]):
+            df[FCR_DROOP_ABS_COL] = (
+                df[FCR_DROOP_ABS_COL].astype(str).str.replace(",", ".", regex=False)
+            )
+        df[FCR_DROOP_ABS_COL] = pd.to_numeric(df[FCR_DROOP_ABS_COL], errors="coerce")
+        cols.append(FCR_DROOP_ABS_COL)
+
     df = df.sort_index()
     if df.index.has_duplicates:
         warnings.warn("Duplicate timestamps found; keeping first occurrence.", UserWarning)
         df = df[~df.index.duplicated(keep="first")]
 
-    return df[[column]]
+    return df[cols]
 
 
 def get_fcr_prices(file_path: str) -> pd.Series:

@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
 
-from flex_dep_opt.market.fcr import FCR_DROOP_COL
+from flex_dep_opt.market.fcr import FCR_DROOP_ABS_COL, FCR_DROOP_COL
 
 from ..domain.depot import Depot
 
@@ -147,12 +147,22 @@ def flexibility_commercialization(
     # d > 0  -> low frequency  -> upward FCR   -> depot exports
     # d < 0  -> high frequency -> downward FCR -> depot imports
     droop_by_t = np.zeros(N, dtype=float)
+    hidden_droop_by_t = np.zeros(N, dtype=float)
     if use_fcr and fcr_frequency_data is not None and not fcr_frequency_data.empty:
         col_vals = fcr_frequency_data[FCR_DROOP_COL].to_numpy(dtype=float)
+        abs_vals = (
+            fcr_frequency_data[FCR_DROOP_ABS_COL].to_numpy(dtype=float)
+            if FCR_DROOP_ABS_COL in fcr_frequency_data.columns
+            else None
+        )
         locs = fcr_frequency_data.index.get_indexer(time_index, method="nearest")
         for t, loc in enumerate(locs):
             if loc >= 0 and t in t_to_fcr_slot:
                 droop_by_t[t] = float(np.clip(col_vals[loc], -1.0, 1.0))
+                if abs_vals is not None:
+                    hidden_droop_by_t[t] = max(
+                        float(abs_vals[loc]) - abs(droop_by_t[t]), 0.0
+                    )
 
     # ============================================================
     # 3) Pyomo model (Sets / Params)
@@ -204,6 +214,7 @@ def flexibility_commercialization(
         m.fcr_cap_max_kw = pyo.Param(m.S_FCR, initialize=lambda mdl, j: fcr_cap_max_vals[j])
         m.fcr_slot_hours = pyo.Param(m.S_FCR, initialize=lambda mdl, j: fcr_slot_hours_vals[j])
         m.fcr_droop_signal = pyo.Param(m.T, initialize=lambda mdl, t: float(droop_by_t[t]))
+        m.fcr_hidden_droop = pyo.Param(m.T, initialize=lambda mdl, t: float(hidden_droop_by_t[t]))
 
         m.x_fcr_committed = pyo.Param(m.S_FCR, initialize=0.0, mutable=True)
         m.fcr_gate_open = pyo.Param(m.S_FCR, initialize=1, mutable=True, within=pyo.Binary)
@@ -479,9 +490,22 @@ def flexibility_commercialization(
                 for mk in mdl.MARKETS for t in mdl.T
             )
 
-        # Cycling cost on total throughput. FCR activation already flows through
-        # p_ch / p_dis via the balance, so no separate FCR throughput term is needed.
+        # Cycling cost on total throughput. The mean FCR activation already flows
+        # through p_ch / p_dis via the balance, so this term captures cycling on
+        # |mean droop|.
         deg_cost = mdl.c_deg * pyo.quicksum((mdl.p_ch[t] + mdl.p_dis[t]) * dt for t in mdl.T)
+
+        # Hidden FCR cycling: the term above only sees the mean droop folded into
+        # p_net, but the battery physically follows the per-second signal and
+        # cycles on mean|droop|. Charge the gap (mean|droop| - |mean droop|) per kW
+        # of committed FCR so the bid reflects true wear (~+30% throughput in
+        # practice). Zero unless the 15-min freq file carries FREQ_DROOP_ABS_MEAN,
+        # and gated by c_deg (= 0 when cycle regularization is disabled).
+        if use_fcr:
+            deg_cost = deg_cost + mdl.c_deg * pyo.quicksum(
+                mdl.fcr_hidden_droop[t] * mdl.x_fcr[t_to_fcr_slot[t]] * dt
+                for t in mdl.T if t in t_to_fcr_slot
+            )
 
         # Optional imbalance cashflow and volume penalty
         imb_cash = 0.0
