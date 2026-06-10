@@ -132,11 +132,7 @@ def replay(run_dir: pathlib.Path, raw_freq_override: str | None) -> None:
         if n == 0:
             continue
 
-        # The 15-min FREQ_DROOP_MEAN the model consumed is not exactly the true
-        # per-second slot mean (an alignment artefact of the model's nearest-bin
-        # lookup). Report that gap separately, and anchor the per-second signal to
-        # the model's committed mean for the SoC diagnostic so the intra-slot
-        # *shape* is isolated from that mean error (otherwise net SoC drifts).
+        # The 15-min FREQ_DROOP_MEAN the model consumed is not exactly the true per-second slot mean (an alignment artefact of the model's nearest-bin lookup). Report that gap separately, and anchor the per-second signal to the model's committed mean for the SoC diagnostic so the intra-slot *shape* is isolated from that mean error (otherwise net SoC drifts).
         true_mean = float(np.mean(d))
         mean_gap_kwh = abs(model_droop - true_mean) * C * dt_h
         d_anchored = d + (model_droop - true_mean)
@@ -216,8 +212,7 @@ def replay(run_dir: pathlib.Path, raw_freq_override: str | None) -> None:
     mean_gap_std = (rep["model_droop"] - rep["droop_mean"]).std()
 
     # The model's committed slot mean should equal the true per-second slot mean.
-    # A nonzero gap means the run's droop was computed with a different definition
-    # or a misaligned bin lookup (e.g. a run saved by older code).
+    # A nonzero gap means the run's droop was computed with a different definition or a misaligned bin lookup (e.g. a run saved by older code).
     if mean_gap_max > 0.5:  # kWh
         align_lines = [
             "-- WARNING: 15-min mean misaligned ---------------------------",
