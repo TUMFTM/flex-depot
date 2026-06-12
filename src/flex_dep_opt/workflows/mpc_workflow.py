@@ -33,9 +33,71 @@ from flex_dep_opt.market.trading_rules import (
     gate_closure_timestamp,
 )
 from flex_dep_opt.opt.model import flexibility_commercialization
-from flex_dep_opt.opt.solve import extract_dispatch, solve_model
+from flex_dep_opt.opt.solve import extract_dispatch, extract_objective_terms, solve_model
 
 logger = logging.getLogger(__name__)
+
+_FCR_BREAKEVEN_NAN = {
+    "breakeven_eur_per_mw": float("nan"),
+    "margin_eur_per_mw": float("nan"),
+    "margin_pct": float("nan"),
+    "opp_cost_eur": float("nan"),
+    "d_energy_eur": float("nan"),
+    "d_fees_eur": float("nan"),
+    "d_cycling_eur": float("nan"),
+    "d_imbalance_eur": float("nan"),
+    "d_penalties_eur": float("nan"),
+}
+
+_PENALTY_TERM_NAMES = (
+    "obj_imb_vol_penalty",
+    "obj_term_penalty",
+    "obj_e_slack_penalty",
+    "obj_reserve_penalty",
+    "obj_balance_penalty",
+)
+
+
+def _fcr_breakeven_metrics(
+    terms_a: dict[str, float],
+    terms_b: dict[str, float],
+    *,
+    bid_kw: float,
+    rev_eur: float,
+    fcr_price: float,
+    covered_fraction: float,
+) -> dict[str, float | str]:
+    """
+    Breakeven of one committed FCR bid from the gate-closure window solve (A)
+    and its counterfactual without the bid (B, slot forced to 0, all other FCR
+    bids pinned).
+
+    The opportunity cost is what the rest of the objective loses by holding the
+    bid: obj_B - (obj_A - rev). Divided by the bid volume (normalized to the
+    full product like the revenue term) it is the EUR/MW capacity price at
+    which the bid breaks even — comparable to the pay-as-cleared price.
+    """
+    opp_cost = terms_b["objective"] - (terms_a["objective"] - rev_eur)
+    denom = (bid_kw / 1000.0) * covered_fraction
+    breakeven = opp_cost / denom
+    margin = fcr_price - breakeven
+
+    def d(name: str) -> float:
+        return terms_b[name] - terms_a[name]
+
+    return {
+        "breakeven_status": "ok",
+        "breakeven_eur_per_mw": breakeven,
+        "margin_eur_per_mw": margin,
+        "margin_pct": margin / fcr_price if abs(fcr_price) > 1e-9 else float("nan"),
+        "opp_cost_eur": opp_cost,
+        # Signed objective-term deltas (B - A): how each component changes when the bid is dropped. opp_cost = d_energy + d_imbalance - d_fees - d_cycling - d_penalties.
+        "d_energy_eur": d("obj_energy_cashflow"),
+        "d_fees_eur": d("obj_fee_cost"),
+        "d_cycling_eur": d("obj_cycling_cost"),
+        "d_imbalance_eur": d("obj_imb_cashflow"),
+        "d_penalties_eur": sum(d(n) for n in _PENALTY_TERM_NAMES),
+    }
 
 
 class _TqdmLoggingHandler(logging.Handler):
@@ -113,6 +175,7 @@ def run_mpc(settings: Settings) -> None:
 
     fcr_product_hours = float(opt_cfg.trading.fcr.product_hours)
     fcr_bid_block_kw = float(opt_cfg.trading.fcr.bid_block_mw) * 1000.0
+    fcr_breakeven_enabled = bool(opt_cfg.trading.fcr.breakeven_analysis)
 
     fcr_energy_reserve_kwh_per_kw = float(opt_cfg.trading.fcr.energy_reserve_minutes) / 60.0
     fcr_reserve_penalty = float(opt_cfg.trading.fcr.reserve_penalty_eur_per_kwh)
@@ -524,46 +587,92 @@ def run_mpc(settings: Settings) -> None:
 
             # commit fcr slots at their gate closure
             if hasattr(model, "S_FCR"):
+                # Snapshot the solve-A bids of every slot closing between now and the next step BEFORE any breakeven counterfactual solve overwrites the model's variable values.
+                closing_slots = []
                 for j in model.S_FCR:
                     slot = model._fcr_slot_starts[j]
                     gate_ts = _fcr_gate_ts(slot)
-                    slot_was_open = current_time < gate_ts
-                    slot_now_closed = next_time >= gate_ts
+                    if current_time < gate_ts and next_time >= gate_ts:
+                        closing_slots.append((
+                            j,
+                            slot,
+                            gate_ts,
+                            float(pyo.value(model.x_fcr[j])),
+                            float(pyo.value(model.fcr_slot_revenue[j])),
+                        ))
 
-                    if slot_was_open and slot_now_closed:
-                        bid_val = pyo.value(model.x_fcr[j])
-                        accepted = bid_val > 0 and random.random() < fcr_acceptance_rate
-                        committed_val = bid_val if accepted else 0.0
-                        committed_fcr_slots[slot] = committed_val
-                        fcr_price_val = float(window_fcr_prices.loc[slot])
-                        # Hours of this 4 h slot covered by the sim horizon;
-                        # revenue is prorated to match the optimizer's
-                        # fcr_revenue term (price is for the full 4 h product).
-                        slot_hours = float(fcr_slot_hours_by_slot.get(slot, 4.0))
+                # Breakeven counterfactuals: re-solve the same window once per committed bid with that slot forced to 0 and every other FCR bid pinned at its solve-A value. Runs on the bid (before the acceptance draw) and is purely diagnostic — nothing reads the model after this block, and the acceptance draws below use the snapshotted bids, so results are identical flag on/off.
+                breakeven_by_slot: dict[pd.Timestamp, dict] = {}
+                if fcr_breakeven_enabled and any(b[3] > 0 for b in closing_slots):
+                    terms_a = extract_objective_terms(model)
+                    z_vals_a = {k: int(round(pyo.value(model.z_fcr[k]))) for k in model.S_FCR}
+                    for k in model.S_FCR:
+                        model.z_fcr[k].fix(z_vals_a[k])
 
-                        fcr_commit_rows.append({
-                            "slot_start": slot,
-                            "gate_closure_time": gate_ts,
-                            "committed_at": current_time,
-                            "bid_kw": bid_val,
-                            "x_fcr_kw": committed_val,
-                            "x_fcr_mw": committed_val / 1000.0,
-                            "accepted": accepted,
-                            "fcr_price": fcr_price_val,
-                            "slot_hours": slot_hours,
-                            "fcr_revenue_eur": (committed_val / 1000.0) * fcr_price_val * (slot_hours / fcr_product_hours),
-                        })
+                    for j, slot, gate_ts, bid_val, rev_eur in closing_slots:
+                        if bid_val <= 0:
+                            continue
+                        model.z_fcr[j].fix(0)
+                        try:
+                            solve_model(model, solver_name=sim_cfg.solver)
+                            breakeven_by_slot[slot] = _fcr_breakeven_metrics(
+                                terms_a,
+                                extract_objective_terms(model),
+                                bid_kw=bid_val,
+                                rev_eur=rev_eur,
+                                fcr_price=float(window_fcr_prices.loc[slot]),
+                                covered_fraction=float(fcr_slot_hours_by_slot.get(slot, fcr_product_hours)) / fcr_product_hours,
+                            )
+                        except RuntimeError as e:
+                            logger.warning(
+                                f"[{current_time}] FCR breakeven counterfactual failed for slot {slot}: {e}"
+                            )
+                            breakeven_by_slot[slot] = {"breakeven_status": "solve_failed", **_FCR_BREAKEVEN_NAN}
+                        model.z_fcr[j].fix(z_vals_a[j])
 
-                        if bid_val > 0:
-                            if accepted:
-                                logger.info(
-                                    f"[{current_time}] FCR slot accepted: {slot} - {committed_val:.1f} kW "
-                                    f"@ {fcr_price_val:.2f} €/MW"
-                                )
-                            else:
-                                logger.info(
-                                    f"[{current_time}] FCR slot rejected: {slot} - bid {bid_val:.1f} kW not accepted"
-                                )
+                    for k in model.S_FCR:
+                        model.z_fcr[k].unfix()
+
+                for j, slot, gate_ts, bid_val, rev_eur in closing_slots:
+                    accepted = bid_val > 0 and random.random() < fcr_acceptance_rate
+                    committed_val = bid_val if accepted else 0.0
+                    committed_fcr_slots[slot] = committed_val
+                    fcr_price_val = float(window_fcr_prices.loc[slot])
+                    # Hours of this 4 h slot covered by the sim horizon; revenue is prorated to match the optimizer's fcr_revenue term (price is for the full 4 h product).
+                    slot_hours = float(fcr_slot_hours_by_slot.get(slot, 4.0))
+
+                    breakeven_cols = breakeven_by_slot.get(
+                        slot,
+                        {
+                            "breakeven_status": "no_bid" if bid_val <= 0 else "disabled",
+                            **_FCR_BREAKEVEN_NAN,
+                        },
+                    )
+
+                    fcr_commit_rows.append({
+                        "slot_start": slot,
+                        "gate_closure_time": gate_ts,
+                        "committed_at": current_time,
+                        "bid_kw": bid_val,
+                        "x_fcr_kw": committed_val,
+                        "x_fcr_mw": committed_val / 1000.0,
+                        "accepted": accepted,
+                        "fcr_price": fcr_price_val,
+                        "slot_hours": slot_hours,
+                        "fcr_revenue_eur": (committed_val / 1000.0) * fcr_price_val * (slot_hours / fcr_product_hours),
+                        **breakeven_cols,
+                    })
+
+                    if bid_val > 0:
+                        if accepted:
+                            logger.info(
+                                f"[{current_time}] FCR slot accepted: {slot} - {committed_val:.1f} kW "
+                                f"@ {fcr_price_val:.2f} €/MW"
+                            )
+                        else:
+                            logger.info(
+                                f"[{current_time}] FCR slot rejected: {slot} - bid {bid_val:.1f} kW not accepted"
+                            )
 
             # --------------------------------------------------------
             # 9.8) Roll energy state forward

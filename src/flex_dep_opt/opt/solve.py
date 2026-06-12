@@ -168,6 +168,35 @@ def solve_model(
 # =============================================================================
 # Result extraction
 # =============================================================================
+OBJECTIVE_TERM_NAMES = (
+    "obj_energy_cashflow",
+    "obj_fcr_revenue",
+    "obj_imb_cashflow",
+    "obj_fee_cost",
+    "obj_cycling_cost",
+    "obj_imb_vol_penalty",
+    "obj_term_penalty",
+    "obj_e_slack_penalty",
+    "obj_reserve_penalty",
+    "obj_balance_penalty",
+)
+
+
+def extract_objective_terms(model: pyo.ConcreteModel) -> dict[str, float]:
+    """
+    Evaluate the named objective-term expressions of a solved model.
+
+    Returns a dict with one entry per OBJECTIVE_TERM_NAMES (0.0 if the model
+    was built without that component) plus "objective" for the total.
+    """
+    terms: dict[str, float] = {}
+    for name in OBJECTIVE_TERM_NAMES:
+        comp = getattr(model, name, None)
+        terms[name] = float(pyo.value(comp)) if comp is not None else 0.0
+    terms["objective"] = float(pyo.value(model.obj))
+    return terms
+
+
 def extract_dispatch(model: pyo.ConcreteModel, time_index: pd.DatetimeIndex) -> pd.DataFrame:
     """
     Extract dispatch time series from a solved multi-market model.

@@ -240,6 +240,13 @@ def flexibility_commercialization(
 
         m.p_droop = pyo.Expression(m.T, rule=_p_droop_rule)
 
+        m.fcr_slot_revenue = pyo.Expression(
+            m.S_FCR,
+            rule=lambda mdl, j: (mdl.fcr_price_param[j] / 1000.0)
+            * mdl.x_fcr[j]
+            * (mdl.fcr_slot_hours[j] / fcr_product_hours),
+        )
+
         # Exposed for result extraction.
         m._fcr_slot_starts = list(fcr_slot_starts)
         m._fcr_product_hours = float(fcr_product_hours)
@@ -475,89 +482,92 @@ def flexibility_commercialization(
     # ============================================================
     # 10) Objective
     # ============================================================
-    def obj_expr(mdl):
-        dt = mdl.dt
-
-        energy_cashflow = pyo.quicksum(
-            -mdl.price[mk, t] * mdl.p_market[mk, t] * dt
-            for mk in mdl.MARKETS for t in mdl.T
+    # Each term is a named scalar Expression so a solved model can be decomposed term-by-term (used by the FCR breakeven analysis) while the objective stays the exact sum of the same expressions.
+    m.obj_energy_cashflow = pyo.Expression(
+        expr=pyo.quicksum(
+            -m.price[mk, t] * m.p_market[mk, t] * m.dt
+            for mk in m.MARKETS for t in m.T
         )
+    )
 
-        fee_cost = 0.0
-        if any_fee:
-            fee_cost = pyo.quicksum(
-                mdl.fee[mk] * mdl.p_market_vol[mk, t] * dt
-                for mk in mdl.MARKETS for t in mdl.T
-            )
+    fee_cost = 0.0
+    if any_fee:
+        fee_cost = pyo.quicksum(
+            m.fee[mk] * m.p_market_vol[mk, t] * m.dt
+            for mk in m.MARKETS for t in m.T
+        )
+    m.obj_fee_cost = pyo.Expression(expr=fee_cost)
 
-        # Cycling cost on total throughput. The mean FCR activation already flows
-        # through p_ch / p_dis via the balance, so this term captures cycling on
-        # |mean droop|.
-        deg_cost = mdl.c_deg * pyo.quicksum((mdl.p_ch[t] + mdl.p_dis[t]) * dt for t in mdl.T)
+    # Cycling cost on total throughput. The mean FCR activation already flows through p_ch / p_dis via the balance, so this term captures cycling on |mean droop|.
+    deg_cost = m.c_deg * pyo.quicksum((m.p_ch[t] + m.p_dis[t]) * m.dt for t in m.T)
 
-        # Hidden FCR cycling: the term above only sees the mean droop folded into
-        # p_net, but the battery physically follows the per-second signal and
-        # cycles on mean|droop|. Charge the gap (mean|droop| - |mean droop|) per kW
-        # of committed FCR so the bid reflects true wear (~+30% throughput in
-        # practice). Zero unless the 15-min freq file carries FREQ_DROOP_ABS_MEAN,
-        # and gated by c_deg (= 0 when cycle regularization is disabled).
-        if use_fcr:
-            deg_cost = deg_cost + mdl.c_deg * pyo.quicksum(
-                mdl.fcr_hidden_droop[t] * mdl.x_fcr[t_to_fcr_slot[t]] * dt
-                for t in mdl.T if t in t_to_fcr_slot
-            )
+    # Hidden FCR cycling: the term above only sees the mean droop folded into p_net, but the battery physically follows the per-second signal and cycles on mean|droop|. Charge the gap (mean|droop| - |mean droop|) per kW of committed FCR so the bid reflects true wear (~+30% throughput in practice). Zero unless the 15-min freq file carries FREQ_DROOP_ABS_MEAN, and gated by c_deg (= 0 when cycle regularization is disabled).
+    if use_fcr:
+        deg_cost = deg_cost + m.c_deg * pyo.quicksum(
+            m.fcr_hidden_droop[t] * m.x_fcr[t_to_fcr_slot[t]] * m.dt
+            for t in m.T if t in t_to_fcr_slot
+        )
+    m.obj_cycling_cost = pyo.Expression(expr=deg_cost)
 
-        # Optional imbalance cashflow and volume penalty
-        imb_cash = 0.0
-        imb_vol_pen = 0.0
-        if allow_imbalance:
-            imb_cash = pyo.quicksum(
-                (-mdl.price_imb_pos[t] * mdl.p_imb_pos[t] + mdl.price_imb_neg[t] * mdl.p_imb_neg[t]) * dt
-                for t in mdl.T
-            )
-            imb_vol_pen = mdl.c_imb_vol * pyo.quicksum(
-                (mdl.p_imb_pos[t] + mdl.p_imb_neg[t]) * dt for t in mdl.T
-            )
+    # Optional imbalance cashflow and volume penalty
+    imb_cash = 0.0
+    imb_vol_pen = 0.0
+    if allow_imbalance:
+        imb_cash = pyo.quicksum(
+            (-m.price_imb_pos[t] * m.p_imb_pos[t] + m.price_imb_neg[t] * m.p_imb_neg[t]) * m.dt
+            for t in m.T
+        )
+        imb_vol_pen = m.c_imb_vol * pyo.quicksum(
+            (m.p_imb_pos[t] + m.p_imb_neg[t]) * m.dt for t in m.T
+        )
+    m.obj_imb_cashflow = pyo.Expression(expr=imb_cash)
+    m.obj_imb_vol_penalty = pyo.Expression(expr=imb_vol_pen)
 
-        # Soft terminal objective (weight set by MPC)
-        term_penalty = mdl.w_term * mdl.e_term_dev
+    # Soft terminal objective (weight set by MPC)
+    m.obj_term_penalty = pyo.Expression(expr=m.w_term * m.e_term_dev)
 
-        # FCR capacity revenue: (EUR/MW for the 4 h product) * MW * (covered_hours / 4).
-        fcr_revenue = 0.0
-        if use_fcr:
-            fcr_revenue = pyo.quicksum(
-                (mdl.fcr_price_param[j] / 1000.0) * mdl.x_fcr[j] * (mdl.fcr_slot_hours[j] / fcr_product_hours)
-                for j in mdl.S_FCR
-            )
+    # FCR capacity revenue (sum of the per-slot revenue expressions).
+    m.obj_fcr_revenue = pyo.Expression(
+        expr=pyo.quicksum(m.fcr_slot_revenue[j] for j in m.S_FCR) if use_fcr else 0.0
+    )
 
-        e_slack_pen = 0.0
-        if allow_imbalance:
-            # Heavy penalty — slack is a last resort to keep PASS2 feasible.
-            e_slack_pen = 1e6 * pyo.quicksum(
-                mdl.e_slack_up[s] + mdl.e_slack_dn[s] for s in mdl.S
-            )
+    e_slack_pen = 0.0
+    if allow_imbalance:
+        # Heavy penalty — slack is a last resort to keep PASS2 feasible.
+        e_slack_pen = 1e6 * pyo.quicksum(
+            m.e_slack_up[s] + m.e_slack_dn[s] for s in m.S
+        )
+    m.obj_e_slack_penalty = pyo.Expression(expr=e_slack_pen)
 
-        # Soft FCR energy-reserve penalty: cost per kWh that planned E intrudes
-        # into the droop headroom buffer. Sits well above arbitrage value and
-        # well below the imbalance penalties, so the reserve is held whenever
-        # that is cheaper than the imbalance it would otherwise prevent.
-        reserve_pen = 0.0
-        if fcr_reserve_penalty_eur_per_kwh > 0.0 and hasattr(mdl, "fcr_reserve_slack_up"):
-            reserve_pen = fcr_reserve_penalty_eur_per_kwh * pyo.quicksum(
-                mdl.fcr_reserve_slack_up[t] + mdl.fcr_reserve_slack_dn[t]
-                for t in mdl.T_FCR
-            )
+    # Soft FCR energy-reserve penalty: cost per kWh that planned E intrudes into the droop headroom buffer. Sits well above arbitrage value and well below the imbalance penalties, so the reserve is held whenever that is cheaper than the imbalance it would otherwise prevent.
+    reserve_pen = 0.0
+    if fcr_reserve_penalty_eur_per_kwh > 0.0 and hasattr(m, "fcr_reserve_slack_up"):
+        reserve_pen = fcr_reserve_penalty_eur_per_kwh * pyo.quicksum(
+            m.fcr_reserve_slack_up[t] + m.fcr_reserve_slack_dn[t]
+            for t in m.T_FCR
+        )
+    m.obj_reserve_penalty = pyo.Expression(expr=reserve_pen)
 
-        # Soft FCR mid-band penalty (pulls E toward the centre of its band on
-        # FCR-covered steps); dt-scaled so it is timestep-resolution independent.
-        bal_pen = 0.0
-        if fcr_balance_penalty_eur_per_kwh > 0.0 and hasattr(mdl, "e_balance_dev"):
-            bal_pen = fcr_balance_penalty_eur_per_kwh * dt * pyo.quicksum(
-                mdl.e_balance_dev[s] for s in mdl.S_FCR_BAL
-            )
+    # Soft FCR mid-band penalty (pulls E toward the centre of its band on FCR-covered steps); dt-scaled so it is timestep-resolution independent.
+    bal_pen = 0.0
+    if fcr_balance_penalty_eur_per_kwh > 0.0 and hasattr(m, "e_balance_dev"):
+        bal_pen = fcr_balance_penalty_eur_per_kwh * m.dt * pyo.quicksum(
+            m.e_balance_dev[s] for s in m.S_FCR_BAL
+        )
+    m.obj_balance_penalty = pyo.Expression(expr=bal_pen)
 
-        return energy_cashflow + fcr_revenue + imb_cash - fee_cost - deg_cost - imb_vol_pen - term_penalty - e_slack_pen - reserve_pen - bal_pen
-
-    m.obj = pyo.Objective(rule=obj_expr, sense=pyo.maximize)
+    m.obj = pyo.Objective(
+        expr=m.obj_energy_cashflow
+        + m.obj_fcr_revenue
+        + m.obj_imb_cashflow
+        - m.obj_fee_cost
+        - m.obj_cycling_cost
+        - m.obj_imb_vol_penalty
+        - m.obj_term_penalty
+        - m.obj_e_slack_penalty
+        - m.obj_reserve_penalty
+        - m.obj_balance_penalty,
+        sense=pyo.maximize,
+    )
 
     return m

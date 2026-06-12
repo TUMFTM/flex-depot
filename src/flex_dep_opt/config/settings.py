@@ -36,6 +36,7 @@ class FCRSettings(BaseModel):
     frequency_source: Optional[str] = None
     acceptance_rate: Annotated[float, Field(gt=0.0, le=1.0)] = 1.0
     acceptance_seed: Optional[int] = None
+    breakeven_analysis: bool = True
     gate_closure_hour: str = "08:00"
     gate_closure_closes_previous_day: bool = True
     gate_closure_timezone: str = "Europe/Berlin"

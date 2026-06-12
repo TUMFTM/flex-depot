@@ -354,6 +354,81 @@ def plot_mpc_dispatch_plotly(
                 row=1, col=1
             )
 
+    # Row 1 overlay: FCR clearing price vs. breakeven bid per committed slot (€/MW for the 4 h product; the shaded gap is the bid margin).
+    if (
+        fcr_commit_df is not None
+        and not fcr_commit_df.empty
+        and "breakeven_eur_per_mw" in fcr_commit_df.columns
+    ):
+        bdf = fcr_commit_df.copy()
+        bdf["slot_start"] = pd.to_datetime(bdf["slot_start"], utc=True).dt.tz_convert(dispatch.index.tz)
+        bdf = bdf[bdf["breakeven_eur_per_mw"].notna()].sort_values("slot_start")
+        x_max = dispatch.index[-1]
+        bdf = bdf[bdf["slot_start"] <= x_max]
+        if not bdf.empty:
+            xs: list = []
+            clearing_ys: list = []
+            breakeven_ys: list = []
+            margins: list = []
+            poly_xs: list = []
+            poly_ys: list = []
+            for _, b_row in bdf.iterrows():
+                slot_end = b_row["slot_start"] + pd.Timedelta(hours=fcr_product_hours)
+                s0 = b_row["slot_start"].isoformat()
+                s1 = min(slot_end, x_max).isoformat()
+                clr = float(b_row["fcr_price"])
+                bev = float(b_row["breakeven_eur_per_mw"])
+                xs += [s0, s1, s1]
+                clearing_ys += [clr, clr, None]
+                breakeven_ys += [bev, bev, None]
+                m_val = float(b_row.get("margin_eur_per_mw", float("nan")))
+                margins += [m_val, m_val, None]
+                poly_xs += [s0, s1, s1, s0, s0, None]
+                poly_ys += [clr, clr, bev, bev, clr, None]
+
+            fig.add_trace(
+                go.Scatter(
+                    x=poly_xs,
+                    y=poly_ys,
+                    mode="lines",
+                    fill="toself",
+                    fillcolor=FCR_GREEN_LIGHT,
+                    line=dict(width=0),
+                    legendgroup="fcr_breakeven",
+                    showlegend=False,
+                    hoverinfo="skip",
+                ),
+                row=1, col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=xs,
+                    y=clearing_ys,
+                    mode="lines",
+                    name="FCR Clearing [€/MW]",
+                    legendgroup="fcr_breakeven",
+                    line=dict(width=2, color=FCR_GREEN),
+                    hovertemplate="FCR clearing: %{y:.2f} €/MW<extra></extra>",
+                ),
+                row=1, col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=xs,
+                    y=breakeven_ys,
+                    mode="lines",
+                    name="FCR Breakeven Bid [€/MW]",
+                    legendgroup="fcr_breakeven",
+                    line=dict(width=2, color=FCR_GREEN, dash="dash"),
+                    customdata=margins,
+                    hovertemplate=(
+                        "FCR breakeven: %{y:.2f} €/MW<br>"
+                        "margin: %{customdata:.2f} €/MW<extra></extra>"
+                    ),
+                ),
+                row=1, col=1,
+            )
+
     # Row 2: Power band + p_net
     fig.add_trace(
         go.Scatter(x=dispatch.index, y=dispatch["P_upper_kw"], mode="lines", name="P upper [kW]",
@@ -602,7 +677,7 @@ def plot_mpc_dispatch_plotly(
         title=dict(text=title, x=0.01, xanchor="left", y=0.99, yanchor="top", yref="container"),
         template="plotly_white",
         height=plot_height,
-        legend=dict(orientation="h", yanchor="bottom", y=1.04, xanchor="right", x=1),
+        legend=dict(orientation="h", yanchor="bottom", y=1.04, xanchor="right", x=1, traceorder="normal"),
         margin=dict(l=60, r=60, t=150, b=60),
         barmode="relative",
         hovermode="x unified",

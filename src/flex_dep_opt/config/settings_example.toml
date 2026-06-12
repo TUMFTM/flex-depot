@@ -31,6 +31,7 @@ prices_source = "data/prices/RESULT_OVERVIEW_CAPACITY_MARKET_FCR_2025-01-01_2025
 frequency_source = "data/prices/Frequenz_20250101_20251231_15min.csv"
 acceptance_rate = 1.0
 acceptance_seed = 1
+breakeven_analysis = true   # log min viable bid price per committed slot (1 extra solve per bid)
 gate_closure_hour = "08:00"
 gate_closure_closes_previous_day = true
 gate_closure_timezone = "Europe/Berlin"
