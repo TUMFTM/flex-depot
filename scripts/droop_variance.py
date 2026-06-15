@@ -137,9 +137,7 @@ def summary_text(fac: pd.DataFrame, start, end, raw_path) -> str:
     ptm = fac["peak_to_mean"].replace([np.inf, -np.inf], np.nan)
 
     lines = [
-        "=" * 64,
-        "DROOP VARIANCE  --  1-second vs 15-min mean",
-        "=" * 64,
+        "Droop Variance",
         f"Raw file        : {raw_path}",
         f"Window          : {start} .. {end}",
         f"15-min slots    : {n}",
@@ -160,7 +158,6 @@ def summary_text(fac: pd.DataFrame, start, end, raw_path) -> str:
         f"Max peak-to-mean: {ptm.max():.1f}x   (max|d| / |mean(d)| over slots)",
         f"Sign changes    : {int(fac['sign_changes'].sum()):,} total, "
         f"{fac['sign_changes'].mean():.1f} avg/slot, {int(fac['sign_changes'].max())} max/slot",
-        "=" * 64,
     ]
     return "\n".join(lines)
 
