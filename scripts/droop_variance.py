@@ -25,12 +25,14 @@ import sys
 import numpy as np
 import pandas as pd
 
+from flex_dep_opt.config.settings import Settings
+
 TZ = "Europe/Berlin"
 
-# todo use settings values
-DEFAULT_NOMINAL_HZ = 50.0
-DEFAULT_DEADBAND_HZ = 0.010
-DEFAULT_FULL_ACTIVATION_HZ = 0.200
+_fcr = Settings.load().optimization.trading.fcr
+DEFAULT_NOMINAL_HZ = _fcr.frequency_nominal_hz
+DEFAULT_DEADBAND_HZ = _fcr.deadband_hz
+DEFAULT_FULL_ACTIVATION_HZ = _fcr.full_activation_hz
 
 MAX_OVERLAY_POINTS = 250_000
 

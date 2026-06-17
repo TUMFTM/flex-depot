@@ -2,6 +2,8 @@ import sys
 import pathlib
 import pandas as pd
 
+from flex_dep_opt.config.settings import Settings
+
 def load_frequency_file(path: pathlib.Path) -> pd.DataFrame:
     df = None
     for encoding in ("utf-8-sig", "latin-1", "utf-8"):
@@ -47,9 +49,10 @@ def load_frequency_file(path: pathlib.Path) -> pd.DataFrame:
     df = df[["DATETIME", "FREQUENCY_HZ"]].set_index("DATETIME").sort_index()
     return df
 
-_FREQ_NOMINAL_HZ = 50.0
-_FREQ_DEADBAND_HZ = 0.010
-_FREQ_FULL_ACTIVATION_HZ = 0.200
+_fcr = Settings.load().optimization.trading.fcr
+_FREQ_NOMINAL_HZ = _fcr.frequency_nominal_hz
+_FREQ_DEADBAND_HZ = _fcr.deadband_hz
+_FREQ_FULL_ACTIVATION_HZ = _fcr.full_activation_hz
 
 def droop_signal_vec(
     freq: pd.Series,

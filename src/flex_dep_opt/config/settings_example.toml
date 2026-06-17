@@ -23,7 +23,7 @@ gate_closure_hour = "12:00"
 closes_previous_day = true
 
 [optimization.trading.intraday]
-offset_minutes_before_delivery = 5 # trading until T-5min
+offset_minutes_before_delivery = 0 # trading until T-5min
 
 [optimization.trading.fcr]
 enabled = true
@@ -40,6 +40,9 @@ bid_block_mw = 1.0
 energy_reserve_minutes = 15.0
 reserve_penalty_eur_per_kwh = 10.0
 balance_penalty_eur_per_kwh = 0.0001
+frequency_nominal_hz = 50.0
+deadband_hz = 0.010
+full_activation_hz = 0.200
 
 [optimization.imbalance]
 enabled = true
@@ -54,7 +57,7 @@ virtual_arbitrage = false
 da_horizon_hours = 48
 id_horizon_hours = 1
 fcr_price_horizon_hours = 48
-fcr_frequency_horizon_minutes = 15
+fcr_frequency_horizon_minutes = 0
 terminal_condition = true
 terminal_weight_eur_per_kwh = 50.0
 
