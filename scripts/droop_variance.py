@@ -26,6 +26,7 @@ import numpy as np
 import pandas as pd
 
 from flex_dep_opt.config.settings import Settings
+from flex_dep_opt.market.fcr import droop_signal
 
 TZ = "Europe/Berlin"
 
@@ -82,12 +83,6 @@ def load_raw_frequency(path: pathlib.Path, start: pd.Timestamp, end: pd.Timestam
     # end is exclusive so a whole-day window yields exactly its full 15-min slots
     # (an inclusive end would leak one sample into a spurious trailing slot).
     return s[(s.index >= start) & (s.index < end)]
-
-
-def droop_per_second(freq: pd.Series, nominal: float, deadband: float, full: float) -> pd.Series:
-    delta_f = freq - nominal
-    droop = (-delta_f / full).clip(-1.0, 1.0)
-    return droop.where(delta_f.abs() >= deadband, 0.0)
 
 
 def _count_sign_changes(values: np.ndarray) -> int:
@@ -291,7 +286,12 @@ def main() -> None:
     freq = load_raw_frequency(raw_path, start, end)
     print(f"Loaded   : {len(freq):,} 1-second samples")
 
-    droop = droop_per_second(freq, args.nominal, args.deadband, args.full).dropna()
+    droop = droop_signal(
+        freq,
+        nominal_hz=args.nominal,
+        deadband_hz=args.deadband,
+        full_activation_hz=args.full,
+    ).dropna()
     fac = compute_slot_factors(droop)
 
     out_dir = pathlib.Path(args.out_dir).expanduser().resolve()

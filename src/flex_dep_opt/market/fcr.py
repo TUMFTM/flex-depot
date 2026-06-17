@@ -8,6 +8,18 @@ FCR_DROOP_COL         = "FREQ_DROOP_MEAN"
 FCR_DROOP_ABS_COL     = "FREQ_DROOP_ABS_MEAN"
 
 
+def droop_signal(
+    freq: pd.Series,
+    *,
+    nominal_hz: float,
+    deadband_hz: float,
+    full_activation_hz: float,
+) -> pd.Series:
+    delta_f = freq - nominal_hz
+    droop = (-delta_f / full_activation_hz).clip(-1.0, 1.0)
+    return droop.where(delta_f.abs() >= deadband_hz, 0.0)
+
+
 def fcr_gate_closure_timestamp(
     slot_start: pd.Timestamp,
     *,

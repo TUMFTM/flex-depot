@@ -8,6 +8,8 @@ import tomllib
 import numpy as np
 import pandas as pd
 
+from flex_dep_opt.market.fcr import droop_signal
+
 TZ = "Europe/Berlin"
 
 def resolve_run_dir(arg: str | None) -> pathlib.Path:
@@ -71,11 +73,6 @@ def load_raw_frequency(path: pathlib.Path, start, end) -> pd.Series:
     return s.loc[start:end]
 
 
-def droop_per_second(freq: pd.Series, nominal: float, deadband: float, full: float) -> pd.Series:
-    delta_f = freq - nominal
-    droop = (-delta_f / full).clip(-1.0, 1.0)
-    return droop.where(delta_f.abs() >= deadband, 0.0)
-
 def replay(run_dir: pathlib.Path, raw_freq_override: str | None) -> None:
     settings = load_settings(run_dir)
     sim = settings["simulation"]
@@ -113,7 +110,9 @@ def replay(run_dir: pathlib.Path, raw_freq_override: str | None) -> None:
     raw_path = raw_freq_path(settings, raw_freq_override)
     print(f"Raw freq  : {raw_path}")
     freq = load_raw_frequency(raw_path, start, end)
-    droop = droop_per_second(freq, nominal, deadband, full)
+    droop = droop_signal(
+        freq, nominal_hz=nominal, deadband_hz=deadband, full_activation_hz=full
+    )
     print(f"Loaded    : {len(freq):,} 1-second samples\n")
 
     step = pd.Timedelta(hours=dt_h)
