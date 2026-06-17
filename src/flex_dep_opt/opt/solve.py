@@ -238,17 +238,11 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index: pd.DatetimeIndex) -> 
     df["p_dis_kw"] = [pyo.value(model.p_dis[t]) for t in T_list]
 
     # -------------------------
-    # Energy state (S or T)
+    # Energy state (S = 0..N): publish both E[t] and E[t+1] aligned to time_index.
     # -------------------------
-    # New model: E is indexed by S (0..N). We publish both E[t] and E[t+1] aligned to time_index.
-    if hasattr(model, "S"):
-        df["E_kWh"] = [pyo.value(model.E[t]) for t in T_list]            # state at timestamp (start of interval)
-        df["E_next_kWh"] = [pyo.value(model.E[t + 1]) for t in T_list]   # state after interval
-        # Optional: terminal value (single number) can be useful for debugging
-        df.attrs["E_terminal_kWh"] = float(pyo.value(model.E[T_len]))
-    else:
-        # Fallback to old convention
-        df["E_kWh"] = [pyo.value(model.E[t]) for t in T_list]
+    df["E_kWh"] = [pyo.value(model.E[t]) for t in T_list]            # state at timestamp (start of interval)
+    df["E_next_kWh"] = [pyo.value(model.E[t + 1]) for t in T_list]   # state after interval
+    df.attrs["E_terminal_kWh"] = float(pyo.value(model.E[T_len]))
 
     # ---------------------------------------------------------------
     # FCR (read straight from the model; no recomputation downstream)
@@ -276,28 +270,21 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index: pd.DatetimeIndex) -> 
     # -------------------------
     # Market positions (T)
     # -------------------------
-    if hasattr(model, "MARKETS"):
-        for mk in model.MARKETS:
-            col = f"p_{str(mk).lower()}_kw"
-            df[col] = [pyo.value(model.p_market[mk, t]) for t in T_list]
+    for mk in model.MARKETS:
+        col = f"p_{str(mk).lower()}_kw"
+        df[col] = [pyo.value(model.p_market[mk, t]) for t in T_list]
 
     # -------------------------
     # Bands for plotting/debug (align to T)
     # -------------------------
-    if hasattr(model, "E_lower") and hasattr(model, "S"):
-        df["E_lower_kWh"] = [pyo.value(model.E_lower[t]) for t in T_list]
-        df["E_upper_kWh"] = [pyo.value(model.E_upper[t]) for t in T_list]
-        # Optional: next-step bounds aligned to the same row (useful to see upcoming tightening)
-        df["E_lower_next_kWh"] = [pyo.value(model.E_lower[t + 1]) for t in T_list]
-        df["E_upper_next_kWh"] = [pyo.value(model.E_upper[t + 1]) for t in T_list]
-    elif hasattr(model, "E_lower"):
-        # Old convention
-        df["E_lower_kWh"] = [pyo.value(model.E_lower[t]) for t in T_list]
-        df["E_upper_kWh"] = [pyo.value(model.E_upper[t]) for t in T_list]
+    df["E_lower_kWh"] = [pyo.value(model.E_lower[t]) for t in T_list]
+    df["E_upper_kWh"] = [pyo.value(model.E_upper[t]) for t in T_list]
+    # Next-step bounds aligned to the same row (useful to see upcoming tightening)
+    df["E_lower_next_kWh"] = [pyo.value(model.E_lower[t + 1]) for t in T_list]
+    df["E_upper_next_kWh"] = [pyo.value(model.E_upper[t + 1]) for t in T_list]
 
-    if hasattr(model, "P_lower"):
-        df["P_lower_kw"] = [pyo.value(model.P_lower[t]) for t in T_list]
-        df["P_upper_kw"] = [pyo.value(model.P_upper[t]) for t in T_list]
+    df["P_lower_kw"] = [pyo.value(model.P_lower[t]) for t in T_list]
+    df["P_upper_kw"] = [pyo.value(model.P_upper[t]) for t in T_list]
 
     # -------------------------
     # Imbalance reBAP (optional)

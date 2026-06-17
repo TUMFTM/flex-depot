@@ -18,7 +18,7 @@ def infer_market_position_columns(dispatch: pd.DataFrame) -> List[str]:
         c for c in dispatch.columns
         if c.startswith("p_")
         and c.endswith("_kw")
-        and c not in ("p_ch_kw", "p_dis_kw", "p_net_kw", "p_imb_pos_kw", "p_imb_neg_kw")
+        and c not in ("p_ch_kw", "p_dis_kw", "p_net_kw", "p_droop_kw", "p_imb_pos_kw", "p_imb_neg_kw")
     ]
 
 

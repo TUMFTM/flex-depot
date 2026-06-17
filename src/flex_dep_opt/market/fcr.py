@@ -31,8 +31,6 @@ def get_fcr_frequency_data(file_path: str, tz: str = "Europe/Berlin") -> pd.Data
     if FCR_DROOP_COL not in df.columns:
         raise ValueError(f"FCR frequency CSV missing required column: {FCR_DROOP_COL}")
 
-    column = FCR_DROOP_COL
-
     if FCR_FREQ_DATETIME_COL not in df.columns:
         if not isinstance(df.index, pd.DatetimeIndex):
             raise ValueError(f"FCR frequency CSV missing column: {FCR_FREQ_DATETIME_COL}")
@@ -52,15 +50,15 @@ def get_fcr_frequency_data(file_path: str, tz: str = "Europe/Berlin") -> pd.Data
         df.index = pd.DatetimeIndex(ts)
         df = df.drop(columns=[FCR_FREQ_DATETIME_COL])
 
-    if not pd.api.types.is_numeric_dtype(df[column]):
-        df[column] = (
-            df[column].astype(str)
+    if not pd.api.types.is_numeric_dtype(df[FCR_DROOP_COL]):
+        df[FCR_DROOP_COL] = (
+            df[FCR_DROOP_COL].astype(str)
             .str.replace(",", ".", regex=False)
         )
 
-    df[column] = pd.to_numeric(df[column], errors="coerce")
+    df[FCR_DROOP_COL] = pd.to_numeric(df[FCR_DROOP_COL], errors="coerce")
 
-    cols = [column]
+    cols = [FCR_DROOP_COL]
     if FCR_DROOP_ABS_COL in df.columns:
         if not pd.api.types.is_numeric_dtype(df[FCR_DROOP_ABS_COL]):
             df[FCR_DROOP_ABS_COL] = (

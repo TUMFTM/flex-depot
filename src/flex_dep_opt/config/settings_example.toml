@@ -23,7 +23,7 @@ gate_closure_hour = "12:00"
 closes_previous_day = true
 
 [optimization.trading.intraday]
-offset_minutes_before_delivery = 0 # trading until T-5min
+offset_minutes_before_delivery = 0 # trading until delivery time
 
 [optimization.trading.fcr]
 enabled = true
@@ -31,7 +31,7 @@ prices_source = "data/prices/RESULT_OVERVIEW_CAPACITY_MARKET_FCR_2025-01-01_2025
 frequency_source = "data/prices/Frequenz_20250101_20251231_15min.csv"
 acceptance_rate = 1.0
 acceptance_seed = 1
-breakeven_analysis = true   # log min viable bid price per committed slot (1 extra solve per bid)
+breakeven_analysis = true
 gate_closure_hour = "08:00"
 gate_closure_closes_previous_day = true
 gate_closure_timezone = "Europe/Berlin"

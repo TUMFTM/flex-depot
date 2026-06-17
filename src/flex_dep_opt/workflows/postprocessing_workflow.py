@@ -24,7 +24,7 @@ def postprocess_mpc_results(settings: Settings | None = None) -> None:
 
     Steps
     -----
-    1) Read dispatch.csv and commit.csv from settings.simulation
+    1) Read dispatch.csv and commit.csv from the latest run directory (LATEST.txt)
     2) Load prices and fees from settings and slice to [start, end]
     3) Compute metrics (cashflows, aggregates, KPIs)
     4) Export optional postprocessing CSVs (cashflows + KPI summary)
@@ -175,7 +175,6 @@ def postprocess_mpc_results(settings: Settings | None = None) -> None:
     # -------------------------------------------------------------------------
     # Optional: persist postprocessing results next to dispatch/commit outputs
     # -------------------------------------------------------------------------
-    #out_dir = dispatch_csv.parent
     cashflow_csv = run_dir / "cashflow.csv"
     kpi_csv = run_dir / "kpis.csv"
 

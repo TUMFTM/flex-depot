@@ -695,7 +695,7 @@ def run_mpc(settings: Settings) -> None:
         run_dir = make_run_dir("results", name, tz="Europe/Berlin")
         write_latest_run_pointer(run_dir, results_root="results")
 
-        # --- Save the exact YAML that was passed via CLI / batch (1:1 copy) ---
+        # --- Snapshot the resolved settings as TOML for this run ---
         settings.save_to_toml(run_dir / "settings.toml")
 
         # --- Output filenames inside run_dir ---

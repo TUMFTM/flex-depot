@@ -249,13 +249,13 @@ def plot_mpc_dispatch_plotly(
     fcr_product_hours: float = 4.0,
 ) -> go.Figure:
     """
-    MPC Visualisierung für Flexband-Modell.
+    MPC flexband dispatch visualisation.
 
     Subplots
     --------
     1) Market prices (optional)
     2) Power band + p_net
-    3) Energy band + E + FCR Energy Buffers
+    3) Energy band + E
     4) Market positions (bars) + optional imbalance position
     """
     if not isinstance(dispatch.index, pd.DatetimeIndex):
