@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 import pyomo.environ as pyo
@@ -23,13 +23,13 @@ def _cbc_executable() -> str | None:
 
     return None
 
-def _ensure_solver_available(solver_name: str) -> None:
+def _make_solver(solver_name: str):
     """
-    Raise a RuntimeError if the requested solver is not available to Pyomo.
+    Build a Pyomo solver factory, raising a RuntimeError if it is unavailable.
     """
-    solver_name = solver_name.lower()
+    name = solver_name.lower()
 
-    if solver_name == "gurobi":
+    if name == "gurobi":
         try:
             import gurobipy  # noqa: F401
         except ImportError as e:
@@ -37,25 +37,24 @@ def _ensure_solver_available(solver_name: str) -> None:
                 "Gurobi (gurobipy) not found. Install it in your environment with: pip install gurobipy"
             ) from e
         solver = pyo.SolverFactory("gurobi")
-
-    elif solver_name == "cbc":
+    elif name == "cbc":
         cbc_exe = _cbc_executable()
         solver = pyo.SolverFactory("cbc", executable=cbc_exe) if cbc_exe else pyo.SolverFactory("cbc")
-
     else:
-        # If you want to allow more solvers later, keep this generic.
-        solver = pyo.SolverFactory(solver_name)
+        solver = pyo.SolverFactory(name)
 
     if not solver.available(exception_flag=False):
         hint = ""
-        if solver_name == "cbc":
+        if name == "cbc":
             hint = (
                 " CBC not available. Install via conda: `conda install -c conda-forge coincbc` "
                 "or ensure `cbc` is on PATH / set CBC_PATH to cbc.exe."
             )
-        elif solver_name == "gurobi":
+        elif name == "gurobi":
             hint = " Gurobi solver not available to Pyomo. Check license and gurobipy installation."
-        raise RuntimeError(f"Solver '{solver_name}' not available to Pyomo.{hint}")
+        raise RuntimeError(f"Solver '{name}' not available to Pyomo.{hint}")
+
+    return solver
 
 
 def _apply_solver_options(
@@ -63,9 +62,9 @@ def _apply_solver_options(
     solver_name: str,
     *,
     silent: bool = True,
-    time_limit_s: Optional[int] = None,
-    mip_gap: Optional[float] = None,
-    threads: Optional[int] = None,
+    time_limit_s: int | None = None,
+    mip_gap: float | None = None,
+    threads: int | None = None,
 ) -> None:
     solver_name = solver_name.lower()
 
@@ -100,9 +99,9 @@ def solve_model(
     model: pyo.ConcreteModel,
     *,
     solver_name: str = "gurobi",
-    time_limit_s: Optional[int] = None,
-    mip_gap: Optional[float] = None,
-    threads: Optional[int] = 8,
+    time_limit_s: int | None = None,
+    mip_gap: float | None = None,
+    threads: int | None = 8,
     tee: bool = False,
 ) -> pyo.results.SolverResults:
     """
@@ -126,18 +125,11 @@ def solve_model(
     RuntimeError
         If the solver is not available or no acceptable solution is reported.
     """
-    _ensure_solver_available(solver_name)
-
-    solver_name_l = solver_name.lower()
-    if solver_name_l == "cbc":
-        cbc_exe = _cbc_executable()
-        opt = pyo.SolverFactory("cbc", executable=cbc_exe) if cbc_exe else pyo.SolverFactory("cbc")
-    else:
-        opt = pyo.SolverFactory(solver_name_l)
+    opt = _make_solver(solver_name)
 
     _apply_solver_options(
         opt,
-        solver_name_l,
+        solver_name.lower(),
         silent=not tee,
         time_limit_s=time_limit_s,
         mip_gap=mip_gap,
@@ -242,7 +234,6 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index: pd.DatetimeIndex) -> 
     # -------------------------
     df["E_kWh"] = [pyo.value(model.E[t]) for t in T_list]            # state at timestamp (start of interval)
     df["E_next_kWh"] = [pyo.value(model.E[t + 1]) for t in T_list]   # state after interval
-    df.attrs["E_terminal_kWh"] = float(pyo.value(model.E[T_len]))
 
     # ---------------------------------------------------------------
     # FCR (read straight from the model; no recomputation downstream)
@@ -262,7 +253,6 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index: pd.DatetimeIndex) -> 
                     x_fcr_by_t[t] = x_cleared
 
         df["x_fcr_kw"] = x_fcr_by_t
-        df["fcr_droop"] = [float(pyo.value(model.fcr_droop_signal[t])) for t in T_list]
         # p_droop is the FCR activation power in the same convention as p_net
         # and the market positions: + = depot imports, - = depot exports.
         df["p_droop_kw"] = [float(pyo.value(model.p_droop[t])) for t in T_list]
@@ -279,9 +269,6 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index: pd.DatetimeIndex) -> 
     # -------------------------
     df["E_lower_kWh"] = [pyo.value(model.E_lower[t]) for t in T_list]
     df["E_upper_kWh"] = [pyo.value(model.E_upper[t]) for t in T_list]
-    # Next-step bounds aligned to the same row (useful to see upcoming tightening)
-    df["E_lower_next_kWh"] = [pyo.value(model.E_lower[t + 1]) for t in T_list]
-    df["E_upper_next_kWh"] = [pyo.value(model.E_upper[t + 1]) for t in T_list]
 
     df["P_lower_kw"] = [pyo.value(model.P_lower[t]) for t in T_list]
     df["P_upper_kw"] = [pyo.value(model.P_upper[t]) for t in T_list]

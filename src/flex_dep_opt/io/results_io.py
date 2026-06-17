@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -20,26 +21,13 @@ def save_dispatch_to_csv(
     df: pd.DataFrame,
     path: str | Path,
     *,
-    include_time_column: bool = True,
     time_col: str = "time",
 ) -> str:
     """
-    Save a dispatch-like DataFrame to CSV.
+    Save a dispatch-like DataFrame to CSV with the timestamp as a dedicated
+    column named `time_col` (not an unnamed index column).
 
-    This helper standardizes the common convention in the project:
-    - A dedicated timestamp column named `time` (default), not an unnamed index column.
-
-    Parameters
-    ----------
-    df:
-        DataFrame to write. Index may be a DatetimeIndex (recommended).
-    path:
-        Output path (string or Path).
-    include_time_column:
-        If True and df has a DatetimeIndex, the index is written as a column `time_col`.
-        If False, the DataFrame is written as-is (index is not written).
-    time_col:
-        Name of the timestamp column to create when `include_time_column=True`.
+    The DataFrame must have a DatetimeIndex or already carry a `time_col` column.
 
     Returns
     -------
@@ -49,14 +37,10 @@ def save_dispatch_to_csv(
     out = _as_path(path)
 
     out_df = df
-    if include_time_column:
-        if isinstance(df.index, pd.DatetimeIndex):
-            out_df = df.copy()
-            out_df = out_df.reset_index().rename(columns={"index": time_col})
-        elif time_col not in df.columns:
-            raise ValueError(
-                f"include_time_column=True, but df has no DatetimeIndex and no '{time_col}' column."
-            )
+    if isinstance(df.index, pd.DatetimeIndex):
+        out_df = df.reset_index().rename(columns={"index": time_col})
+    elif time_col not in df.columns:
+        raise ValueError(f"df has no DatetimeIndex and no '{time_col}' column.")
 
     out_df.to_csv(out, index=False)
     return str(out.resolve())

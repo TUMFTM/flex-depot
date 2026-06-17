@@ -707,7 +707,7 @@ def run_mpc(settings: Settings) -> None:
         if rows:
             result = pd.DataFrame(rows)
             result.index.name = "time"
-            save_dispatch_to_csv(result, out_dispatch, include_time_column=True)
+            save_dispatch_to_csv(result, out_dispatch)
 
         # --- Write commit ---
         if commit_rows:

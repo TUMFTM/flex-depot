@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Mapping, Optional
+from collections.abc import Mapping
 
 import pandas as pd
 
@@ -8,7 +8,7 @@ import pandas as pd
 # =============================================================================
 # Helpers
 # =============================================================================
-def infer_market_position_columns(dispatch: pd.DataFrame) -> List[str]:
+def infer_market_position_columns(dispatch: pd.DataFrame) -> list[str]:
     """
     Return all dispatch columns that represent per-market positions p_<mk>_kw.
 
@@ -113,7 +113,6 @@ def compute_market_aggregates(
     timestep_hours: float,
 ) -> tuple[
     dict[str, tuple[float, float]],
-    dict[str, tuple[float, float]],
     list[tuple[str, str, float]],
     list[tuple[str, str, float]],
 ]:
@@ -124,8 +123,6 @@ def compute_market_aggregates(
     -------
     energy_by_mk:
         mk -> (buy_kwh, sell_kwh), both >= 0
-    cash_by_mk:
-        mk -> (buy_eur, sell_eur), both >= 0 (magnitudes)
     energy_data:
         list (mk, side, value>=0) for sunburst (Buy/Sell)
     cash_data:
@@ -140,7 +137,6 @@ def compute_market_aggregates(
     market_cols = infer_market_position_columns(dispatch)
 
     energy_by_mk: dict[str, tuple[float, float]] = {}
-    cash_by_mk: dict[str, tuple[float, float]] = {}
 
     energy_data: list[tuple[str, str, float]] = []
     cash_data: list[tuple[str, str, float]] = []
@@ -169,7 +165,6 @@ def compute_market_aggregates(
         sell_c = float((cash_eur[sell_mask]).sum()) if sell_mask.any() else 0.0
 
         energy_by_mk[mk] = (buy_e, sell_e)
-        cash_by_mk[mk] = (buy_c, sell_c)
 
         if buy_e > 0:
             energy_data.append((mk, "Buy", buy_e))
@@ -208,7 +203,6 @@ def compute_market_aggregates(
             imb_cost_eur = float((pos_price * p_pos + neg_price * p_neg).sum() * dt)
 
             energy_by_mk["IMB"] = (buy_e, sell_e)
-            cash_by_mk["IMB"] = (imb_cost_eur, 0.0)
 
             if buy_e > 0:
                 energy_data.append(("IMB", "Buy", buy_e))
@@ -217,13 +211,13 @@ def compute_market_aggregates(
             if imb_cost_eur > 0:
                 cash_data.append(("IMB", "Cost", imb_cost_eur))
 
-    return energy_by_mk, cash_by_mk, energy_data, cash_data
+    return energy_by_mk, energy_data, cash_data
 
 
 def compute_fcr_cashflow_per_slot(
     index: pd.DatetimeIndex,
-    fcr_commit_df: Optional[pd.DataFrame],
-) -> Optional[pd.Series]:
+    fcr_commit_df: pd.DataFrame | None,
+) -> pd.Series | None:
     """
     Book per-slot FCR revenue (EUR, from fcr_commit.csv) as a single value at the
     first index inside each slot window. The bar chart shows one bar per 4 h slot
@@ -257,7 +251,7 @@ def compute_fcr_activation_energy(
     dispatch: pd.DataFrame,
     *,
     timestep_hours: float,
-) -> Optional[tuple[float, float]]:
+) -> tuple[float, float] | None:
     """
     Total activation energy moved by FCR over the horizon, split into:
       buy_kwh  = energy taken in (downward FCR activations, depot charges)
@@ -285,7 +279,7 @@ def compute_kpis(
     energy_by_mk: Mapping[str, tuple[float, float]],
     fee_eur_per_kwh_by_market: Mapping[str, float],
     *,
-    commit: Optional[pd.DataFrame] = None,
+    commit: pd.DataFrame | None = None,
 ) -> dict[str, float | int]:
     """
     Compute KPIs for reporting.

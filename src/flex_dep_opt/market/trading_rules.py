@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
-
 import pandas as pd
 
 from flex_dep_opt.config.settings import OptimizationSettings
@@ -10,17 +8,10 @@ from flex_dep_opt.config.settings import OptimizationSettings
 # =============================================================================
 # Gate-closure helpers (single source of truth)
 # =============================================================================
-def _parse_hhmm(value: str, default: Tuple[int, int] = (12, 0)) -> Tuple[int, int]:
-    """
-    Parse a 'HH:MM' string to integers.
-
-    Falls back to `default` if parsing fails (keeps simulations robust).
-    """
-    try:
-        hh_str, mm_str = value.split(":")
-        return int(hh_str), int(mm_str)
-    except Exception:
-        return default
+def _parse_hhmm(value: str) -> tuple[int, int]:
+    """Parse a 'HH:MM' string to integers."""
+    hh_str, mm_str = value.split(":")
+    return int(hh_str), int(mm_str)
 
 
 def gate_closure_timestamp(
@@ -65,7 +56,7 @@ def gate_closure_timestamp(
         gc_hour_str = da_cfg.gate_closure_hour
         closes_prev = da_cfg.closes_previous_day
 
-        gc_h, gc_m = _parse_hhmm(gc_hour_str, default=(12, 0))
+        gc_h, gc_m = _parse_hhmm(gc_hour_str)
 
         base_date = (
             delivery_time.normalize() - pd.Timedelta(days=1)
@@ -86,13 +77,13 @@ def gate_closure_timestamp(
 # =============================================================================
 # Market selection helpers
 # =============================================================================
-def _enabled_markets_from_cfg(optimization_cfg: OptimizationSettings) -> List[str]:
+def _enabled_markets_from_cfg(optimization_cfg: OptimizationSettings) -> list[str]:
     """
     Return enabled markets as a list of market codes ("DA", "ID", ...).
     """
     market_cfg = optimization_cfg.markets
 
-    enabled: List[str] = []
+    enabled: list[str] = []
     if market_cfg.dayahead.enabled:
         enabled.append("DA")
     if market_cfg.intraday.enabled:
@@ -107,7 +98,7 @@ def build_market_activity_mask_for_time(
     current_time: pd.Timestamp,
     delivery_times: pd.DatetimeIndex,
     optimization_cfg: OptimizationSettings,
-) -> Dict[str, pd.Series]:
+) -> dict[str, pd.Series]:
     """
     Build market activity masks for ONE MPC step.
 
@@ -131,7 +122,7 @@ def build_market_activity_mask_for_time(
 
     Returns
     -------
-    Dict[str, pd.Series]
+    dict[str, pd.Series]
         One boolean series per enabled market, indexed by `delivery_times`.
         If no markets are enabled, returns an empty dict.
     """
@@ -139,7 +130,7 @@ def build_market_activity_mask_for_time(
     mode = trading_cfg.mode
 
     enabled_markets = _enabled_markets_from_cfg(optimization_cfg)
-    mask_by_market: Dict[str, pd.Series] = {}
+    mask_by_market: dict[str, pd.Series] = {}
 
     # -------------------------------------------------------------------------
     # Mode "none": everything open (baseline / debugging)

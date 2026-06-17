@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Mapping, Optional, Tuple
+from collections.abc import Mapping
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -12,7 +12,7 @@ from flex_dep_opt.post.metrics import has_imbalance, infer_market_position_colum
 # =============================================================================
 # Color conventions
 # =============================================================================
-MARKET_COLORS: Dict[str, Tuple[int, int, int]] = {
+MARKET_COLORS: dict[str, tuple[int, int, int]] = {
     "DA": (0, 101, 189),
     "ID": (227, 114, 34),
     "IMB": (120, 80, 160),
@@ -245,7 +245,7 @@ def plot_mpc_dispatch_plotly(
     commit_df: pd.DataFrame | None = None,
     fcr_commit_df: pd.DataFrame | None = None,
     title: str = "MPC Flexband Dispatch and Market Positions",
-    fcr_frequency_data: Optional[pd.DataFrame] = None,
+    fcr_frequency_data: pd.DataFrame | None = None,
     fcr_product_hours: float = 4.0,
 ) -> go.Figure:
     """
@@ -275,13 +275,13 @@ def plot_mpc_dispatch_plotly(
     #   - fcr_droop  : per-step droop signal in [-1, +1] (signed; + = up-reg)
     #   - p_droop_kw : per-step activation power (kW, import-positive, matches p_net)
     has_fcr = "x_fcr_kw" in dispatch.columns
-    x_fcr_dense: Optional[pd.Series] = dispatch["x_fcr_kw"].astype(float) if has_fcr else None
-    p_droop_kw: Optional[pd.Series] = (
+    x_fcr_dense: pd.Series | None = dispatch["x_fcr_kw"].astype(float) if has_fcr else None
+    p_droop_kw: pd.Series | None = (
         dispatch["p_droop_kw"].astype(float) if has_fcr and "p_droop_kw" in dispatch.columns else None
     )
 
     has_freq_subplot = has_fcr and fcr_frequency_data is not None and not fcr_frequency_data.empty
-    freq_resampled: Optional[pd.Series] = None
+    freq_resampled: pd.Series | None = None
 
     if has_freq_subplot:
         freq_df = fcr_frequency_data.copy()

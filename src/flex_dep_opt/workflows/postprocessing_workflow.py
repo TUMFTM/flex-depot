@@ -148,7 +148,7 @@ def postprocess_mpc_results(settings: Settings | None = None) -> None:
         cf_df[total_col] = cf_df.sum(axis=1)
         cf_df[cum_col] = cf_df[total_col].cumsum()
 
-    energy_by_mk, cash_by_mk, energy_data, cash_data = compute_market_aggregates(
+    energy_by_mk, energy_data, cash_data = compute_market_aggregates(
         dispatch, prices_by_market, timestep_hours=dt
     )
 
@@ -179,7 +179,7 @@ def postprocess_mpc_results(settings: Settings | None = None) -> None:
     kpi_csv = run_dir / "kpis.csv"
 
     # cashflows: keep DatetimeIndex in the CSV for later analysis
-    save_dispatch_to_csv(cf_df, cashflow_csv, include_time_column=True)
+    save_dispatch_to_csv(cf_df, cashflow_csv)
 
     # KPIs: single row
     save_summary_to_csv(kpis, kpi_csv)

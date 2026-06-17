@@ -1,6 +1,6 @@
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal
 
 import toml
 from pydantic import BaseModel, Field, PrivateAttr
@@ -33,9 +33,9 @@ class TradingIntraday(BaseModel):
 class FCRSettings(BaseModel):
     enabled: bool = False
     prices_source: str
-    frequency_source: Optional[str] = None
+    frequency_source: str | None = None
     acceptance_rate: Annotated[float, Field(gt=0.0, le=1.0)] = 1.0
-    acceptance_seed: Optional[int] = None
+    acceptance_seed: int | None = None
     breakeven_analysis: bool = True
     gate_closure_hour: str = "08:00"
     gate_closure_closes_previous_day: bool = True
@@ -100,7 +100,7 @@ class Settings(BaseSettings):
     simulation: SimulationSettings
     optimization: OptimizationSettings
 
-    _source_path: Optional[Path] = PrivateAttr(default=None)
+    _source_path: Path | None = PrivateAttr(default=None)
 
     model_config = SettingsConfigDict(
         toml_file=_DEFAULT_TOML,
@@ -119,7 +119,7 @@ class Settings(BaseSettings):
         return (TomlConfigSettingsSource(settings_cls),)
 
     @classmethod
-    def load(cls, config_path: Optional[str | Path] = None) -> "Settings":
+    def load(cls, config_path: str | Path | None = None) -> "Settings":
         resolved = _DEFAULT_TOML if config_path is None else Path(config_path)
         if config_path is not None and not resolved.is_file():
             raise FileNotFoundError(f"Config file not found: {resolved}")
@@ -133,7 +133,7 @@ class Settings(BaseSettings):
         instance._source_path = resolved
         return instance
 
-    def save_to_toml(self, path: Optional[str | Path] = None):
+    def save_to_toml(self, path: str | Path | None = None):
         save_path = path or self._source_path
 
         if not save_path:
@@ -144,5 +144,5 @@ class Settings(BaseSettings):
         with open(save_path, "w") as f:
             toml.dump(data, f)
 
-    def get_source_path(self) -> Optional[Path]:
+    def get_source_path(self) -> Path | None:
         return self._source_path

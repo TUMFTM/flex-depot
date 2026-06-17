@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Union
 
 import pandas as pd
 
 from flex_dep_opt.config.settings import Settings
 
-PathLike = Union[str, Path]
+PathLike = str | Path
 
 
 # =============================================================================
@@ -88,7 +87,7 @@ def read_prices_csv(path: PathLike, tz: str = "Europe/Berlin") -> pd.Series:
 # =============================================================================
 # Settings-based builders
 # =============================================================================
-def build_prices_from_settings(settings: Settings, *, tz: str = "Europe/Berlin") -> Dict[str, pd.Series]:
+def build_prices_from_settings(settings: Settings, *, tz: str = "Europe/Berlin") -> dict[str, pd.Series]:
     """
     Build price series by market from settings.
 
@@ -99,7 +98,7 @@ def build_prices_from_settings(settings: Settings, *, tz: str = "Europe/Berlin")
     - "IMB_POS", "IMB_NEG": optional imbalance prices
 
     """
-    prices_by_market: Dict[str, pd.Series] = {}
+    prices_by_market: dict[str, pd.Series] = {}
 
     mk_cfg = settings.optimization.markets
 
@@ -118,11 +117,11 @@ def build_prices_from_settings(settings: Settings, *, tz: str = "Europe/Berlin")
     return prices_by_market
 
 
-def build_fees_from_settings(settings: Settings) -> Dict[str, float]:
+def build_fees_from_settings(settings: Settings) -> dict[str, float]:
     """
     Build a dict of per-market transaction fees [EUR/kWh] keyed by market code.
     """
-    fees_by_market: Dict[str, float] = {}
+    fees_by_market: dict[str, float] = {}
 
     mk_cfg = settings.optimization.markets
 
