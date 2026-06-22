@@ -22,6 +22,8 @@ MARKET_COLORS: dict[str, tuple[int, int, int]] = {
 FCR_GREEN = "rgb(44,160,44)"
 FCR_GREEN_LIGHT = "rgba(44,160,44,0.12)"
 FCR_GREEN_MID = "rgba(44,160,44,0.25)"
+FCR_RED = "rgb(214,39,40)"
+FCR_RED_LIGHT = "rgba(214,39,40,0.12)"
 
 
 def _rgb(market: str) -> str:
@@ -354,7 +356,8 @@ def plot_mpc_dispatch_plotly(
                 row=1, col=1
             )
 
-    # Row 1 overlay: FCR clearing price vs. breakeven bid per committed slot (€/MW for the 4 h product; the shaded gap is the bid margin).
+    # Row 1 overlay: FCR clearing price vs. breakeven bid per slot (€/MW for the 4 h product; the shaded gap is the margin).
+    # Committed slots are green (breakeven below clearing, positive margin); declined-but-capable slots ("ok_entry_price") are red (breakeven above clearing, negative margin — the price the slot would have needed).
     if (
         fcr_commit_df is not None
         and not fcr_commit_df.empty
@@ -366,67 +369,75 @@ def plot_mpc_dispatch_plotly(
         x_max = dispatch.index[-1]
         bdf = bdf[bdf["slot_start"] <= x_max]
         if not bdf.empty:
+            status = bdf.get("breakeven_status")
+            if status is not None:
+                declined_mask = status == "ok_entry_price"
+            else:
+                declined_mask = bdf["margin_eur_per_mw"] < 0
+
             xs: list = []
             clearing_ys: list = []
-            breakeven_ys: list = []
-            margins: list = []
-            poly_xs: list = []
-            poly_ys: list = []
             for _, b_row in bdf.iterrows():
                 slot_end = b_row["slot_start"] + pd.Timedelta(hours=fcr_product_hours)
-                s0 = b_row["slot_start"].isoformat()
-                s1 = min(slot_end, x_max).isoformat()
-                clr = float(b_row["fcr_price"])
-                bev = float(b_row["breakeven_eur_per_mw"])
+                s0, s1 = b_row["slot_start"].isoformat(), min(slot_end, x_max).isoformat()
                 xs += [s0, s1, s1]
-                clearing_ys += [clr, clr, None]
-                breakeven_ys += [bev, bev, None]
-                m_val = float(b_row.get("margin_eur_per_mw", float("nan")))
-                margins += [m_val, m_val, None]
-                poly_xs += [s0, s1, s1, s0, s0, None]
-                poly_ys += [clr, clr, bev, bev, clr, None]
-
+                clearing_ys += [float(b_row["fcr_price"]), float(b_row["fcr_price"]), None]
             fig.add_trace(
                 go.Scatter(
-                    x=poly_xs,
-                    y=poly_ys,
-                    mode="lines",
-                    fill="toself",
-                    fillcolor=FCR_GREEN_LIGHT,
-                    line=dict(width=0),
-                    legendgroup="fcr_breakeven",
-                    showlegend=False,
-                    hoverinfo="skip",
-                ),
-                row=1, col=1,
-            )
-            fig.add_trace(
-                go.Scatter(
-                    x=xs,
-                    y=clearing_ys,
-                    mode="lines",
-                    name="FCR Clearing [€/MW]",
-                    legendgroup="fcr_breakeven",
-                    line=dict(width=2, color=FCR_GREEN),
+                    x=xs, y=clearing_ys, mode="lines", name="FCR Clearing [€/MW]",
+                    legendgroup="fcr_breakeven", line=dict(width=2, color=FCR_GREEN),
                     hovertemplate="FCR clearing: %{y:.2f} €/MW<extra></extra>",
                 ),
                 row=1, col=1,
             )
-            fig.add_trace(
-                go.Scatter(
-                    x=xs,
-                    y=breakeven_ys,
-                    mode="lines",
-                    name="FCR Breakeven Bid [€/MW]",
-                    legendgroup="fcr_breakeven",
-                    line=dict(width=2, color=FCR_GREEN, dash="dash"),
-                    customdata=margins,
-                    hovertemplate=(
-                        "FCR breakeven: %{y:.2f} €/MW<br>"
-                        "margin: %{customdata:.2f} €/MW<extra></extra>"
+
+            def _add_breakeven_group(sub_df, *, color, fill, name, group):
+                if sub_df.empty:
+                    return
+                gxs: list = []
+                breakeven_ys: list = []
+                margins: list = []
+                poly_xs: list = []
+                poly_ys: list = []
+                for _, b_row in sub_df.iterrows():
+                    slot_end = b_row["slot_start"] + pd.Timedelta(hours=fcr_product_hours)
+                    s0, s1 = b_row["slot_start"].isoformat(), min(slot_end, x_max).isoformat()
+                    clr = float(b_row["fcr_price"])
+                    bev = float(b_row["breakeven_eur_per_mw"])
+                    m_val = float(b_row.get("margin_eur_per_mw", float("nan")))
+                    gxs += [s0, s1, s1]
+                    breakeven_ys += [bev, bev, None]
+                    margins += [m_val, m_val, None]
+                    poly_xs += [s0, s1, s1, s0, s0, None]
+                    poly_ys += [clr, clr, bev, bev, clr, None]
+                fig.add_trace(
+                    go.Scatter(
+                        x=poly_xs, y=poly_ys, mode="lines", fill="toself",
+                        fillcolor=fill, line=dict(width=0), legendgroup=group,
+                        showlegend=False, hoverinfo="skip",
                     ),
-                ),
-                row=1, col=1,
+                    row=1, col=1,
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=gxs, y=breakeven_ys, mode="lines", name=name,
+                        legendgroup=group, line=dict(width=2, color=color, dash="dash"),
+                        customdata=margins,
+                        hovertemplate=(
+                            "FCR breakeven: %{y:.2f} €/MW<br>"
+                            "margin: %{customdata:.2f} €/MW<extra></extra>"
+                        ),
+                    ),
+                    row=1, col=1,
+                )
+
+            _add_breakeven_group(
+                bdf[~declined_mask], color=FCR_GREEN, fill=FCR_GREEN_LIGHT,
+                name="FCR Breakeven Bid [€/MW]", group="fcr_breakeven",
+            )
+            _add_breakeven_group(
+                bdf[declined_mask], color=FCR_RED, fill=FCR_RED_LIGHT,
+                name="FCR Entry Price (declined) [€/MW]", group="fcr_entry_price",
             )
 
     # Row 2: Power band + p_net

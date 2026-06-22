@@ -32,6 +32,7 @@ frequency_source = "data/prices/Frequenz_20250101_20251231_15min.csv"
 acceptance_rate = 1.0
 acceptance_seed = 1
 breakeven_analysis = true
+breakeven_include_zero_bid = true
 gate_closure_hour = "08:00"
 gate_closure_closes_previous_day = true
 gate_closure_timezone = "Europe/Berlin"

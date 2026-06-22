@@ -59,8 +59,8 @@ _PENALTY_TERM_NAMES = (
 
 
 def _fcr_breakeven_metrics(
-    terms_a: dict[str, float],
-    terms_b: dict[str, float],
+    terms_with: dict[str, float],
+    terms_without: dict[str, float],
     *,
     bid_kw: float,
     rev_eur: float,
@@ -68,22 +68,29 @@ def _fcr_breakeven_metrics(
     covered_fraction: float,
 ) -> dict[str, float | str]:
     """
-    Breakeven of one committed FCR bid from the gate-closure window solve (A)
-    and its counterfactual without the bid (B, slot forced to 0, all other FCR
-    bids pinned).
+    Breakeven of one FCR bid from two window solves: one holding the bid
+    (`terms_with`) and the counterfactual without it (`terms_without`), with all
+    other FCR bids pinned.
+
+    For a *committed* slot, `terms_with` is the actual solve A and
+    `terms_without` is the slot forced to 0 (solve B). For a *declined*
+    (zero-bid) slot it is the other way round: `terms_with` is the slot forced
+    in (one block) and `terms_without` is the actual solve.
 
     The opportunity cost is what the rest of the objective loses by holding the
-    bid: obj_B - (obj_A - rev). Divided by the bid volume (normalized to the
-    full product like the revenue term) it is the EUR/MW capacity price at
-    which the bid breaks even — comparable to the pay-as-cleared price.
+    bid: obj_without - (obj_with - rev). Divided by the bid volume (normalized to
+    the full product like the revenue term) it is the EUR/MW capacity price at
+    which the bid breaks even — comparable to the pay-as-cleared price. For a
+    committed slot the margin (price - breakeven) is >= 0; for a declined slot
+    it is <= 0 (the model left it because it did not pay).
     """
-    opp_cost = terms_b["objective"] - (terms_a["objective"] - rev_eur)
+    opp_cost = terms_without["objective"] - (terms_with["objective"] - rev_eur)
     denom = (bid_kw / 1000.0) * covered_fraction
     breakeven = opp_cost / denom
     margin = fcr_price - breakeven
 
     def d(name: str) -> float:
-        return terms_b[name] - terms_a[name]
+        return terms_without[name] - terms_with[name]
 
     return {
         "breakeven_status": "ok",
@@ -176,6 +183,7 @@ def run_mpc(settings: Settings) -> None:
     fcr_product_hours = float(opt_cfg.trading.fcr.product_hours)
     fcr_bid_block_kw = float(opt_cfg.trading.fcr.bid_block_mw) * 1000.0
     fcr_breakeven_enabled = bool(opt_cfg.trading.fcr.breakeven_analysis)
+    fcr_breakeven_include_zero_bid = bool(opt_cfg.trading.fcr.breakeven_include_zero_bid)
 
     fcr_energy_reserve_kwh_per_kw = float(opt_cfg.trading.fcr.energy_reserve_minutes) / 60.0
     fcr_reserve_penalty = float(opt_cfg.trading.fcr.reserve_penalty_eur_per_kwh)
@@ -601,28 +609,52 @@ def run_mpc(settings: Settings) -> None:
                             float(pyo.value(model.fcr_slot_revenue[j])),
                         ))
 
-                # Breakeven counterfactuals: re-solve the same window once per committed bid with that slot forced to 0 and every other FCR bid pinned at its solve-A value. Runs on the bid (before the acceptance draw) and is purely diagnostic — nothing reads the model after this block, and the acceptance draws below use the snapshotted bids, so results are identical flag on/off.
+                # Breakeven counterfactuals: re-solve the same window once per slot with that slot's FCR decision flipped and every other FCR bid pinned at its solve-A value. Runs on the bid (before the acceptance draw) and is purely diagnostic — nothing reads the model after this block, and the acceptance draws below use the snapshotted bids, so results are identical flag on/off.
+                #   - committed slot: force it OFF (z_fcr=0) -> opportunity cost of holding it; margin >= 0.
+                #   - declined slot (zero bid, only with breakeven_include_zero_bid): force one block ON -> the "entry price" it would need; margin <= 0.
                 breakeven_by_slot: dict[pd.Timestamp, dict] = {}
-                if fcr_breakeven_enabled and any(b[3] > 0 for b in closing_slots):
+                do_breakeven = fcr_breakeven_enabled and closing_slots and (
+                    any(b[3] > 0 for b in closing_slots) or fcr_breakeven_include_zero_bid
+                )
+                if do_breakeven:
                     terms_a = extract_objective_terms(model)
                     z_vals_a = {k: int(round(pyo.value(model.z_fcr[k]))) for k in model.S_FCR}
                     for k in model.S_FCR:
                         model.z_fcr[k].fix(z_vals_a[k])
 
                     for j, slot, gate_ts, bid_val, rev_eur in closing_slots:
-                        if bid_val <= 0:
+                        if bid_val <= 0 and not fcr_breakeven_include_zero_bid:
                             continue
-                        model.z_fcr[j].fix(0)
+                        covered_fraction = float(fcr_slot_hours_by_slot.get(slot, fcr_product_hours)) / fcr_product_hours
+                        fcr_price = float(window_fcr_prices.loc[slot])
+                        if bid_val > 0:
+                            forced_z = 0  # committed: flip off
+                        else:
+                            # Declined: flip one block on — but only if the slot can host one. The z_fcr bound is cap_max // block, so a slot with < 1 MW of capacity has bound 0 and can never be bid; there is no entry price to compute.
+                            forced_z = 1 if (model.z_fcr[j].ub or 0) >= 1 else 0
+                            if forced_z == 0:
+                                breakeven_by_slot[slot] = {"breakeven_status": "no_capacity", **_FCR_BREAKEVEN_NAN}
+                                continue
+                        model.z_fcr[j].fix(forced_z)
                         try:
                             solve_model(model, solver_name=sim_cfg.solver)
-                            breakeven_by_slot[slot] = _fcr_breakeven_metrics(
-                                terms_a,
-                                extract_objective_terms(model),
-                                bid_kw=bid_val,
-                                rev_eur=rev_eur,
-                                fcr_price=float(window_fcr_prices.loc[slot]),
-                                covered_fraction=float(fcr_slot_hours_by_slot.get(slot, fcr_product_hours)) / fcr_product_hours,
-                            )
+                            terms_cf = extract_objective_terms(model)
+                            if bid_val > 0:
+                                metrics = _fcr_breakeven_metrics(
+                                    terms_a, terms_cf,
+                                    bid_kw=bid_val, rev_eur=rev_eur,
+                                    fcr_price=fcr_price, covered_fraction=covered_fraction,
+                                )
+                            else:
+                                # Declined slot: the forced solve holds the bid, the actual solve (terms_a) is the "without" side.
+                                metrics = _fcr_breakeven_metrics(
+                                    terms_cf, terms_a,
+                                    bid_kw=fcr_bid_block_kw,
+                                    rev_eur=float(pyo.value(model.fcr_slot_revenue[j])),
+                                    fcr_price=fcr_price, covered_fraction=covered_fraction,
+                                )
+                                metrics["breakeven_status"] = "ok_entry_price"
+                            breakeven_by_slot[slot] = metrics
                         except RuntimeError as e:
                             logger.warning(
                                 f"[{current_time}] FCR breakeven counterfactual failed for slot {slot}: {e}"
