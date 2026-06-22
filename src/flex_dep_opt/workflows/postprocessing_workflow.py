@@ -18,7 +18,9 @@ from flex_dep_opt.post.metrics import (
 from flex_dep_opt.post.plots import plot_market_cashflows_plotly, plot_mpc_dispatch_plotly
 
 
-def postprocess_mpc_results(settings: Settings | None = None) -> None:
+def postprocess_mpc_results(
+    settings: Settings | None = None, run_dir: Path | None = None
+) -> None:
     """
     Postprocessing workflow for MPC results.
 
@@ -31,7 +33,8 @@ def postprocess_mpc_results(settings: Settings | None = None) -> None:
     5) Generate interactive Plotly HTML plots
     """
     results_root = Path("results")
-    run_dir = read_latest_run_pointer(results_root)
+    if run_dir is None:
+        run_dir = read_latest_run_pointer(results_root)
 
     if settings is None:
         run_settings_path = run_dir / "settings.toml"

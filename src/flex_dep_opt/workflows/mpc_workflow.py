@@ -1,6 +1,7 @@
 import logging
 import random
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -127,7 +128,7 @@ logging.getLogger("gurobipy").setLevel(logging.WARNING)
 logging.getLogger("pyomo").setLevel(logging.WARNING)
 logging.getLogger("pyomo.core").setLevel(logging.ERROR)
 
-def run_mpc(settings: Settings) -> None:
+def run_mpc(settings: Settings) -> Path:
     """
     Rolling-horizon Model Predictive Control (MPC).
 
@@ -765,4 +766,6 @@ def run_mpc(settings: Settings) -> None:
         )
 
         print("MPC finished → Postprocessing starts")
+
+    return run_dir
 
