@@ -26,7 +26,7 @@ The full license text can be found in the LICENSE file in the root directory of 
 
 ## Related Publications
 Brödel, M., Park, W.-H., Rosner, P., Lienkamp, M.: "FLEX-DEPOT: An open-source framework for multi-market flexibility commercialization of a logistics depot incorporating electric trucks." <br>
-Manuscript under review at Energy Informatics, Springer Nature (2026)
+Manuscript under review at SoftwareX, Elsevier (2026)
 
 ## Citation
 If you use FLEX-DEPOT in academic work, please cite **both**:
@@ -40,7 +40,7 @@ https://github.com/TUMFTM/flex-depot
 **Publication:**
 Brödel, M., Park, W.-H., Rosner, P., Lienkamp, M.  
 *FLEX-DEPOT: An open-source framework for multi-market flexibility commercialization of a logistics depot incorporating electric trucks.*  
-Energy Informatics, 2026 (under review).
+SoftwareX, 2026 (under review).
 
 Citation metadata is provided in `CITATION.cff`.
 
