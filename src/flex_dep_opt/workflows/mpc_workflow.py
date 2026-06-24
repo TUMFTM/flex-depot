@@ -128,7 +128,7 @@ logging.getLogger("gurobipy").setLevel(logging.WARNING)
 logging.getLogger("pyomo").setLevel(logging.WARNING)
 logging.getLogger("pyomo.core").setLevel(logging.ERROR)
 
-def run_mpc(settings: Settings) -> Path:
+def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
     """
     Rolling-horizon Model Predictive Control (MPC).
 
@@ -724,9 +724,14 @@ def run_mpc(settings: Settings) -> Path:
         if not name:
             raise ValueError("simulation.name must be set in the settings file (e.g. 'illustrative_example').")
 
-        # --- Create per-run output directory (Option A: name + timestamp) ---
-        run_dir = make_run_dir("results", name, tz="Europe/Berlin")
-        write_latest_run_pointer(run_dir, results_root="results")
+        # --- Create per-run output directory (name + timestamp), unless caller
+        #     supplied an explicit run_dir (e.g. batch mode names it per config) ---
+        if run_dir is None:
+            run_dir = make_run_dir("results", name, tz="Europe/Berlin")
+            write_latest_run_pointer(run_dir, results_root="results")
+        else:
+            run_dir = Path(run_dir)
+            run_dir.mkdir(parents=True, exist_ok=True)
 
         # --- Snapshot the resolved settings as TOML for this run ---
         settings.save_to_toml(run_dir / "settings.toml")

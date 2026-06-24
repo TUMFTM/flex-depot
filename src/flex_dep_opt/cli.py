@@ -42,9 +42,12 @@ def _load_merged(config_path: str, default_path: str | None) -> Settings:
         os.unlink(tmp)
 
 
-def _run_one(config_path: str, default_path: str | None = None) -> dict:
+def _run_one(
+    config_path: str, default_path: str | None = None, results_root: str | None = None
+) -> dict:
     settings = _load_merged(config_path, default_path)
-    run_dir = run_mpc(settings)
+    run_dir = Path(results_root) / Path(config_path).stem if results_root else None
+    run_dir = run_mpc(settings, run_dir=run_dir)
     postprocess_mpc_results(settings, run_dir=run_dir)
 
     row = {"config": config_path, "run_dir": str(run_dir)}
@@ -102,7 +105,8 @@ def main():
         if not configs:
             raise SystemExit(f"No *.toml configs found in {args.configs_dir}")
 
-        run = partial(_run_one, default_path=default_path)
+        results_root = str(configs_dir / "results")
+        run = partial(_run_one, default_path=default_path, results_root=results_root)
         if args.jobs > 1:
             ctx = mp.get_context("spawn")
             with ctx.Pool(args.jobs) as pool:
