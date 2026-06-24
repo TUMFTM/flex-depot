@@ -20,7 +20,7 @@ def fetch_da_prices(start: str, end: str, bzn: str = "DE-LU") -> pd.Series:
         data = json.load(r)
 
     idx = pd.to_datetime(data["unix_seconds"], unit="s", utc=True).tz_convert(TZ)
-    prices = pd.Series(data["price"], index=idx, name="price") / 1000.0
+    prices = (pd.Series(data["price"], index=idx, name="price") / 1000.0).round(5)
     prices.index.name = "time"
     return prices.dropna()
 
