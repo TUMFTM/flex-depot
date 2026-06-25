@@ -16,7 +16,7 @@ REQUIRED_COLS: List[str] = [
 # =============================================================================
 # CSV I/O: flexibility bounds
 # =============================================================================
-def read_flexibility_bounds_csv(path: str, tz: str = "Europe/Berlin") -> pd.DataFrame:
+def read_flexibility_bounds_csv(path: str, tz: str = "UTC") -> pd.DataFrame:
     """
     Read flexibility bounds CSV and return a time-indexed DataFrame.
 
