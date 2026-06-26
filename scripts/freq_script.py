@@ -2,8 +2,13 @@ import sys
 import pathlib
 import pandas as pd
 
-from flex_dep_opt.config.settings import Settings
 from flex_dep_opt.market.fcr import droop_signal
+
+# FCR droop is a fixed product spec (50 Hz nominal, +-10 mHz deadband, full activation at +-200 mHz) 
+# hardcoded here so this resample script has no dependency on the run config.
+_FREQ_NOMINAL_HZ = 50.0
+_FREQ_DEADBAND_HZ = 0.010
+_FREQ_FULL_ACTIVATION_HZ = 0.200
 
 def load_frequency_file(path: pathlib.Path) -> pd.DataFrame:
     df = None
@@ -53,11 +58,6 @@ def load_frequency_file(path: pathlib.Path) -> pd.DataFrame:
 
     df = df[["DATETIME", "FREQUENCY_HZ"]].set_index("DATETIME").sort_index()
     return df
-
-_fcr = Settings.load().optimization.trading.fcr
-_FREQ_NOMINAL_HZ = _fcr.frequency_nominal_hz
-_FREQ_DEADBAND_HZ = _fcr.deadband_hz
-_FREQ_FULL_ACTIVATION_HZ = _fcr.full_activation_hz
 
 def resample_to_15min(df: pd.DataFrame) -> pd.DataFrame:
     resampled = df["FREQUENCY_HZ"].resample("15min").agg(
