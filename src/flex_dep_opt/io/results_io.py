@@ -9,6 +9,8 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from flex_dep_opt.io.time_utils import LOCAL_TIMEZONE
+
 
 def _as_path(path: str | Path) -> Path:
     """Normalize path input and ensure parent directory exists."""
@@ -21,7 +23,9 @@ def save_dispatch_to_csv(
     df: pd.DataFrame,
     path: str | Path,
     *,
+    include_time_column: bool = True,
     time_col: str = "time",
+    output_tz: str = LOCAL_TIMEZONE,
 ) -> str:
     """
     Save a dispatch-like DataFrame to CSV with the timestamp as a dedicated
@@ -37,23 +41,36 @@ def save_dispatch_to_csv(
     out = _as_path(path)
 
     out_df = df
-    if isinstance(df.index, pd.DatetimeIndex):
-        out_df = df.reset_index().rename(columns={"index": time_col})
-    elif time_col not in df.columns:
-        raise ValueError(f"df has no DatetimeIndex and no '{time_col}' column.")
+    if include_time_column:
+        if isinstance(df.index, pd.DatetimeIndex):
+            out_df = df.copy()
+            if out_df.index.tz is not None and output_tz:
+                out_df.index = out_df.index.tz_convert(output_tz)
+            out_df = out_df.reset_index().rename(columns={"index": time_col})
+        elif time_col not in df.columns:
+            raise ValueError(
+                f"include_time_column=True, but df has no DatetimeIndex and no '{time_col}' column."
+            )
 
     out_df.to_csv(out, index=False)
     return str(out.resolve())
 
 
-def save_table_to_csv(df: pd.DataFrame, path: str | Path) -> str:
+def save_table_to_csv(df: pd.DataFrame, path: str | Path, *, output_tz: str = LOCAL_TIMEZONE) -> str:
     """
     Save any table-like DataFrame to CSV exactly as provided (index not written).
 
     Use this for tables where the index has no semantic meaning (e.g. commit logs).
     """
     out = _as_path(path)
-    df.to_csv(out, index=False)
+    out_df = df.copy()
+    if output_tz:
+        for col in out_df.columns:
+            if pd.api.types.is_datetime64_any_dtype(out_df[col]):
+                series = out_df[col]
+                if getattr(series.dt, "tz", None) is not None:
+                    out_df[col] = series.dt.tz_convert(output_tz)
+    out_df.to_csv(out, index=False)
     return str(out.resolve())
 
 

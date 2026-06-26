@@ -29,6 +29,7 @@ from flex_dep_opt.market.fcr import (
     get_fcr_frequency_data,
     get_fcr_prices,
 )
+from flex_dep_opt.io.time_utils import LOCAL_TIMEZONE, local_config_timestamp_to_utc, validate_regular_index
 from flex_dep_opt.market.trading_rules import (
     build_market_activity_mask_for_time,
     gate_closure_timestamp,
@@ -144,7 +145,7 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
     Gate-closure times are computed in the market layer via `gate_closure_timestamp()`.
     This ensures mask enforcement and commit logging use the exact same rules.
     """
-    run_started_at = datetime.now(ZoneInfo("Europe/Berlin"))
+    run_started_at = datetime.now(ZoneInfo(LOCAL_TIMEZONE))
 
     # ============================================================
     # 1) Read configuration blocks
@@ -214,17 +215,19 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
     prices_by_market = build_prices_from_settings(settings)
     fees_by_market = build_fees_from_settings(settings)
 
-    start = pd.to_datetime(sim_cfg.start).tz_localize(
-        "Europe/Berlin", ambiguous=True, nonexistent="shift_forward"
-    )
-    end = pd.to_datetime(sim_cfg.end).tz_localize(
-        "Europe/Berlin", ambiguous=True, nonexistent="shift_forward"
-    )
+    start = local_config_timestamp_to_utc(sim_cfg.start, local_tz=LOCAL_TIMEZONE)
+    end = local_config_timestamp_to_utc(sim_cfg.end, local_tz=LOCAL_TIMEZONE)
 
     for mk in prices_by_market:
         prices_by_market[mk] = prices_by_market[mk].loc[start:end]
+        validate_regular_index(
+            prices_by_market[mk].index,
+            timestep_hours=step_hours,
+            name=f"{mk} price index",
+        )
 
     full_index = prices_by_market[next(iter(prices_by_market))].index
+    validate_regular_index(full_index, timestep_hours=step_hours, name="simulation decision index")
 
     # Full state index (N+1): add terminal state timestamp
     dt = pd.Timedelta(hours=step_hours)
@@ -317,7 +320,7 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
         for i in range(len(full_index)):
             current_time = full_index[i]
             next_time = current_time + pd.Timedelta(hours=step_hours)
-            pbar.set_postfix(time=str(current_time), E=f"{E_state:.1f} kWh")
+            pbar.set_postfix(time=str(current_time.tz_convert(LOCAL_TIMEZONE)), E=f"{E_state:.1f} kWh")
 
             # --------------------------------------------------------
             # 9.1) Define rolling optimization window
@@ -727,7 +730,7 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
         # --- Create per-run output directory (name + timestamp), unless caller
         #     supplied an explicit run_dir (e.g. batch mode names it per config) ---
         if run_dir is None:
-            run_dir = make_run_dir("results", name, tz="Europe/Berlin")
+            run_dir = make_run_dir("results", name, tz=LOCAL_TIMEZONE)
             write_latest_run_pointer(run_dir, results_root="results")
         else:
             run_dir = Path(run_dir)
@@ -745,20 +748,20 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
         if rows:
             result = pd.DataFrame(rows)
             result.index.name = "time"
-            save_dispatch_to_csv(result, out_dispatch)
+            save_dispatch_to_csv(result, out_dispatch, include_time_column=True, output_tz=LOCAL_TIMEZONE)
 
         # --- Write commit ---
         if commit_rows:
             commit_df = pd.DataFrame(commit_rows)
             commit_df = commit_df.sort_values(["delivery_time", "current_time"])
-            save_table_to_csv(commit_df, out_commit)
+            save_table_to_csv(commit_df, out_commit, output_tz=LOCAL_TIMEZONE)
 
         # fcr commits log
         if fcr_commit_rows:
             fcr_commit_df = pd.DataFrame(fcr_commit_rows).sort_values("slot_start")
-            save_table_to_csv(fcr_commit_df, out_fcr_commit)
+            save_table_to_csv(fcr_commit_df, out_fcr_commit, output_tz=LOCAL_TIMEZONE)
 
-        run_finished_at = datetime.now(ZoneInfo("Europe/Berlin"))
+        run_finished_at = datetime.now(ZoneInfo(LOCAL_TIMEZONE))
 
         save_run_info_txt(
             run_dir=run_dir,
@@ -767,7 +770,7 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
             solver_name=sim_cfg.solver,
             start_time=run_started_at,
             end_time=run_finished_at,
-            tz="Europe/Berlin",
+            tz=LOCAL_TIMEZONE,
         )
 
         print("MPC finished → Postprocessing starts")

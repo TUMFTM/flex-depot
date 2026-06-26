@@ -7,6 +7,7 @@ import pandas as pd
 from flex_dep_opt.config.settings import Settings
 from flex_dep_opt.io.prices_io import build_fees_from_settings, build_prices_from_settings
 from flex_dep_opt.io.results_io import read_latest_run_pointer, save_dispatch_to_csv, save_summary_to_csv
+from flex_dep_opt.io.time_utils import LOCAL_TIMEZONE, local_config_timestamp_to_utc, validate_regular_index
 from flex_dep_opt.market.fcr import get_fcr_frequency_data
 from flex_dep_opt.post.metrics import (
     compute_cashflows_per_step,
@@ -60,12 +61,8 @@ def postprocess_mpc_results(
     # ------------------------------------------------------------------
     # Time window
     # ------------------------------------------------------------------
-    start = pd.to_datetime(sim.start).tz_localize(
-        "Europe/Berlin", ambiguous=True, nonexistent="shift_forward"
-    )
-    end = pd.to_datetime(sim.end).tz_localize(
-        "Europe/Berlin", ambiguous=True, nonexistent="shift_forward"
-    )
+    start = local_config_timestamp_to_utc(sim.start, local_tz=LOCAL_TIMEZONE)
+    end = local_config_timestamp_to_utc(sim.end, local_tz=LOCAL_TIMEZONE)
 
     # ------------------------------------------------------------------
     # Load dispatch
@@ -73,11 +70,12 @@ def postprocess_mpc_results(
     df = pd.read_csv(dispatch_csv)
     if "time" not in df.columns:
         raise ValueError(f"{dispatch_csv} must contain a 'time' column.")
-    idx = pd.to_datetime(df["time"], utc=True).dt.tz_convert("Europe/Berlin")
+    idx = pd.to_datetime(df["time"], utc=True).dt.tz_convert("UTC")
 
     dispatch = df.drop(columns=["time"])
     dispatch.index = idx
     dispatch = dispatch.loc[start:end]
+    validate_regular_index(dispatch.index, timestep_hours=float(sim.timestep_hours), name="dispatch index")
 
     # ------------------------------------------------------------------
     # Load commit
@@ -86,9 +84,9 @@ def postprocess_mpc_results(
 
     # robust parsing if saved as strings
     if "delivery_time" in cdf.columns:
-        cdf["delivery_time"] = pd.to_datetime(cdf["delivery_time"], utc=True).dt.tz_convert("Europe/Berlin")
+        cdf["delivery_time"] = pd.to_datetime(cdf["delivery_time"], utc=True).dt.tz_convert("UTC")
     if "current_time" in cdf.columns:
-        cdf["current_time"] = pd.to_datetime(cdf["current_time"], utc=True).dt.tz_convert("Europe/Berlin")
+        cdf["current_time"] = pd.to_datetime(cdf["current_time"], utc=True).dt.tz_convert("UTC")
 
     commit_df = cdf
     if "delivery_time" in commit_df.columns:
@@ -110,6 +108,11 @@ def postprocess_mpc_results(
     prices_by_market = build_prices_from_settings(settings)
     for mk, s in list(prices_by_market.items()):
         prices_by_market[mk] = s.loc[start:end]
+        validate_regular_index(
+            prices_by_market[mk].index,
+            timestep_hours=float(sim.timestep_hours),
+            name=f"{mk} price index",
+        )
 
     fees_by_market = build_fees_from_settings(settings)
 
@@ -182,7 +185,7 @@ def postprocess_mpc_results(
     kpi_csv = run_dir / "kpis.csv"
 
     # cashflows: keep DatetimeIndex in the CSV for later analysis
-    save_dispatch_to_csv(cf_df, cashflow_csv)
+    save_dispatch_to_csv(cf_df, cashflow_csv, include_time_column=True, output_tz=LOCAL_TIMEZONE)
 
     # KPIs: single row
     save_summary_to_csv(kpis, kpi_csv)
@@ -196,7 +199,6 @@ def postprocess_mpc_results(
     # -------------------------------------------------------------------------
     # Plot 1: dispatch report
     # -------------------------------------------------------------------------
-
     fcr_cfg = settings.optimization.trading.fcr
     fcr_frequency_data_pp: pd.DataFrame | None = None
     if fcr_cfg.enabled and getattr(fcr_cfg, "frequency_source", None):
@@ -206,13 +208,24 @@ def postprocess_mpc_results(
                 (fcr_frequency_data_pp.index >= start) &
                 (fcr_frequency_data_pp.index <= end)
             ]
+            # align with the local-time plot axis
+            fcr_frequency_data_pp.index = fcr_frequency_data_pp.index.tz_convert(LOCAL_TIMEZONE)
         except Exception:
             fcr_frequency_data_pp = None
 
+    dispatch_plot = dispatch.copy()
+    dispatch_plot.index = dispatch_plot.index.tz_convert(LOCAL_TIMEZONE)
+    prices_plot = {mk: s.tz_convert(LOCAL_TIMEZONE) for mk, s in prices_by_market.items()}
+    commit_plot = commit_df.copy()
+    for col in ("delivery_time", "current_time", "next_time", "gate_closure_time"):
+        if col in commit_plot.columns and pd.api.types.is_datetime64_any_dtype(commit_plot[col]):
+            if getattr(commit_plot[col].dt, "tz", None) is not None:
+                commit_plot[col] = commit_plot[col].dt.tz_convert(LOCAL_TIMEZONE)
+
     fig_dispatch = plot_mpc_dispatch_plotly(
-        dispatch=dispatch,
-        prices_by_market=prices_by_market,
-        commit_df=commit_df,
+        dispatch=dispatch_plot,
+        prices_by_market=prices_plot,
+        commit_df=commit_plot,
         fcr_commit_df=fcr_commit_df,
         title="MPC Flexband Dispatch and Market Positions",
         fcr_frequency_data=fcr_frequency_data_pp,
@@ -224,8 +237,10 @@ def postprocess_mpc_results(
     # -------------------------------------------------------------------------
     # Plot 2: cashflow report (plots consume precomputed metrics)
     # -------------------------------------------------------------------------
+    cf_plot = cf_df.copy()
+    cf_plot.index = cf_plot.index.tz_convert(LOCAL_TIMEZONE)
     fig_cf = plot_market_cashflows_plotly(
-        cf_df=cf_df,
+        cf_df=cf_plot,
         energy_data=energy_data,
         cash_data=cash_data,
         kpis=kpis,

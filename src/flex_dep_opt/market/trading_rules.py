@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 
 from flex_dep_opt.config.settings import OptimizationSettings
+from flex_dep_opt.io.time_utils import LOCAL_TIMEZONE
 
 
 # =============================================================================
@@ -18,6 +19,8 @@ def gate_closure_timestamp(
     market: str,
     delivery_time: pd.Timestamp,
     optimization_cfg: OptimizationSettings,
+    *,
+    market_tz: str = LOCAL_TIMEZONE,
 ) -> pd.Timestamp:
     """
     Compute the market gate-closure timestamp for a given delivery time.
@@ -34,8 +37,9 @@ def gate_closure_timestamp(
     market:
         Market identifier, e.g. "DA" or "ID".
     delivery_time:
-        Delivery timestamp (tz-aware or tz-naive). The returned timestamp will
-        follow the timezone-awareness of `delivery_time`.
+        Delivery timestamp. Internally this may be UTC; gate rules are evaluated
+        in `market_tz`, and the returned timestamp is converted back to the
+        timezone of `delivery_time`.
     optimization_cfg:
         Optimization configuration containing `optimization_cfg["trading"]`.
 
@@ -50,6 +54,12 @@ def gate_closure_timestamp(
         If `market` is unknown.
     """
     trading_cfg = optimization_cfg.trading
+    if delivery_time.tzinfo is None:
+        delivery_local = delivery_time.tz_localize(market_tz, ambiguous="raise", nonexistent="raise")
+        output_tz = market_tz
+    else:
+        output_tz = str(delivery_time.tz)
+        delivery_local = delivery_time.tz_convert(market_tz)
 
     if market == "DA":
         da_cfg = trading_cfg.dayahead
@@ -59,17 +69,17 @@ def gate_closure_timestamp(
         gc_h, gc_m = _parse_hhmm(gc_hour_str)
 
         base_date = (
-            delivery_time.normalize() - pd.Timedelta(days=1)
+            delivery_local.normalize() - pd.Timedelta(days=1)
             if closes_prev
-            else delivery_time.normalize()
+            else delivery_local.normalize()
         )
         # `normalize()` preserves tz-awareness; adding Timedelta keeps tz-awareness
-        return base_date + pd.Timedelta(hours=gc_h, minutes=gc_m)
+        return (base_date + pd.Timedelta(hours=gc_h, minutes=gc_m)).tz_convert(output_tz)
 
     if market == "ID":
         id_cfg = trading_cfg.intraday
         offset_min = id_cfg.offset_minutes_before_delivery
-        return delivery_time - pd.Timedelta(minutes=offset_min)
+        return (delivery_local - pd.Timedelta(minutes=offset_min)).tz_convert(output_tz)
 
     raise ValueError(f"Unknown market: {market}")
 
@@ -129,6 +139,11 @@ def build_market_activity_mask_for_time(
     trading_cfg = optimization_cfg.trading
     mode = trading_cfg.mode
 
+    if current_time.tzinfo is None:
+        current_cmp = current_time.tz_localize(LOCAL_TIMEZONE, ambiguous="raise", nonexistent="raise")
+    else:
+        current_cmp = current_time
+
     enabled_markets = _enabled_markets_from_cfg(optimization_cfg)
     mask_by_market: dict[str, pd.Series] = {}
 
@@ -153,9 +168,9 @@ def build_market_activity_mask_for_time(
 
             # Apply market-specific "open" condition (keep historical semantics)
             if mk == "DA":
-                mask_by_market[mk] = current_time < gcs
+                mask_by_market[mk] = current_cmp < gcs
             elif mk == "ID":
-                mask_by_market[mk] = current_time <= gcs
+                mask_by_market[mk] = current_cmp <= gcs
             else:
                 # If you add more markets later, enforce explicit semantics here
                 raise ValueError(f"Missing activity rule for market={mk}")

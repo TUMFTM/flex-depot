@@ -12,12 +12,12 @@ PathLike = str | Path
 # =============================================================================
 # CSV I/O: generic price series (single source of truth for validation)
 # =============================================================================
-def read_prices_csv(path: PathLike, tz: str = "Europe/Berlin") -> pd.Series:
+def read_prices_csv(path: PathLike, tz: str = "UTC") -> pd.Series:
     """
     Read a CSV file containing columns [time, price] into a timezone-aware Series.
 
     This function is the single source of truth for:
-      - timestamp parsing (UTC -> tz conversion)
+      - timestamp parsing (offset-aware input -> UTC -> tz conversion)
       - NaT detection (unparsable timestamps)
       - NaN / non-numeric price detection
       - duplicate timestamp detection
@@ -87,7 +87,7 @@ def read_prices_csv(path: PathLike, tz: str = "Europe/Berlin") -> pd.Series:
 # =============================================================================
 # Settings-based builders
 # =============================================================================
-def build_prices_from_settings(settings: Settings, *, tz: str = "Europe/Berlin") -> dict[str, pd.Series]:
+def build_prices_from_settings(settings: Settings, *, tz: str = "UTC") -> dict[str, pd.Series]:
     """
     Build price series by market from settings.
 
