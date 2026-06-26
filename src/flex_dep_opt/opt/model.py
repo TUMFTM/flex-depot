@@ -207,7 +207,6 @@ def flexibility_commercialization(
         m.S_FCR = pyo.RangeSet(0, n_fcr - 1)
 
         m.fcr_price_param = pyo.Param(m.S_FCR, initialize=lambda mdl, j: fcr_slot_price_vals[j])
-        m.fcr_cap_max_kw = pyo.Param(m.S_FCR, initialize=lambda mdl, j: fcr_cap_max_vals[j])
         m.fcr_slot_hours = pyo.Param(m.S_FCR, initialize=lambda mdl, j: fcr_slot_hours_vals[j])
         m.fcr_droop_signal = pyo.Param(m.T, initialize=lambda mdl, t: float(droop_by_t[t]))
         m.fcr_hidden_droop = pyo.Param(m.T, initialize=lambda mdl, t: float(hidden_droop_by_t[t]))
@@ -327,9 +326,9 @@ def flexibility_commercialization(
     # 8) FCR gate closure constraints
     # ============================================================
     if use_fcr:
-        # While the gate is open, x_fcr is free up to fcr_cap_max_kw (bounded by
-        # the z_fcr integer bound). When the gate closes, fcr_gate_open=0 and the
-        # offer is pinned to x_fcr_committed.
+        # While the gate is open, x_fcr is free up to its biddable capacity
+        # (via the z_fcr integer bound). When the gate closes, fcr_gate_open=0
+        # and the offer is pinned to x_fcr_committed.
         m.fcr_gate_ub = pyo.Constraint(
             m.S_FCR,
             rule=lambda mdl, j: (
@@ -476,7 +475,8 @@ def flexibility_commercialization(
     # ============================================================
     # 10) Objective
     # ============================================================
-    # Each term is a named scalar Expression so a solved model can be decomposed term-by-term (used by the FCR breakeven analysis) while the objective stays the exact sum of the same expressions.
+    # Named per-term Expressions so the objective can be decomposed term-by-term
+    # (FCR breakeven analysis); the objective below is their exact sum.
     m.obj_energy_cashflow = pyo.Expression(
         expr=pyo.quicksum(-m.price[mk, t] * m.p_market[mk, t] * m.dt for mk in m.MARKETS for t in m.T)
     )
@@ -486,10 +486,13 @@ def flexibility_commercialization(
         fee_cost = pyo.quicksum(m.fee[mk] * m.p_market_vol[mk, t] * m.dt for mk in m.MARKETS for t in m.T)
     m.obj_fee_cost = pyo.Expression(expr=fee_cost)
 
-    # Cycling cost on total throughput. The mean FCR activation already flows through p_ch / p_dis via the balance, so this term captures cycling on |mean droop|.
+    # Cycling cost on total throughput; mean FCR activation is already in
+    # p_ch/p_dis via the balance, so this captures cycling on |mean droop|.
     deg_cost = m.c_deg * pyo.quicksum((m.p_ch[t] + m.p_dis[t]) * m.dt for t in m.T)
 
-    # Hidden FCR cycling: the term above only sees the mean droop folded into p_net, but the battery physically follows the per-second signal and cycles on mean|droop|. Charge the gap (mean|droop| - |mean droop|) per kW of committed FCR so the bid reflects true wear (~+30% throughput in practice). Zero unless the 15-min freq file carries FREQ_DROOP_ABS_MEAN, and gated by c_deg (= 0 when cycle regularization is disabled).
+    # Hidden FCR cycling: the battery follows the per-second signal (mean|droop|)
+    # but the balance only sees |mean droop|. Charge the gap per committed kW so
+    # the bid reflects true wear. Needs FREQ_DROOP_ABS_MEAN; gated by c_deg.
     if use_fcr:
         deg_cost = deg_cost + m.c_deg * pyo.quicksum(
             m.fcr_hidden_droop[t] * m.x_fcr[t_to_fcr_slot[t]] * m.dt for t in m.T if t in t_to_fcr_slot
@@ -521,7 +524,8 @@ def flexibility_commercialization(
         e_slack_pen = 1e6 * pyo.quicksum(m.e_slack_up[s] + m.e_slack_dn[s] for s in m.S)
     m.obj_e_slack_penalty = pyo.Expression(expr=e_slack_pen)
 
-    # Soft FCR energy-reserve penalty: cost per kWh that planned E intrudes into the droop headroom buffer. Sits well above arbitrage value and well below the imbalance penalties, so the reserve is held whenever that is cheaper than the imbalance it would otherwise prevent.
+    # Soft FCR energy-reserve penalty: cost per kWh that planned E intrudes into
+    # the droop headroom buffer. Priced above arbitrage, below imbalance.
     reserve_pen = 0.0
     if fcr_reserve_penalty_eur_per_kwh > 0.0 and hasattr(m, "fcr_reserve_slack_up"):
         reserve_pen = fcr_reserve_penalty_eur_per_kwh * pyo.quicksum(
@@ -529,7 +533,8 @@ def flexibility_commercialization(
         )
     m.obj_reserve_penalty = pyo.Expression(expr=reserve_pen)
 
-    # Soft FCR mid-band penalty (pulls E toward the centre of its band on FCR-covered steps); dt-scaled so it is timestep-resolution independent.
+    # Soft FCR mid-band penalty: pulls E toward band centre on FCR steps;
+    # dt-scaled for timestep-resolution independence.
     bal_pen = 0.0
     if fcr_balance_penalty_eur_per_kwh > 0.0 and hasattr(m, "e_balance_dev"):
         bal_pen = (

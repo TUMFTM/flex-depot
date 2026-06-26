@@ -52,10 +52,7 @@ def get_fcr_frequency_data(file_path: str, tz: str = "Europe/Berlin") -> pd.Data
             raise ValueError(f"Unparsable timestamps in '{FCR_FREQ_DATETIME_COL}'")
 
         if ts.dt.tz is None:
-            try:
-                ts = ts.dt.tz_localize(tz, ambiguous=False, nonexistent="shift_forward")
-            except Exception:
-                ts = ts.dt.tz_localize("UTC").dt.tz_convert(tz)
+            ts = ts.dt.tz_localize(tz, ambiguous="infer", nonexistent="shift_forward")
         else:
             ts = ts.dt.tz_convert(tz)
 
