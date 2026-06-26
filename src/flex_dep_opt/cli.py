@@ -80,7 +80,7 @@ def main():
     p_batch.add_argument("--jobs", type=int, default=1, help="Parallel processes (default: 1).")
     p_batch.add_argument(
         "--manifest", default=None,
-        help="Manifest CSV path (default: <configs_dir>/manifest.csv).",
+        help="Manifest CSV path (default: <configs_dir>/results/manifest.csv).",
     )
 
     args = parser.parse_args()
@@ -114,7 +114,7 @@ def main():
         else:
             rows = [run(c) for c in configs]
 
-        manifest = Path(args.manifest) if args.manifest else Path(args.configs_dir) / "manifest.csv"
+        manifest = Path(args.manifest) if args.manifest else Path(results_root) / "manifest.csv"
         pd.DataFrame(rows).to_csv(manifest, index=False)
         print(f"Batch done: {len(rows)} runs → {manifest}")
         return

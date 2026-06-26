@@ -226,3 +226,5 @@ __marimo__/
 /src/flex_dep_opt/cli_paper.py
 
 .vscode/
+
+examples/batch_example/results
