@@ -362,8 +362,12 @@ def flexibility_commercialization(
             r = float(fcr_energy_reserve_kwh_per_kw)
             m.T_FCR = pyo.Set(initialize=sorted(t_to_fcr_slot.keys()))
 
-            m.fcr_reserve_slack_up = pyo.Var(m.T_FCR, within=pyo.NonNegativeReals)
-            m.fcr_reserve_slack_dn = pyo.Var(m.T_FCR, within=pyo.NonNegativeReals)
+            reserve_states = sorted(
+                {s for t in t_to_fcr_slot for s in (t, t + 1) if s != 0}
+            )
+            m.S_FCR_RESERVE = pyo.Set(initialize=reserve_states)
+            m.fcr_reserve_slack_up = pyo.Var(m.S_FCR_RESERVE, within=pyo.NonNegativeReals)
+            m.fcr_reserve_slack_dn = pyo.Var(m.S_FCR_RESERVE, within=pyo.NonNegativeReals)
 
             def _reserve_up(mdl, t):
                 if t == 0:  # E[0] is realized, not planned — skip
@@ -389,13 +393,13 @@ def flexibility_commercialization(
                 m.T_FCR,
                 rule=lambda mdl, t: mdl.E[t + 1]
                 <= mdl.E_upper[t + 1] - r * mdl.x_fcr[t_to_fcr_slot[t]]
-                + mdl.fcr_reserve_slack_up[t],
+                + mdl.fcr_reserve_slack_up[t + 1],
             )
             m.fcr_E_reserve_dn_next = pyo.Constraint(
                 m.T_FCR,
                 rule=lambda mdl, t: mdl.E[t + 1]
                 >= mdl.E_lower[t + 1] + r * mdl.x_fcr[t_to_fcr_slot[t]]
-                - mdl.fcr_reserve_slack_dn[t],
+                - mdl.fcr_reserve_slack_dn[t + 1],
             )
 
         # Soft mid-band pull on FCR-covered states: discourages E from sitting
@@ -543,8 +547,8 @@ def flexibility_commercialization(
     reserve_pen = 0.0
     if fcr_reserve_penalty_eur_per_kwh > 0.0 and hasattr(m, "fcr_reserve_slack_up"):
         reserve_pen = fcr_reserve_penalty_eur_per_kwh * pyo.quicksum(
-            m.fcr_reserve_slack_up[t] + m.fcr_reserve_slack_dn[t]
-            for t in m.T_FCR
+            m.fcr_reserve_slack_up[s] + m.fcr_reserve_slack_dn[s]
+            for s in m.S_FCR_RESERVE
         )
     m.obj_reserve_penalty = pyo.Expression(expr=reserve_pen)
 
