@@ -160,9 +160,7 @@ def flexibility_commercialization(
             if loc >= 0 and t in t_to_fcr_slot:
                 droop_by_t[t] = float(np.clip(col_vals[loc], -1.0, 1.0))
                 if abs_vals is not None:
-                    hidden_droop_by_t[t] = max(
-                        float(abs_vals[loc]) - abs(droop_by_t[t]), 0.0
-                    )
+                    hidden_droop_by_t[t] = max(float(abs_vals[loc]) - abs(droop_by_t[t]), 0.0)
 
     # ============================================================
     # 3) Pyomo model (Sets / Params)
@@ -194,9 +192,7 @@ def flexibility_commercialization(
     m.Eterm = pyo.Param(initialize=0.0, mutable=True)
     m.w_term = pyo.Param(initialize=0.0, mutable=True, within=pyo.NonNegativeReals)
 
-    closed_pairs = [
-        (mk, t) for mk in markets for t in range(N) if not bool(mask_arr[mk][t])
-    ]
+    closed_pairs = [(mk, t) for mk in markets for t in range(N) if not bool(mask_arr[mk][t])]
     m.MARKET_CLOSED = pyo.Set(initialize=closed_pairs, dimen=2)
     m.p_market_committed = pyo.Param(
         m.MARKET_CLOSED,
@@ -242,9 +238,9 @@ def flexibility_commercialization(
 
         m.fcr_slot_revenue = pyo.Expression(
             m.S_FCR,
-            rule=lambda mdl, j: (mdl.fcr_price_param[j] / 1000.0)
-            * mdl.x_fcr[j]
-            * (mdl.fcr_slot_hours[j] / fcr_product_hours),
+            rule=lambda mdl, j: (
+                (mdl.fcr_price_param[j] / 1000.0) * mdl.x_fcr[j] * (mdl.fcr_slot_hours[j] / fcr_product_hours)
+            ),
         )
 
         # Exposed for result extraction.
@@ -288,10 +284,10 @@ def flexibility_commercialization(
 
     m.energy_state = pyo.Constraint(
         m.T,
-        rule=lambda mdl, t: mdl.E[t + 1]
-        == mdl.E[t]
-        + mdl.eta_c * mdl.p_ch[t] * mdl.dt
-        - (1.0 / mdl.eta_d) * mdl.p_dis[t] * mdl.dt,
+        rule=lambda mdl, t: (
+            mdl.E[t + 1]
+            == mdl.E[t] + mdl.eta_c * mdl.p_ch[t] * mdl.dt - (1.0 / mdl.eta_d) * mdl.p_dis[t] * mdl.dt
+        ),
     )
 
     if allow_imbalance:
@@ -336,13 +332,15 @@ def flexibility_commercialization(
         # offer is pinned to x_fcr_committed.
         m.fcr_gate_ub = pyo.Constraint(
             m.S_FCR,
-            rule=lambda mdl, j: mdl.x_fcr[j]
-            <= mdl.x_fcr_committed[j] + fcr_cap_max_vals[j] * mdl.fcr_gate_open[j],
+            rule=lambda mdl, j: (
+                mdl.x_fcr[j] <= mdl.x_fcr_committed[j] + fcr_cap_max_vals[j] * mdl.fcr_gate_open[j]
+            ),
         )
         m.fcr_gate_lb = pyo.Constraint(
             m.S_FCR,
-            rule=lambda mdl, j: mdl.x_fcr[j]
-            >= mdl.x_fcr_committed[j] - fcr_cap_max_vals[j] * mdl.fcr_gate_open[j],
+            rule=lambda mdl, j: (
+                mdl.x_fcr[j] >= mdl.x_fcr_committed[j] - fcr_cap_max_vals[j] * mdl.fcr_gate_open[j]
+            ),
         )
 
         # --------------------------------------------------------
@@ -362,9 +360,7 @@ def flexibility_commercialization(
             r = float(fcr_energy_reserve_kwh_per_kw)
             m.T_FCR = pyo.Set(initialize=sorted(t_to_fcr_slot.keys()))
 
-            reserve_states = sorted(
-                {s for t in t_to_fcr_slot for s in (t, t + 1) if s != 0}
-            )
+            reserve_states = sorted({s for t in t_to_fcr_slot for s in (t, t + 1) if s != 0})
             m.S_FCR_RESERVE = pyo.Set(initialize=reserve_states)
             m.fcr_reserve_slack_up = pyo.Var(m.S_FCR_RESERVE, within=pyo.NonNegativeReals)
             m.fcr_reserve_slack_dn = pyo.Var(m.S_FCR_RESERVE, within=pyo.NonNegativeReals)
@@ -373,33 +369,31 @@ def flexibility_commercialization(
                 if t == 0:  # E[0] is realized, not planned — skip
                     return pyo.Constraint.Skip
                 return (
-                    mdl.E[t]
-                    <= mdl.E_upper[t] - r * mdl.x_fcr[t_to_fcr_slot[t]]
-                    + mdl.fcr_reserve_slack_up[t]
+                    mdl.E[t] <= mdl.E_upper[t] - r * mdl.x_fcr[t_to_fcr_slot[t]] + mdl.fcr_reserve_slack_up[t]
                 )
 
             def _reserve_dn(mdl, t):
                 if t == 0:  # E[0] is realized, not planned — skip
                     return pyo.Constraint.Skip
                 return (
-                    mdl.E[t]
-                    >= mdl.E_lower[t] + r * mdl.x_fcr[t_to_fcr_slot[t]]
-                    - mdl.fcr_reserve_slack_dn[t]
+                    mdl.E[t] >= mdl.E_lower[t] + r * mdl.x_fcr[t_to_fcr_slot[t]] - mdl.fcr_reserve_slack_dn[t]
                 )
 
             m.fcr_E_reserve_up = pyo.Constraint(m.T_FCR, rule=_reserve_up)
             m.fcr_E_reserve_dn = pyo.Constraint(m.T_FCR, rule=_reserve_dn)
             m.fcr_E_reserve_up_next = pyo.Constraint(
                 m.T_FCR,
-                rule=lambda mdl, t: mdl.E[t + 1]
-                <= mdl.E_upper[t + 1] - r * mdl.x_fcr[t_to_fcr_slot[t]]
-                + mdl.fcr_reserve_slack_up[t + 1],
+                rule=lambda mdl, t: (
+                    mdl.E[t + 1]
+                    <= mdl.E_upper[t + 1] - r * mdl.x_fcr[t_to_fcr_slot[t]] + mdl.fcr_reserve_slack_up[t + 1]
+                ),
             )
             m.fcr_E_reserve_dn_next = pyo.Constraint(
                 m.T_FCR,
-                rule=lambda mdl, t: mdl.E[t + 1]
-                >= mdl.E_lower[t + 1] + r * mdl.x_fcr[t_to_fcr_slot[t]]
-                - mdl.fcr_reserve_slack_dn[t + 1],
+                rule=lambda mdl, t: (
+                    mdl.E[t + 1]
+                    >= mdl.E_lower[t + 1] + r * mdl.x_fcr[t_to_fcr_slot[t]] - mdl.fcr_reserve_slack_dn[t + 1]
+                ),
             )
 
         # Soft mid-band pull on FCR-covered states: discourages E from sitting
@@ -411,8 +405,7 @@ def flexibility_commercialization(
                 m.S_FCR_BAL = pyo.Set(initialize=fcr_states)
                 m.E_mid = pyo.Param(
                     m.S_FCR_BAL,
-                    initialize=lambda mdl, s: 0.5
-                    * (float(E_lower_arr[s]) + float(E_upper_arr[s])),
+                    initialize=lambda mdl, s: 0.5 * (float(E_lower_arr[s]) + float(E_upper_arr[s])),
                 )
                 m.e_balance_dev = pyo.Var(m.S_FCR_BAL, within=pyo.NonNegativeReals)
                 m.fcr_bal_up = pyo.Constraint(
@@ -455,8 +448,9 @@ def flexibility_commercialization(
         )
 
         m.p_market_def = pyo.Constraint(
-            m.MARKETS, m.T,
-            rule=lambda mdl, mk, t: mdl.p_market[mk, t] == mdl.p_market_pos[mk, t] - mdl.p_market_neg[mk, t]
+            m.MARKETS,
+            m.T,
+            rule=lambda mdl, mk, t: mdl.p_market[mk, t] == mdl.p_market_pos[mk, t] - mdl.p_market_neg[mk, t],
         )
 
         def total_export(mdl, t):
@@ -466,21 +460,17 @@ def flexibility_commercialization(
             return pyo.quicksum(mdl.p_market_pos[mk, t] for mk in mdl.MARKETS)
 
         m.export_mode_limit = pyo.Constraint(
-            m.T,
-            rule=lambda mdl, t: total_export(mdl, t) <= mdl.P_dis_max_t[t] * mdl.u_state[t]
+            m.T, rule=lambda mdl, t: total_export(mdl, t) <= mdl.P_dis_max_t[t] * mdl.u_state[t]
         )
         m.import_mode_limit = pyo.Constraint(
-            m.T,
-            rule=lambda mdl, t: total_import(mdl, t) <= mdl.P_ch_max_t[t] * (1.0 - mdl.u_state[t])
+            m.T, rule=lambda mdl, t: total_import(mdl, t) <= mdl.P_ch_max_t[t] * (1.0 - mdl.u_state[t])
         )
 
         m.p_dis_mode_limit = pyo.Constraint(
-            m.T,
-            rule=lambda mdl, t: mdl.p_dis[t] <= mdl.P_dis_max_t[t] * mdl.u_state[t]
+            m.T, rule=lambda mdl, t: mdl.p_dis[t] <= mdl.P_dis_max_t[t] * mdl.u_state[t]
         )
         m.p_ch_mode_limit = pyo.Constraint(
-            m.T,
-            rule=lambda mdl, t: mdl.p_ch[t] <= mdl.P_ch_max_t[t] * (1.0 - mdl.u_state[t])
+            m.T, rule=lambda mdl, t: mdl.p_ch[t] <= mdl.P_ch_max_t[t] * (1.0 - mdl.u_state[t])
         )
 
     # ============================================================
@@ -488,18 +478,12 @@ def flexibility_commercialization(
     # ============================================================
     # Each term is a named scalar Expression so a solved model can be decomposed term-by-term (used by the FCR breakeven analysis) while the objective stays the exact sum of the same expressions.
     m.obj_energy_cashflow = pyo.Expression(
-        expr=pyo.quicksum(
-            -m.price[mk, t] * m.p_market[mk, t] * m.dt
-            for mk in m.MARKETS for t in m.T
-        )
+        expr=pyo.quicksum(-m.price[mk, t] * m.p_market[mk, t] * m.dt for mk in m.MARKETS for t in m.T)
     )
 
     fee_cost = 0.0
     if any_fee:
-        fee_cost = pyo.quicksum(
-            m.fee[mk] * m.p_market_vol[mk, t] * m.dt
-            for mk in m.MARKETS for t in m.T
-        )
+        fee_cost = pyo.quicksum(m.fee[mk] * m.p_market_vol[mk, t] * m.dt for mk in m.MARKETS for t in m.T)
     m.obj_fee_cost = pyo.Expression(expr=fee_cost)
 
     # Cycling cost on total throughput. The mean FCR activation already flows through p_ch / p_dis via the balance, so this term captures cycling on |mean droop|.
@@ -508,8 +492,7 @@ def flexibility_commercialization(
     # Hidden FCR cycling: the term above only sees the mean droop folded into p_net, but the battery physically follows the per-second signal and cycles on mean|droop|. Charge the gap (mean|droop| - |mean droop|) per kW of committed FCR so the bid reflects true wear (~+30% throughput in practice). Zero unless the 15-min freq file carries FREQ_DROOP_ABS_MEAN, and gated by c_deg (= 0 when cycle regularization is disabled).
     if use_fcr:
         deg_cost = deg_cost + m.c_deg * pyo.quicksum(
-            m.fcr_hidden_droop[t] * m.x_fcr[t_to_fcr_slot[t]] * m.dt
-            for t in m.T if t in t_to_fcr_slot
+            m.fcr_hidden_droop[t] * m.x_fcr[t_to_fcr_slot[t]] * m.dt for t in m.T if t in t_to_fcr_slot
         )
     m.obj_cycling_cost = pyo.Expression(expr=deg_cost)
 
@@ -518,12 +501,9 @@ def flexibility_commercialization(
     imb_vol_pen = 0.0
     if allow_imbalance:
         imb_cash = pyo.quicksum(
-            (-m.price_imb_pos[t] * m.p_imb_pos[t] + m.price_imb_neg[t] * m.p_imb_neg[t]) * m.dt
-            for t in m.T
+            (-m.price_imb_pos[t] * m.p_imb_pos[t] + m.price_imb_neg[t] * m.p_imb_neg[t]) * m.dt for t in m.T
         )
-        imb_vol_pen = m.c_imb_vol * pyo.quicksum(
-            (m.p_imb_pos[t] + m.p_imb_neg[t]) * m.dt for t in m.T
-        )
+        imb_vol_pen = m.c_imb_vol * pyo.quicksum((m.p_imb_pos[t] + m.p_imb_neg[t]) * m.dt for t in m.T)
     m.obj_imb_cashflow = pyo.Expression(expr=imb_cash)
     m.obj_imb_vol_penalty = pyo.Expression(expr=imb_vol_pen)
 
@@ -538,25 +518,22 @@ def flexibility_commercialization(
     e_slack_pen = 0.0
     if allow_imbalance:
         # Heavy penalty — slack is a last resort to keep PASS2 feasible.
-        e_slack_pen = 1e6 * pyo.quicksum(
-            m.e_slack_up[s] + m.e_slack_dn[s] for s in m.S
-        )
+        e_slack_pen = 1e6 * pyo.quicksum(m.e_slack_up[s] + m.e_slack_dn[s] for s in m.S)
     m.obj_e_slack_penalty = pyo.Expression(expr=e_slack_pen)
 
     # Soft FCR energy-reserve penalty: cost per kWh that planned E intrudes into the droop headroom buffer. Sits well above arbitrage value and well below the imbalance penalties, so the reserve is held whenever that is cheaper than the imbalance it would otherwise prevent.
     reserve_pen = 0.0
     if fcr_reserve_penalty_eur_per_kwh > 0.0 and hasattr(m, "fcr_reserve_slack_up"):
         reserve_pen = fcr_reserve_penalty_eur_per_kwh * pyo.quicksum(
-            m.fcr_reserve_slack_up[s] + m.fcr_reserve_slack_dn[s]
-            for s in m.S_FCR_RESERVE
+            m.fcr_reserve_slack_up[s] + m.fcr_reserve_slack_dn[s] for s in m.S_FCR_RESERVE
         )
     m.obj_reserve_penalty = pyo.Expression(expr=reserve_pen)
 
     # Soft FCR mid-band penalty (pulls E toward the centre of its band on FCR-covered steps); dt-scaled so it is timestep-resolution independent.
     bal_pen = 0.0
     if fcr_balance_penalty_eur_per_kwh > 0.0 and hasattr(m, "e_balance_dev"):
-        bal_pen = fcr_balance_penalty_eur_per_kwh * m.dt * pyo.quicksum(
-            m.e_balance_dev[s] for s in m.S_FCR_BAL
+        bal_pen = (
+            fcr_balance_penalty_eur_per_kwh * m.dt * pyo.quicksum(m.e_balance_dev[s] for s in m.S_FCR_BAL)
         )
     m.obj_balance_penalty = pyo.Expression(expr=bal_pen)
 

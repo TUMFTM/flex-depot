@@ -41,13 +41,9 @@ MAX_OVERLAY_POINTS = 250_000
 def default_raw_path() -> pathlib.Path:
     """Find a raw Frequenz_*.csv (not *_15min) under data/prices/."""
     prices = pathlib.Path("data/prices")
-    candidates = sorted(
-        p for p in prices.glob("Frequenz_*.csv") if "_15min" not in p.name
-    )
+    candidates = sorted(p for p in prices.glob("Frequenz_*.csv") if "_15min" not in p.name)
     if not candidates:
-        raise FileNotFoundError(
-            "No raw Frequenz_*.csv found under data/prices/; pass --raw explicitly."
-        )
+        raise FileNotFoundError("No raw Frequenz_*.csv found under data/prices/; pass --raw explicitly.")
     return candidates[0].resolve()
 
 
@@ -114,7 +110,7 @@ def compute_slot_factors(droop: pd.Series) -> pd.DataFrame:
             "droop_std": g.std(),
             "droop_var": g.var(),
             "droop_abs_mean": abs_mean,
-            "abs_mean_gap": abs_mean_gap,   # mean(|d|) - |mean(d)| : the rectification gap
+            "abs_mean_gap": abs_mean_gap,  # mean(|d|) - |mean(d)| : the rectification gap
             "droop_abs_max": abs_max,
             "peak_to_mean": peak_to_mean,
             "sign_changes": sign_changes.astype(int),
@@ -128,9 +124,7 @@ def summary_text(fac: pd.DataFrame, start, end, raw_path) -> str:
     n = len(fac)
     sum_abs_mean = float(fac["droop_abs_mean"].sum())
     sum_abs_of_mean = float(fac["droop_mean"].abs().sum())
-    hidden_pct = (
-        100.0 * (sum_abs_mean / sum_abs_of_mean - 1.0) if sum_abs_of_mean > 0 else float("nan")
-    )
+    hidden_pct = 100.0 * (sum_abs_mean / sum_abs_of_mean - 1.0) if sum_abs_of_mean > 0 else float("nan")
     ptm = fac["peak_to_mean"].replace([np.inf, -np.inf], np.nan)
 
     lines = [
@@ -148,8 +142,7 @@ def summary_text(fac: pd.DataFrame, start, end, raw_path) -> str:
         "-- Rectification gap  mean(|d|) - |mean(d)| ------------------",
         f"Mean per slot   : {fac['abs_mean_gap'].mean():.4f}",
         f"Max  per slot   : {fac['abs_mean_gap'].max():.4f}",
-        f"Hidden cycling  : {hidden_pct:+.1f}%   "
-        "(Sigma mean(|d|) / Sigma |mean(d)| - 1, droop-signal level)",
+        f"Hidden cycling  : {hidden_pct:+.1f}%   (Sigma mean(|d|) / Sigma |mean(d)| - 1, droop-signal level)",
         "",
         "-- Spike magnitude / oscillation -----------------------------",
         f"Max peak-to-mean: {ptm.max():.1f}x   (max|d| / |mean(d)| over slots)",
@@ -182,8 +175,7 @@ def build_overlay(droop: pd.Series, fac: pd.DataFrame) -> "object":
         d_plot = droop.iloc[::stride]
         note = f" (1-s line downsampled 1:{stride})"
         print(
-            f"  overlay: {len(droop):,} 1-s points > {MAX_OVERLAY_POINTS:,}; "
-            f"downsampling raw line 1:{stride}"
+            f"  overlay: {len(droop):,} 1-s points > {MAX_OVERLAY_POINTS:,}; downsampling raw line 1:{stride}"
         )
 
     fig = go.Figure()
@@ -191,7 +183,9 @@ def build_overlay(droop: pd.Series, fac: pd.DataFrame) -> "object":
     # Raw 1-second droop (thin, faint)
     fig.add_trace(
         go.Scatter(
-            x=d_plot.index, y=d_plot.values, mode="lines",
+            x=d_plot.index,
+            y=d_plot.values,
+            mode="lines",
             name="droop (1s)",
             line=dict(width=0.7, color="rgba(80,80,80,0.55)"),
             hovertemplate="droop = %{y:.3f}<extra></extra>",
@@ -203,16 +197,24 @@ def build_overlay(droop: pd.Series, fac: pd.DataFrame) -> "object":
     lo_x, lo_y = _step_xy(fac["droop_mean"] - fac["droop_std"].fillna(0.0), slot)
     fig.add_trace(
         go.Scatter(
-            x=up_x, y=up_y, mode="lines", name="mean +1sigma",
+            x=up_x,
+            y=up_y,
+            mode="lines",
+            name="mean +1sigma",
             line=dict(width=0, color="rgba(0,101,189,0.0)"),
-            showlegend=False, hoverinfo="skip",
+            showlegend=False,
+            hoverinfo="skip",
         )
     )
     fig.add_trace(
         go.Scatter(
-            x=lo_x, y=lo_y, mode="lines", name="+/-1sigma band",
+            x=lo_x,
+            y=lo_y,
+            mode="lines",
+            name="+/-1sigma band",
             line=dict(width=0, color="rgba(0,101,189,0.0)"),
-            fill="tonexty", fillcolor="rgba(0,101,189,0.15)",
+            fill="tonexty",
+            fillcolor="rgba(0,101,189,0.15)",
             hoverinfo="skip",
         )
     )
@@ -221,7 +223,10 @@ def build_overlay(droop: pd.Series, fac: pd.DataFrame) -> "object":
     m_x, m_y = _step_xy(fac["droop_mean"], slot)
     fig.add_trace(
         go.Scatter(
-            x=m_x, y=m_y, mode="lines", name="slot mean (15min)",
+            x=m_x,
+            y=m_y,
+            mode="lines",
+            name="slot mean (15min)",
             line=dict(width=2, color="rgb(0,101,189)"),
             hovertemplate="mean = %{y:.3f}<extra></extra>",
         )
@@ -231,7 +236,10 @@ def build_overlay(droop: pd.Series, fac: pd.DataFrame) -> "object":
     am_x, am_y = _step_xy(fac["droop_abs_mean"], slot)
     fig.add_trace(
         go.Scatter(
-            x=am_x, y=am_y, mode="lines", name="mean(|d|) (15min)",
+            x=am_x,
+            y=am_y,
+            mode="lines",
+            name="mean(|d|) (15min)",
             line=dict(width=2, color="rgb(227,114,34)", dash="dot"),
             hovertemplate="mean|d| = %{y:.3f}<extra></extra>",
         )

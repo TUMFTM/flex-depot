@@ -7,7 +7,9 @@ LOCAL_TIMEZONE = "Europe/Berlin"
 INTERNAL_TIMEZONE = "UTC"
 
 
-def local_config_timestamp_to_utc(value: str | pd.Timestamp, *, local_tz: str = LOCAL_TIMEZONE) -> pd.Timestamp:
+def local_config_timestamp_to_utc(
+    value: str | pd.Timestamp, *, local_tz: str = LOCAL_TIMEZONE
+) -> pd.Timestamp:
     """
     Interpret a config timestamp as local market time and convert it to UTC.
 
@@ -39,9 +41,7 @@ def validate_regular_index(index: pd.DatetimeIndex, *, timestep_hours: float, na
     bad = diffs[diffs != expected]
     if not bad.empty:
         examples = [(str(ts), str(delta)) for ts, delta in bad.head(5).items()]
-        raise ValueError(
-            f"{name} is not regular at {expected}. Bad UTC step examples: {examples}"
-        )
+        raise ValueError(f"{name} is not regular at {expected}. Bad UTC step examples: {examples}")
 
 
 def localize_datetime_index(index: pd.DatetimeIndex, *, tz: str = LOCAL_TIMEZONE) -> pd.DatetimeIndex:

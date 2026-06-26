@@ -42,9 +42,7 @@ def _load_merged(config_path: str, default_path: str | None) -> Settings:
         os.unlink(tmp)
 
 
-def _run_one(
-    config_path: str, default_path: str | None = None, results_root: str | None = None
-) -> dict:
+def _run_one(config_path: str, default_path: str | None = None, results_root: str | None = None) -> dict:
     settings = _load_merged(config_path, default_path)
     run_dir = Path(results_root) / Path(config_path).stem if results_root else None
     run_dir = run_mpc(settings, run_dir=run_dir)
@@ -63,13 +61,15 @@ def main():
 
     p_mpc = sub.add_parser("run-sim")
     p_mpc.add_argument(
-        "--config", default=None,
+        "--config",
+        default=None,
         help="Path to a TOML config file (default: bundled settings_example.toml).",
     )
 
     p_plot_mpc = sub.add_parser("run-post")
     p_plot_mpc.add_argument(
-        "--config", default=None,
+        "--config",
+        default=None,
         help="Path to a TOML config file (default: the settings.toml saved in the latest run directory).",
     )
 
@@ -79,7 +79,8 @@ def main():
     p_batch.add_argument("configs_dir", help="Directory containing one TOML config per run.")
     p_batch.add_argument("--jobs", type=int, default=1, help="Parallel processes (default: 1).")
     p_batch.add_argument(
-        "--manifest", default=None,
+        "--manifest",
+        default=None,
         help="Manifest CSV path (default: <configs_dir>/results/manifest.csv).",
     )
 
@@ -99,9 +100,7 @@ def main():
         default_file = configs_dir / DEFAULT_TOML_NAME
         default_path = str(default_file) if default_file.is_file() else None
 
-        configs = sorted(
-            str(p) for p in configs_dir.glob("*.toml") if p.name != DEFAULT_TOML_NAME
-        )
+        configs = sorted(str(p) for p in configs_dir.glob("*.toml") if p.name != DEFAULT_TOML_NAME)
         if not configs:
             raise SystemExit(f"No *.toml configs found in {args.configs_dir}")
 

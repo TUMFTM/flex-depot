@@ -15,7 +15,8 @@ def infer_market_position_columns(dispatch: pd.DataFrame) -> list[str]:
     Excludes physical variables (p_ch/p_dis/p_net) and imbalance variables.
     """
     return [
-        c for c in dispatch.columns
+        c
+        for c in dispatch.columns
         if c.startswith("p_")
         and c.endswith("_kw")
         and c not in ("p_ch_kw", "p_dis_kw", "p_net_kw", "p_droop_kw", "p_imb_pos_kw", "p_imb_neg_kw")
@@ -329,9 +330,10 @@ def compute_kpis(
 
     total_cf_eur = float(cf_df["Total Cashflow [€/step]"].sum())
 
-    gross_profit_eur = total_cf_eur + fees_eur                             # total CF (DA/ID + IMB + FCR) plus fees (negative)
-    trading_profit_eur = total_cf_eur - imb_cost_eur - fcr_cf_eur                       # total CF less IMB and FCR -> pure scheduled-market (DA/ID) CF
-
+    gross_profit_eur = total_cf_eur + fees_eur  # total CF (DA/ID + IMB + FCR) plus fees (negative)
+    trading_profit_eur = (
+        total_cf_eur - imb_cost_eur - fcr_cf_eur
+    )  # total CF less IMB and FCR -> pure scheduled-market (DA/ID) CF
 
     return {
         "gross_profit_eur": gross_profit_eur,
@@ -343,4 +345,3 @@ def compute_kpis(
         "sell_kwh": float(sell_kwh),
         "buy_kwh": float(buy_kwh),
     }
-

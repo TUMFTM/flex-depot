@@ -147,7 +147,8 @@ def plot_market_cashflows_plotly(
             name="Cumulative Profit [€]",
             line=dict(width=3, color="rgb(162,173,0)"),
         ),
-        row=2, col=1
+        row=2,
+        col=1,
     )
 
     # Row 3: Sunbursts
@@ -161,7 +162,8 @@ def plot_market_cashflows_plotly(
             name="Energy",
             hovertemplate="%{label}<br>%{value:.2f}<extra></extra>",
         ),
-        row=3, col=1
+        row=3,
+        col=1,
     )
     fig.add_trace(
         go.Sunburst(
@@ -173,7 +175,8 @@ def plot_market_cashflows_plotly(
             name="Cashflow",
             hovertemplate="%{label}<br>%{value:.2f}<extra></extra>",
         ),
-        row=3, col=2
+        row=3,
+        col=2,
     )
 
     # Indented rows decompose Gross Profit:
@@ -217,7 +220,8 @@ def plot_market_cashflows_plotly(
                 font=dict(size=12),
             ),
         ),
-        row=3, col=3
+        row=3,
+        col=3,
     )
 
     fig.update_layout(
@@ -290,8 +294,10 @@ def plot_mpc_dispatch_plotly(
         if not isinstance(freq_df.index, pd.DatetimeIndex):
             has_freq_subplot = False
         else:
-            droop_col = FCR_DROOP_COL if FCR_DROOP_COL in freq_df.columns else next(
-                (c for c in freq_df.columns if "DROOP" in c.upper()), None
+            droop_col = (
+                FCR_DROOP_COL
+                if FCR_DROOP_COL in freq_df.columns
+                else next((c for c in freq_df.columns if "DROOP" in c.upper()), None)
             )
             if droop_col is None:
                 has_freq_subplot = False
@@ -353,7 +359,8 @@ def plot_mpc_dispatch_plotly(
                     line=dict(width=3, color=_rgb(mk if mk in MARKET_COLORS else "IMB")),
                     visible="legendonly" if is_imb_price else True,
                 ),
-                row=1, col=1
+                row=1,
+                col=1,
             )
 
     # Row 1 overlay: FCR clearing price vs. breakeven bid per slot (€/MW for the 4 h product; the shaded gap is the margin).
@@ -384,11 +391,16 @@ def plot_mpc_dispatch_plotly(
                 clearing_ys += [float(b_row["fcr_price"]), float(b_row["fcr_price"]), None]
             fig.add_trace(
                 go.Scatter(
-                    x=xs, y=clearing_ys, mode="lines", name="FCR Clearing [€/MW]",
-                    legendgroup="fcr_breakeven", line=dict(width=2, color=FCR_GREEN),
+                    x=xs,
+                    y=clearing_ys,
+                    mode="lines",
+                    name="FCR Clearing [€/MW]",
+                    legendgroup="fcr_breakeven",
+                    line=dict(width=2, color=FCR_GREEN),
                     hovertemplate="FCR clearing: %{y:.2f} €/MW<extra></extra>",
                 ),
-                row=1, col=1,
+                row=1,
+                col=1,
             )
 
             def _add_breakeven_group(sub_df, *, color, fill, name, group):
@@ -412,69 +424,124 @@ def plot_mpc_dispatch_plotly(
                     poly_ys += [clr, clr, bev, bev, clr, None]
                 fig.add_trace(
                     go.Scatter(
-                        x=poly_xs, y=poly_ys, mode="lines", fill="toself",
-                        fillcolor=fill, line=dict(width=0), legendgroup=group,
-                        showlegend=False, hoverinfo="skip",
+                        x=poly_xs,
+                        y=poly_ys,
+                        mode="lines",
+                        fill="toself",
+                        fillcolor=fill,
+                        line=dict(width=0),
+                        legendgroup=group,
+                        showlegend=False,
+                        hoverinfo="skip",
                     ),
-                    row=1, col=1,
+                    row=1,
+                    col=1,
                 )
                 fig.add_trace(
                     go.Scatter(
-                        x=gxs, y=breakeven_ys, mode="lines", name=name,
-                        legendgroup=group, line=dict(width=2, color=color, dash="dash"),
+                        x=gxs,
+                        y=breakeven_ys,
+                        mode="lines",
+                        name=name,
+                        legendgroup=group,
+                        line=dict(width=2, color=color, dash="dash"),
                         customdata=margins,
                         hovertemplate=(
-                            "FCR breakeven: %{y:.2f} €/MW<br>"
-                            "margin: %{customdata:.2f} €/MW<extra></extra>"
+                            "FCR breakeven: %{y:.2f} €/MW<br>margin: %{customdata:.2f} €/MW<extra></extra>"
                         ),
                     ),
-                    row=1, col=1,
+                    row=1,
+                    col=1,
                 )
 
             _add_breakeven_group(
-                bdf[~declined_mask], color=FCR_GREEN, fill=FCR_GREEN_LIGHT,
-                name="FCR Breakeven Bid [€/MW]", group="fcr_breakeven",
+                bdf[~declined_mask],
+                color=FCR_GREEN,
+                fill=FCR_GREEN_LIGHT,
+                name="FCR Breakeven Bid [€/MW]",
+                group="fcr_breakeven",
             )
             _add_breakeven_group(
-                bdf[declined_mask], color=FCR_RED, fill=FCR_RED_LIGHT,
-                name="FCR Entry Price (declined) [€/MW]", group="fcr_entry_price",
+                bdf[declined_mask],
+                color=FCR_RED,
+                fill=FCR_RED_LIGHT,
+                name="FCR Entry Price (declined) [€/MW]",
+                group="fcr_entry_price",
             )
 
     # Row 2: Power band + p_net
     fig.add_trace(
-        go.Scatter(x=dispatch.index, y=dispatch["P_upper_kw"], mode="lines", name="P upper [kW]",
-                   line=dict(width=1, color="rgba(0,0,0,0.5)")),
-        row=2, col=1
+        go.Scatter(
+            x=dispatch.index,
+            y=dispatch["P_upper_kw"],
+            mode="lines",
+            name="P upper [kW]",
+            line=dict(width=1, color="rgba(0,0,0,0.5)"),
+        ),
+        row=2,
+        col=1,
     )
     fig.add_trace(
-        go.Scatter(x=dispatch.index, y=dispatch["P_lower_kw"], mode="lines", name="P lower [kW]",
-                   fill="tonexty", line=dict(width=1, color="rgba(0,0,0,0.5)"),
-                   fillcolor="rgba(0,0,0,0.08)"),
-        row=2, col=1
+        go.Scatter(
+            x=dispatch.index,
+            y=dispatch["P_lower_kw"],
+            mode="lines",
+            name="P lower [kW]",
+            fill="tonexty",
+            line=dict(width=1, color="rgba(0,0,0,0.5)"),
+            fillcolor="rgba(0,0,0,0.08)",
+        ),
+        row=2,
+        col=1,
     )
     fig.add_trace(
-        go.Scatter(x=dispatch.index, y=dispatch["p_net_kw"], mode="lines", name="p_net [kW]",
-                   line=dict(width=3, color="rgb(162,173,0)")),
-        row=2, col=1
+        go.Scatter(
+            x=dispatch.index,
+            y=dispatch["p_net_kw"],
+            mode="lines",
+            name="p_net [kW]",
+            line=dict(width=3, color="rgb(162,173,0)"),
+        ),
+        row=2,
+        col=1,
     )
 
     # Row 3: Energy band + E
     fig.add_trace(
-        go.Scatter(x=dispatch.index, y=dispatch["E_upper_kWh"], mode="lines", name="E upper [kWh]",
-                   line=dict(width=1, color="rgba(0,0,0,0.5)")),
-        row=3, col=1
+        go.Scatter(
+            x=dispatch.index,
+            y=dispatch["E_upper_kWh"],
+            mode="lines",
+            name="E upper [kWh]",
+            line=dict(width=1, color="rgba(0,0,0,0.5)"),
+        ),
+        row=3,
+        col=1,
     )
     fig.add_trace(
-        go.Scatter(x=dispatch.index, y=dispatch["E_lower_kWh"], mode="lines", name="E lower [kWh]",
-                   fill="tonexty", line=dict(width=1, color="rgba(0,0,0,0.5)"),
-                   fillcolor="rgba(0,0,0,0.08)"),
-        row=3, col=1
+        go.Scatter(
+            x=dispatch.index,
+            y=dispatch["E_lower_kWh"],
+            mode="lines",
+            name="E lower [kWh]",
+            fill="tonexty",
+            line=dict(width=1, color="rgba(0,0,0,0.5)"),
+            fillcolor="rgba(0,0,0,0.08)",
+        ),
+        row=3,
+        col=1,
     )
 
     fig.add_trace(
-        go.Scatter(x=dispatch.index, y=dispatch["E_kWh"], mode="lines", name="E [kWh]",
-                   line=dict(width=3, color="rgb(162,173,0)")),
-        row=3, col=1
+        go.Scatter(
+            x=dispatch.index,
+            y=dispatch["E_kWh"],
+            mode="lines",
+            name="E [kWh]",
+            line=dict(width=3, color="rgb(162,173,0)"),
+        ),
+        row=3,
+        col=1,
     )
 
     # Row 4: Market positions
@@ -504,12 +571,11 @@ def plot_mpc_dispatch_plotly(
                 marker_color=colors,
                 customdata=custom,
                 hovertemplate=(
-                    "%{y:.1f} kW<br>"
-                    "%{customdata[0]}<br>"
-                    "Committed at: %{customdata[1]}<extra></extra>"
+                    "%{y:.1f} kW<br>%{customdata[0]}<br>Committed at: %{customdata[1]}<extra></extra>"
                 ),
             ),
-            row=4, col=1
+            row=4,
+            col=1,
         )
 
     if has_fcr and x_fcr_dense is not None:
@@ -544,11 +610,11 @@ def plot_mpc_dispatch_plotly(
                 line=dict(width=2, color=FCR_GREEN),
                 customdata=custom_fcr,
                 hovertemplate=(
-                    "FCR: ±%{customdata[0]:.0f} kW<br>"
-                    "Committed at: %{customdata[1]}<extra></extra>"
+                    "FCR: ±%{customdata[0]:.0f} kW<br>Committed at: %{customdata[1]}<extra></extra>"
                 ),
             ),
-            row=4, col=1,
+            row=4,
+            col=1,
         )
         fig.add_trace(
             go.Scatter(
@@ -562,12 +628,12 @@ def plot_mpc_dispatch_plotly(
                 line=dict(width=2, color=FCR_GREEN, dash="dot"),
                 customdata=custom_fcr,
                 hovertemplate=(
-                    "FCR: ±%{customdata[0]:.0f} kW<br>"
-                    "Committed at: %{customdata[1]}<extra></extra>"
+                    "FCR: ±%{customdata[0]:.0f} kW<br>Committed at: %{customdata[1]}<extra></extra>"
                 ),
                 showlegend=False,
             ),
-            row=4, col=1,
+            row=4,
+            col=1,
         )
 
     # Imbalance net position
@@ -577,16 +643,20 @@ def plot_mpc_dispatch_plotly(
         labels = ["Buy" if v > 0 else "Sell" if v < 0 else "Neutral" for v in p_imb_net]
 
         if has_used_flag:
-            used_str = dispatch["used_rebap"].astype(bool).map(lambda x: "reBAP used" if x else "no reBAP").values
+            used_str = (
+                dispatch["used_rebap"].astype(bool).map(lambda x: "reBAP used" if x else "no reBAP").values
+            )
         else:
             used_str = ["reBAP unknown"] * len(dispatch)
 
-        custom = pd.DataFrame({
-            "side": labels,
-            "used": used_str,
-            "pos": dispatch["p_imb_pos_kw"].values,
-            "neg": dispatch["p_imb_neg_kw"].values,
-        }).values
+        custom = pd.DataFrame(
+            {
+                "side": labels,
+                "used": used_str,
+                "pos": dispatch["p_imb_pos_kw"].values,
+                "neg": dispatch["p_imb_neg_kw"].values,
+            }
+        ).values
 
         fig.add_trace(
             go.Bar(
@@ -604,7 +674,8 @@ def plot_mpc_dispatch_plotly(
                     "<extra></extra>"
                 ),
             ),
-            row=4, col=1
+            row=4,
+            col=1,
         )
 
     # Highlight reBAP usage
@@ -617,20 +688,24 @@ def plot_mpc_dispatch_plotly(
             if (not flag) and start is not None:
                 end = ts
                 fig.add_vrect(
-                    x0=start, x1=end,
+                    x0=start,
+                    x1=end,
                     fillcolor="rgba(120,80,160,0.12)",
                     line_width=0,
                     layer="below",
-                    row=4, col=1
+                    row=4,
+                    col=1,
                 )
                 start = None
         if start is not None:
             fig.add_vrect(
-                x0=start, x1=dispatch.index[-1],
+                x0=start,
+                x1=dispatch.index[-1],
                 fillcolor="rgba(120,80,160,0.12)",
                 line_width=0,
                 layer="below",
-                row="all", col=1
+                row="all",
+                col=1,
             )
 
     fig.update_yaxes(title_text="Price [€/MWh]", row=1, col=1)
@@ -640,10 +715,7 @@ def plot_mpc_dispatch_plotly(
 
     if has_freq_subplot and freq_resampled is not None and p_droop_kw is not None:
         # Import-positive convention: + = depot charges (downward FCR), - = depot discharges.
-        bar_colors = [
-            "rgba(31,119,180,0.75)" if v > 0 else "rgba(214,39,40,0.75)"
-            for v in p_droop_kw
-        ]
+        bar_colors = ["rgba(31,119,180,0.75)" if v > 0 else "rgba(214,39,40,0.75)" for v in p_droop_kw]
         fig.add_trace(
             go.Bar(
                 x=p_droop_kw.index,
@@ -651,13 +723,11 @@ def plot_mpc_dispatch_plotly(
                 name="FCR Activation Power [kW]",
                 marker_color=bar_colors,
                 yaxis="y5",
-                hovertemplate=(
-                    "FCR power: %{y:.1f} kW<br>"
-                    "(+charge / -discharge)<extra></extra>"
-                ),
+                hovertemplate=("FCR power: %{y:.1f} kW<br>(+charge / -discharge)<extra></extra>"),
                 opacity=0.85,
             ),
-            row=5, col=1,
+            row=5,
+            col=1,
         )
 
         fig.update_yaxes(title_text="Power [kW]", row=5, col=1)
@@ -671,13 +741,15 @@ def plot_mpc_dispatch_plotly(
                 line=dict(width=1.5, color="rgba(80,80,80,0.7)"),
                 hovertemplate="droop = %{y:.3f}<extra></extra>",
             ),
-            row=6, col=1,
+            row=6,
+            col=1,
         )
 
         fig.add_hline(
             y=0.0,
             line=dict(width=1, color="rgba(0,0,0,0.3)", dash="dash"),
-            row=6, col=1,
+            row=6,
+            col=1,
         )
 
         fig.update_yaxes(title_text="Droop [-1, 1]", row=6, col=1)

@@ -13,6 +13,7 @@ import pandas as pd
 
 API = "https://api.energy-charts.info/price"
 
+
 def fetch_da_prices(start: str, end: str, bzn: str = "DE-LU") -> pd.Series:
     url = f"{API}?bzn={bzn}&start={start}&end={end}"
     with urllib.request.urlopen(url, timeout=60) as r:

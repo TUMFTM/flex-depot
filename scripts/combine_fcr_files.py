@@ -25,5 +25,7 @@ if __name__ == "__main__":
 
     prices = get_fcr_prices(out)
     assert not prices.empty, "combined file produced no prices"
-    print(f"Wrote {os.path.basename(out)}: {len(prices)} slot prices, "
-          f"{prices.index.min()} -> {prices.index.max()}")
+    print(
+        f"Wrote {os.path.basename(out)}: {len(prices)} slot prices, "
+        f"{prices.index.min()} -> {prices.index.max()}"
+    )

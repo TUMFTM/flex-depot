@@ -141,16 +141,13 @@ def read_latest_run_pointer(results_root: str | Path = "results") -> Path:
 
     if not latest_path.exists():
         raise FileNotFoundError(
-            f"No latest run pointer found at {latest_path.resolve()}. "
-            "Run `run-sim` first."
+            f"No latest run pointer found at {latest_path.resolve()}. Run `run-sim` first."
         )
 
     run_dir = Path(latest_path.read_text(encoding="utf-8").strip())
 
     if not run_dir.exists():
-        raise FileNotFoundError(
-            f"Latest run directory from LATEST.txt does not exist: {run_dir}"
-        )
+        raise FileNotFoundError(f"Latest run directory from LATEST.txt does not exist: {run_dir}")
 
     return run_dir
 

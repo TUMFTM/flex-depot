@@ -4,8 +4,8 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 FCR_FREQ_DATETIME_COL = "DATETIME"
-FCR_DROOP_COL         = "FREQ_DROOP_MEAN"
-FCR_DROOP_ABS_COL     = "FREQ_DROOP_ABS_MEAN"
+FCR_DROOP_COL = "FREQ_DROOP_MEAN"
+FCR_DROOP_ABS_COL = "FREQ_DROOP_ABS_MEAN"
 
 
 def droop_signal(
@@ -63,19 +63,14 @@ def get_fcr_frequency_data(file_path: str, tz: str = "Europe/Berlin") -> pd.Data
         df = df.drop(columns=[FCR_FREQ_DATETIME_COL])
 
     if not pd.api.types.is_numeric_dtype(df[FCR_DROOP_COL]):
-        df[FCR_DROOP_COL] = (
-            df[FCR_DROOP_COL].astype(str)
-            .str.replace(",", ".", regex=False)
-        )
+        df[FCR_DROOP_COL] = df[FCR_DROOP_COL].astype(str).str.replace(",", ".", regex=False)
 
     df[FCR_DROOP_COL] = pd.to_numeric(df[FCR_DROOP_COL], errors="coerce")
 
     cols = [FCR_DROOP_COL]
     if FCR_DROOP_ABS_COL in df.columns:
         if not pd.api.types.is_numeric_dtype(df[FCR_DROOP_ABS_COL]):
-            df[FCR_DROOP_ABS_COL] = (
-                df[FCR_DROOP_ABS_COL].astype(str).str.replace(",", ".", regex=False)
-            )
+            df[FCR_DROOP_ABS_COL] = df[FCR_DROOP_ABS_COL].astype(str).str.replace(",", ".", regex=False)
         df[FCR_DROOP_ABS_COL] = pd.to_numeric(df[FCR_DROOP_ABS_COL], errors="coerce")
         cols.append(FCR_DROOP_ABS_COL)
 
@@ -93,9 +88,7 @@ def get_fcr_prices(file_path: str) -> pd.Series:
     df["start_hour"] = df["PRODUCTNAME"].str.split("_").str[1].astype(int)
     df["datetime"] = pd.to_datetime(df["DATE_FROM"]) + pd.to_timedelta(df["start_hour"], unit="h")
 
-    df = df.set_index("datetime").tz_localize(
-        "Europe/Berlin", ambiguous="infer", nonexistent="shift_forward"
-    )
+    df = df.set_index("datetime").tz_localize("Europe/Berlin", ambiguous="infer", nonexistent="shift_forward")
 
     price_col = "GERMANY_SETTLEMENTCAPACITY_PRICE_[EUR/MW]"
     prices = (

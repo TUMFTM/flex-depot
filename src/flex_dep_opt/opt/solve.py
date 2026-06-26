@@ -23,6 +23,7 @@ def _cbc_executable() -> str | None:
 
     return None
 
+
 def _make_solver(solver_name: str):
     """
     Build a Pyomo solver factory, raising a RuntimeError if it is unavailable.
@@ -138,7 +139,7 @@ def solve_model(
 
     results = opt.solve(model, tee=tee)
 
-    status_ok = (results.solver.status == pyo.SolverStatus.ok)
+    status_ok = results.solver.status == pyo.SolverStatus.ok
     term = results.solver.termination_condition
 
     if not status_ok:
@@ -154,7 +155,6 @@ def solve_model(
         )
 
     return results
-
 
 
 # =============================================================================
@@ -216,9 +216,7 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index: pd.DatetimeIndex) -> 
     T_list = list(model.T)
     T_len = len(T_list)
     if len(time_index) != T_len:
-        raise ValueError(
-            f"time_index length ({len(time_index)}) does not match model horizon ({T_len})."
-        )
+        raise ValueError(f"time_index length ({len(time_index)}) does not match model horizon ({T_len}).")
 
     df = pd.DataFrame(index=time_index)
 
@@ -232,8 +230,8 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index: pd.DatetimeIndex) -> 
     # -------------------------
     # Energy state (S = 0..N): publish both E[t] and E[t+1] aligned to time_index.
     # -------------------------
-    df["E_kWh"] = [pyo.value(model.E[t]) for t in T_list]            # state at timestamp (start of interval)
-    df["E_next_kWh"] = [pyo.value(model.E[t + 1]) for t in T_list]   # state after interval
+    df["E_kWh"] = [pyo.value(model.E[t]) for t in T_list]  # state at timestamp (start of interval)
+    df["E_next_kWh"] = [pyo.value(model.E[t + 1]) for t in T_list]  # state after interval
 
     # ---------------------------------------------------------------
     # FCR (read straight from the model; no recomputation downstream)

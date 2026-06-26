@@ -129,6 +129,7 @@ logging.getLogger("gurobipy").setLevel(logging.WARNING)
 logging.getLogger("pyomo").setLevel(logging.WARNING)
 logging.getLogger("pyomo.core").setLevel(logging.ERROR)
 
+
 def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
     """
     Rolling-horizon Model Predictive Control (MPC).
@@ -244,9 +245,7 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
     imb_neg_full = prices_by_market.pop("IMB_NEG", None)
 
     # slice fcr prices to simulation window
-    fcr_prices_full = fcr_prices_full.loc[
-        (fcr_prices_full.index >= start) & (fcr_prices_full.index <= end)
-    ]
+    fcr_prices_full = fcr_prices_full.loc[(fcr_prices_full.index >= start) & (fcr_prices_full.index <= end)]
 
     all_fcr_slot_starts = list(fcr_prices_full.index)
 
@@ -290,9 +289,7 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
     # ============================================================
     committed_positions = {mk: pd.Series(0.0, index=full_index) for mk in prices_by_market.keys()}
 
-    committed_fcr_slots: dict[pd.Timestamp, float] = {
-        slot: 0.0 for slot in all_fcr_slot_starts
-    }
+    committed_fcr_slots: dict[pd.Timestamp, float] = {slot: 0.0 for slot in all_fcr_slot_starts}
 
     # ============================================================
     # 7) Initialize energy state (band-consistent)
@@ -300,7 +297,8 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
     if flexibility_bounds_full is not None:
         E_state = 0.5 * (
             flexibility_bounds_full["Capacity_lower_kWh"].iloc[0]
-            + flexibility_bounds_full["Capacity_upper_kWh"].iloc[0])
+            + flexibility_bounds_full["Capacity_upper_kWh"].iloc[0]
+        )
     else:
         E_state = 0.0
 
@@ -326,9 +324,9 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
             # 9.1) Define rolling optimization window
             # --------------------------------------------------------
             N_total = len(full_index)
-            window_end = min(i + da_horizon_steps, N_total)   # exclusive end for decisions
-            window_idx = full_index[i:window_end]             # decision timestamps
-            window_state_idx = full_state_index[i:window_end + 1]  # state timestamps (decisions + 1)
+            window_end = min(i + da_horizon_steps, N_total)  # exclusive end for decisions
+            window_idx = full_index[i:window_end]  # decision timestamps
+            window_state_idx = full_state_index[i : window_end + 1]  # state timestamps (decisions + 1)
 
             if len(window_idx) == 0:
                 break
@@ -342,16 +340,24 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                 align_and_validate_flexibility_bounds(
                     bounds=flexibility_bounds_full,
                     time_index=window_state_idx,
-                    expected_len=len(window_state_idx),)
+                    expected_len=len(window_state_idx),
+                )
                 if flexibility_bounds_full is not None
-                else None)
+                else None
+            )
 
-            window_imb_pos = (imb_pos_full.loc[window_idx] if (imb_enabled and imb_pos_full is not None) else None)
-            window_imb_neg = (imb_neg_full.loc[window_idx] if (imb_enabled and imb_neg_full is not None) else None)
+            window_imb_pos = (
+                imb_pos_full.loc[window_idx] if (imb_enabled and imb_pos_full is not None) else None
+            )
+            window_imb_neg = (
+                imb_neg_full.loc[window_idx] if (imb_enabled and imb_neg_full is not None) else None
+            )
 
             # fcr gates
             window_start = window_idx[0]
-            window_end_ts = window_idx[-1] + pd.Timedelta(hours=fcr_product_hours)  # last slot may start up to one product length before window end
+            window_end_ts = window_idx[-1] + pd.Timedelta(
+                hours=fcr_product_hours
+            )  # last slot may start up to one product length before window end
 
             # Include any slot that *overlaps* the window, not only those starting
             # inside it. An already-running slot (gate closed, bid committed) still
@@ -359,8 +365,8 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
             # only the slot-start step ever sees nonzero p_droop.
             slot_duration = pd.Timedelta(hours=fcr_product_hours)
             window_fcr_prices = fcr_prices_full.loc[
-                (fcr_prices_full.index + slot_duration > window_start) &
-                (fcr_prices_full.index < window_end_ts)
+                (fcr_prices_full.index + slot_duration > window_start)
+                & (fcr_prices_full.index < window_end_ts)
             ]
 
             # gate-open mask for slots in this window
@@ -404,9 +410,7 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                 # horizon the droop signal is reset to 0.0 so the optimizer plans
                 # for no FCR activation there. The current step (at current_time)
                 # always keeps its real value.
-                fcr_freq_horizon_end = current_time + pd.Timedelta(
-                    minutes=fcr_frequency_horizon_minutes
-                )
+                fcr_freq_horizon_end = current_time + pd.Timedelta(minutes=fcr_frequency_horizon_minutes)
                 beyond_horizon = window_freq_data.index > fcr_freq_horizon_end
                 window_freq_data.loc[beyond_horizon, FCR_DROOP_COL] = 0.0
             else:
@@ -417,7 +421,9 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
             # --------------------------------------------------------
             def _build_model(allow_imbalance: bool, imb_penalty: float) -> object:
                 _m = flexibility_commercialization(
-                    depot=Depot(dep_cfg.eta_grid2depot, dep_cfg.eta_depot2grid, dep_cfg.grid_connection_limit),
+                    depot=Depot(
+                        dep_cfg.eta_grid2depot, dep_cfg.eta_depot2grid, dep_cfg.grid_connection_limit
+                    ),
                     prices_by_market=window_prices,
                     fee_eur_per_kwh_by_market=fees_by_market,
                     timestep_hours=step_hours,
@@ -425,8 +431,7 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                     cycling_cost_eur_per_kwh=c_cyc,
                     market_activity_mask=decision_masks,
                     committed_positions={
-                        mk: committed_positions[mk].loc[window_idx]
-                        for mk in committed_positions
+                        mk: committed_positions[mk].loc[window_idx] for mk in committed_positions
                     },
                     flexibility_bounds=window_flexibility_bounds,
                     allow_imbalance=allow_imbalance,
@@ -516,7 +521,9 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                     solved = False
                 else:
                     tqdm.write("PASS1 infeasible → Imbalance activated (PASS2)")
-                    logger.info(f"PASS1 infeasible at {current_time} → trying PASS2 (imbalance). Details: {e1}")
+                    logger.info(
+                        f"PASS1 infeasible at {current_time} → trying PASS2 (imbalance). Details: {e1}"
+                    )
 
                     model2 = _build_model(
                         allow_imbalance=True,
@@ -605,20 +612,24 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                     slot = model._fcr_slot_starts[j]
                     gate_ts = _fcr_gate_ts(slot)
                     if current_time < gate_ts and next_time >= gate_ts:
-                        closing_slots.append((
-                            j,
-                            slot,
-                            gate_ts,
-                            float(pyo.value(model.x_fcr[j])),
-                            float(pyo.value(model.fcr_slot_revenue[j])),
-                        ))
+                        closing_slots.append(
+                            (
+                                j,
+                                slot,
+                                gate_ts,
+                                float(pyo.value(model.x_fcr[j])),
+                                float(pyo.value(model.fcr_slot_revenue[j])),
+                            )
+                        )
 
                 # Breakeven counterfactuals: re-solve the same window once per slot with that slot's FCR decision flipped and every other FCR bid pinned at its solve-A value. Runs on the bid (before the acceptance draw) and is purely diagnostic — nothing reads the model after this block, and the acceptance draws below use the snapshotted bids, so results are identical flag on/off.
                 #   - committed slot: force it OFF (z_fcr=0) -> opportunity cost of holding it; margin >= 0.
                 #   - declined slot (zero bid, only with breakeven_include_zero_bid): force one block ON -> the "entry price" it would need; margin <= 0.
                 breakeven_by_slot: dict[pd.Timestamp, dict] = {}
-                do_breakeven = fcr_breakeven_enabled and closing_slots and (
-                    any(b[3] > 0 for b in closing_slots) or fcr_breakeven_include_zero_bid
+                do_breakeven = (
+                    fcr_breakeven_enabled
+                    and closing_slots
+                    and (any(b[3] > 0 for b in closing_slots) or fcr_breakeven_include_zero_bid)
                 )
                 if do_breakeven:
                     terms_a = extract_objective_terms(model)
@@ -629,7 +640,9 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                     for j, slot, gate_ts, bid_val, rev_eur in closing_slots:
                         if bid_val <= 0 and not fcr_breakeven_include_zero_bid:
                             continue
-                        covered_fraction = float(fcr_slot_hours_by_slot.get(slot, fcr_product_hours)) / fcr_product_hours
+                        covered_fraction = (
+                            float(fcr_slot_hours_by_slot.get(slot, fcr_product_hours)) / fcr_product_hours
+                        )
                         fcr_price = float(window_fcr_prices.loc[slot])
                         if bid_val > 0:
                             forced_z = 0  # committed: flip off
@@ -637,7 +650,10 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                             # Declined: flip one block on — but only if the slot can host one. The z_fcr bound is cap_max // block, so a slot with < 1 MW of capacity has bound 0 and can never be bid; there is no entry price to compute.
                             forced_z = 1 if (model.z_fcr[j].ub or 0) >= 1 else 0
                             if forced_z == 0:
-                                breakeven_by_slot[slot] = {"breakeven_status": "no_capacity", **_FCR_BREAKEVEN_NAN}
+                                breakeven_by_slot[slot] = {
+                                    "breakeven_status": "no_capacity",
+                                    **_FCR_BREAKEVEN_NAN,
+                                }
                                 continue
                         model.z_fcr[j].fix(forced_z)
                         try:
@@ -645,17 +661,22 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                             terms_cf = extract_objective_terms(model)
                             if bid_val > 0:
                                 metrics = _fcr_breakeven_metrics(
-                                    terms_a, terms_cf,
-                                    bid_kw=bid_val, rev_eur=rev_eur,
-                                    fcr_price=fcr_price, covered_fraction=covered_fraction,
+                                    terms_a,
+                                    terms_cf,
+                                    bid_kw=bid_val,
+                                    rev_eur=rev_eur,
+                                    fcr_price=fcr_price,
+                                    covered_fraction=covered_fraction,
                                 )
                             else:
                                 # Declined slot: the forced solve holds the bid, the actual solve (terms_a) is the "without" side.
                                 metrics = _fcr_breakeven_metrics(
-                                    terms_cf, terms_a,
+                                    terms_cf,
+                                    terms_a,
                                     bid_kw=fcr_bid_block_kw,
                                     rev_eur=float(pyo.value(model.fcr_slot_revenue[j])),
-                                    fcr_price=fcr_price, covered_fraction=covered_fraction,
+                                    fcr_price=fcr_price,
+                                    covered_fraction=covered_fraction,
                                 )
                                 metrics["breakeven_status"] = "ok_entry_price"
                             breakeven_by_slot[slot] = metrics
@@ -663,7 +684,10 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                             logger.warning(
                                 f"[{current_time}] FCR breakeven counterfactual failed for slot {slot}: {e}"
                             )
-                            breakeven_by_slot[slot] = {"breakeven_status": "solve_failed", **_FCR_BREAKEVEN_NAN}
+                            breakeven_by_slot[slot] = {
+                                "breakeven_status": "solve_failed",
+                                **_FCR_BREAKEVEN_NAN,
+                            }
                         model.z_fcr[j].fix(z_vals_a[j])
 
                     for k in model.S_FCR:
@@ -685,19 +709,23 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                         },
                     )
 
-                    fcr_commit_rows.append({
-                        "slot_start": slot,
-                        "gate_closure_time": gate_ts,
-                        "committed_at": current_time,
-                        "bid_kw": bid_val,
-                        "x_fcr_kw": committed_val,
-                        "x_fcr_mw": committed_val / 1000.0,
-                        "accepted": accepted,
-                        "fcr_price": fcr_price_val,
-                        "slot_hours": slot_hours,
-                        "fcr_revenue_eur": (committed_val / 1000.0) * fcr_price_val * (slot_hours / fcr_product_hours),
-                        **breakeven_cols,
-                    })
+                    fcr_commit_rows.append(
+                        {
+                            "slot_start": slot,
+                            "gate_closure_time": gate_ts,
+                            "committed_at": current_time,
+                            "bid_kw": bid_val,
+                            "x_fcr_kw": committed_val,
+                            "x_fcr_mw": committed_val / 1000.0,
+                            "accepted": accepted,
+                            "fcr_price": fcr_price_val,
+                            "slot_hours": slot_hours,
+                            "fcr_revenue_eur": (committed_val / 1000.0)
+                            * fcr_price_val
+                            * (slot_hours / fcr_product_hours),
+                            **breakeven_cols,
+                        }
+                    )
 
                     if bid_val > 0:
                         if accepted:
@@ -725,7 +753,9 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
         # --- Read simulation "name" from settings ---
         name = sim_cfg.name.strip()
         if not name:
-            raise ValueError("simulation.name must be set in the settings file (e.g. 'illustrative_example').")
+            raise ValueError(
+                "simulation.name must be set in the settings file (e.g. 'illustrative_example')."
+            )
 
         # --- Create per-run output directory (name + timestamp), unless caller
         #     supplied an explicit run_dir (e.g. batch mode names it per config) ---
@@ -776,4 +806,3 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
         print("MPC finished → Postprocessing starts")
 
     return run_dir
-

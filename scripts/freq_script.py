@@ -4,11 +4,12 @@ import pandas as pd
 
 from flex_dep_opt.market.fcr import droop_signal
 
-# FCR droop is a fixed product spec (50 Hz nominal, +-10 mHz deadband, full activation at +-200 mHz) 
+# FCR droop is a fixed product spec (50 Hz nominal, +-10 mHz deadband, full activation at +-200 mHz)
 # hardcoded here so this resample script has no dependency on the run config.
 _FREQ_NOMINAL_HZ = 50.0
 _FREQ_DEADBAND_HZ = 0.010
 _FREQ_FULL_ACTIVATION_HZ = 0.200
+
 
 def load_frequency_file(path: pathlib.Path) -> pd.DataFrame:
     df = None
@@ -37,10 +38,7 @@ def load_frequency_file(path: pathlib.Path) -> pd.DataFrame:
 
     missing = [k for k in ("date", "time", "freq") if k not in col_map]
     if missing:
-        raise ValueError(
-            f"Could not find columns for: {missing}.\n"
-            f"Columns found: {list(df.columns)}"
-        )
+        raise ValueError(f"Could not find columns for: {missing}.\nColumns found: {list(df.columns)}")
 
     datetime_str = df[col_map["date"]].str.strip() + " " + df[col_map["time"]].str.strip()
     df["DATETIME"] = (
@@ -49,23 +47,23 @@ def load_frequency_file(path: pathlib.Path) -> pd.DataFrame:
         .dt.tz_convert("UTC")
     )
 
-    df["FREQUENCY_HZ"] = (
-        df[col_map["freq"]]
-        .str.strip()
-        .str.replace(",", ".", regex=False)
-        .astype(float)
-    )
+    df["FREQUENCY_HZ"] = df[col_map["freq"]].str.strip().str.replace(",", ".", regex=False).astype(float)
 
     df = df[["DATETIME", "FREQUENCY_HZ"]].set_index("DATETIME").sort_index()
     return df
 
+
 def resample_to_15min(df: pd.DataFrame) -> pd.DataFrame:
-    resampled = df["FREQUENCY_HZ"].resample("15min").agg(
-        FREQ_MEAN_HZ="mean",
-        FREQ_MIN_HZ="min",
-        FREQ_MAX_HZ="max",
-        FREQ_STD_HZ="std",
-        SAMPLE_COUNT="count",
+    resampled = (
+        df["FREQUENCY_HZ"]
+        .resample("15min")
+        .agg(
+            FREQ_MEAN_HZ="mean",
+            FREQ_MIN_HZ="min",
+            FREQ_MAX_HZ="max",
+            FREQ_STD_HZ="std",
+            SAMPLE_COUNT="count",
+        )
     )
     dev_max = (resampled["FREQ_MAX_HZ"] - _FREQ_NOMINAL_HZ).abs()
     dev_min = (resampled["FREQ_MIN_HZ"] - _FREQ_NOMINAL_HZ).abs()
@@ -89,6 +87,7 @@ def save_output(df: pd.DataFrame, path: pathlib.Path) -> None:
     df.to_csv(path, index=False, sep=",")
     print(f"Saved {len(df):,} rows → {path}")
 
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
@@ -107,11 +106,11 @@ def main():
 
     print(f"Reading  : {input_path}")
     df_raw = load_frequency_file(input_path)
-    print(f"Loaded   : {len(df_raw):,} samples  "
-          f"({df_raw.index[0]} → {df_raw.index[-1]})")
+    print(f"Loaded   : {len(df_raw):,} samples  ({df_raw.index[0]} → {df_raw.index[-1]})")
 
     df_15min = resample_to_15min(df_raw)
     save_output(df_15min, output_path)
+
 
 if __name__ == "__main__":
     main()

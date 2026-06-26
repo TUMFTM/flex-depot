@@ -24,6 +24,7 @@ class Depot:
         This limit applies symmetrically to charging and discharging.
 
     """
+
     eta_grid2depot: float
     eta_depot2grid: float
     grid_connection_limit: float

@@ -19,9 +19,7 @@ from flex_dep_opt.post.metrics import (
 from flex_dep_opt.post.plots import plot_market_cashflows_plotly, plot_mpc_dispatch_plotly
 
 
-def postprocess_mpc_results(
-    settings: Settings | None = None, run_dir: Path | None = None
-) -> None:
+def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | None = None) -> None:
     """
     Postprocessing workflow for MPC results.
 
@@ -41,8 +39,7 @@ def postprocess_mpc_results(
         run_settings_path = run_dir / "settings.toml"
         if not run_settings_path.exists():
             raise FileNotFoundError(
-                f"No settings.toml found in {run_dir}. "
-                "Pass an explicit config with --config."
+                f"No settings.toml found in {run_dir}. Pass an explicit config with --config."
             )
         settings = Settings.load(run_settings_path)
 
@@ -97,9 +94,13 @@ def postprocess_mpc_results(
     if fcr_commit_csv.exists():
         fcr_cdf = pd.read_csv(fcr_commit_csv)
         if "slot_start" in fcr_cdf.columns:
-            fcr_cdf["slot_start"] = pd.to_datetime(fcr_cdf["slot_start"], utc=True).dt.tz_convert("Europe/Berlin")
+            fcr_cdf["slot_start"] = pd.to_datetime(fcr_cdf["slot_start"], utc=True).dt.tz_convert(
+                "Europe/Berlin"
+            )
         if "committed_at" in fcr_cdf.columns:
-            fcr_cdf["committed_at"] = pd.to_datetime(fcr_cdf["committed_at"], utc=True).dt.tz_convert("Europe/Berlin")
+            fcr_cdf["committed_at"] = pd.to_datetime(fcr_cdf["committed_at"], utc=True).dt.tz_convert(
+                "Europe/Berlin"
+            )
         fcr_commit_df = fcr_cdf
 
     # -------------------------------------------------------------------------
@@ -125,15 +126,23 @@ def postprocess_mpc_results(
     if fcr_commit_df is not None and not fcr_commit_df.empty:
         accepted = (
             fcr_commit_df[fcr_commit_df["accepted"].astype(bool)]
-            if "accepted" in fcr_commit_df.columns else fcr_commit_df
+            if "accepted" in fcr_commit_df.columns
+            else fcr_commit_df
         )
-        committed_mask = accepted["x_fcr_kw"] > 0 if "x_fcr_kw" in accepted.columns else pd.Series(False, index=accepted.index)
+        committed_mask = (
+            accepted["x_fcr_kw"] > 0
+            if "x_fcr_kw" in accepted.columns
+            else pd.Series(False, index=accepted.index)
+        )
         fcr_kpis = {
-            "fcr_revenue_eur": float(accepted["fcr_revenue_eur"].sum()) if "fcr_revenue_eur" in accepted.columns else 0.0,
+            "fcr_revenue_eur": float(accepted["fcr_revenue_eur"].sum())
+            if "fcr_revenue_eur" in accepted.columns
+            else 0.0,
             "fcr_slots_committed": int(committed_mask.sum()),
             "fcr_avg_capacity_mw": (
                 float(accepted.loc[committed_mask, "x_fcr_mw"].mean())
-                if "x_fcr_mw" in accepted.columns and committed_mask.any() else 0.0
+                if "x_fcr_mw" in accepted.columns and committed_mask.any()
+                else 0.0
             ),
         }
 
@@ -205,8 +214,7 @@ def postprocess_mpc_results(
         try:
             fcr_frequency_data_pp = get_fcr_frequency_data(fcr_cfg.frequency_source)
             fcr_frequency_data_pp = fcr_frequency_data_pp.loc[
-                (fcr_frequency_data_pp.index >= start) &
-                (fcr_frequency_data_pp.index <= end)
+                (fcr_frequency_data_pp.index >= start) & (fcr_frequency_data_pp.index <= end)
             ]
             # align with the local-time plot axis
             fcr_frequency_data_pp.index = fcr_frequency_data_pp.index.tz_convert(LOCAL_TIMEZONE)
@@ -232,7 +240,7 @@ def postprocess_mpc_results(
         fcr_product_hours=fcr_cfg.product_hours,
     )
     fig_dispatch.write_html(dispatch_html, include_plotlyjs="cdn")
-    #webbrowser.open(dispatch_html.resolve().as_uri())
+    # webbrowser.open(dispatch_html.resolve().as_uri())
 
     # -------------------------------------------------------------------------
     # Plot 2: cashflow report (plots consume precomputed metrics)
@@ -247,7 +255,7 @@ def postprocess_mpc_results(
         title="Market Cashflows",
     )
     fig_cf.write_html(cashflow_html, include_plotlyjs="cdn")
-    #webbrowser.open(cashflow_html.resolve().as_uri())
+    # webbrowser.open(cashflow_html.resolve().as_uri())
 
     print(f"Result CSV files saved → {run_dir.as_posix()}")
     print(f"Result HTML plots saved → {run_dir.as_posix()}")

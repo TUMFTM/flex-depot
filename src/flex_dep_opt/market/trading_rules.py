@@ -69,9 +69,7 @@ def gate_closure_timestamp(
         gc_h, gc_m = _parse_hhmm(gc_hour_str)
 
         base_date = (
-            delivery_local.normalize() - pd.Timedelta(days=1)
-            if closes_prev
-            else delivery_local.normalize()
+            delivery_local.normalize() - pd.Timedelta(days=1) if closes_prev else delivery_local.normalize()
         )
         # `normalize()` preserves tz-awareness; adding Timedelta keeps tz-awareness
         return (base_date + pd.Timedelta(hours=gc_h, minutes=gc_m)).tz_convert(output_tz)
@@ -179,4 +177,3 @@ def build_market_activity_mask_for_time(
 
     # Unknown mode: return empty masks (explicit and safe)
     return mask_by_market
-

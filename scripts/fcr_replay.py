@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import pathlib
@@ -11,6 +10,7 @@ import pandas as pd
 from flex_dep_opt.market.fcr import droop_signal
 
 TZ = "Europe/Berlin"
+
 
 def resolve_run_dir(arg: str | None) -> pathlib.Path:
     if arg:
@@ -38,6 +38,7 @@ def raw_freq_path(settings: dict, override: str | None) -> pathlib.Path:
     raw = p.with_name(p.name.replace("_15min", ""))
     return raw.expanduser().resolve()
 
+
 def load_raw_frequency(path: pathlib.Path, start, end) -> pd.Series:
     """Load the raw 'DATE;TIME;FREQUENCY_[HZ]' file, filtered to [start, end]."""
     # Set of "dd.mm.yyyy" date strings spanning the window (inclusive, +1 day).
@@ -64,9 +65,7 @@ def load_raw_frequency(path: pathlib.Path, start, end) -> pd.Series:
         df[date_col].str.strip() + " " + df[time_col].str.strip(),
         format="%d.%m.%Y %H:%M:%S",
     )
-    freq = (
-        df[freq_col].str.strip().str.replace(",", ".", regex=False).astype(float)
-    )
+    freq = df[freq_col].str.strip().str.replace(",", ".", regex=False).astype(float)
     s = pd.Series(freq.values, index=pd.DatetimeIndex(dt))
     s = s.tz_localize(TZ, ambiguous="infer", nonexistent="shift_forward").sort_index()
     s = s[~s.index.duplicated(keep="first")]
@@ -110,9 +109,7 @@ def replay(run_dir: pathlib.Path, raw_freq_override: str | None) -> None:
     raw_path = raw_freq_path(settings, raw_freq_override)
     print(f"Raw freq  : {raw_path}")
     freq = load_raw_frequency(raw_path, start, end)
-    droop = droop_signal(
-        freq, nominal_hz=nominal, deadband_hz=deadband, full_activation_hz=full
-    )
+    droop = droop_signal(freq, nominal_hz=nominal, deadband_hz=deadband, full_activation_hz=full)
     print(f"Loaded    : {len(freq):,} 1-second samples\n")
 
     step = pd.Timedelta(hours=dt_h)
@@ -122,11 +119,11 @@ def replay(run_dir: pathlib.Path, raw_freq_override: str | None) -> None:
     for ts, row in fcr_steps.iterrows():
         C = float(row["x_fcr_kw"])
         p_net = float(row["p_net_kw"])
-        p_droop_mean = float(row["p_droop_kw"])      # = -droop_mean * C
-        p_sched = p_net - p_droop_mean               # markets+imbalance (const over slot)
-        model_droop = float(row["fcr_droop"])        # slot droop the MODEL committed to
+        p_droop_mean = float(row["p_droop_kw"])  # = -droop_mean * C
+        p_sched = p_net - p_droop_mean  # markets+imbalance (const over slot)
+        model_droop = float(row["fcr_droop"])  # slot droop the MODEL committed to
 
-        d = droop.loc[ts: ts + step - pd.Timedelta(seconds=1)].to_numpy(dtype=float)
+        d = droop.loc[ts : ts + step - pd.Timedelta(seconds=1)].to_numpy(dtype=float)
         n = d.size
         if n == 0:
             continue
@@ -151,33 +148,35 @@ def replay(run_dir: pathlib.Path, raw_freq_override: str | None) -> None:
         lo = float(row["E_lower_kWh"]) + (float(row["E_lower_next_kWh"]) - float(row["E_lower_kWh"])) * frac
         up = float(row["E_upper_kWh"]) + (float(row["E_upper_next_kWh"]) - float(row["E_upper_kWh"])) * frac
 
-        over = np.maximum(e - up, 0.0)     # breach above upper bound
-        under = np.maximum(lo - e, 0.0)    # breach below lower bound
+        over = np.maximum(e - up, 0.0)  # breach above upper bound
+        under = np.maximum(lo - e, 0.0)  # breach below lower bound
         headroom = np.minimum(up - e, e - lo)  # min distance to a hard bound (<0 = breach)
 
         # throughput (raw physical signal)
         modeled_thru = (float(row["p_ch_kw"]) + float(row["p_dis_kw"])) * dt_h
         true_thru = float(np.sum(np.abs(p_true)) * dt_s)
 
-        rows.append({
-            "time": ts,
-            "x_fcr_kw": C,
-            "droop_mean": true_mean,
-            "model_droop": model_droop,
-            "mean_gap_kwh": mean_gap_kwh,
-            "droop_abs_mean": float(np.mean(np.abs(d))),
-            "droop_abs_max": float(np.max(np.abs(d))),
-            "modeled_throughput_kwh": modeled_thru,
-            "true_throughput_kwh": true_thru,
-            "hidden_throughput_kwh": true_thru - modeled_thru,
-            "E_end_true": float(e[-1]),
-            "E_end_model": float(row["E_next_kWh"]),
-            "peak_over_upper_kwh": float(np.max(over)),
-            "peak_under_lower_kwh": float(np.max(under)),
-            "min_headroom_kwh": float(np.min(headroom)),
-            "reserve_kwh": r_kwh_per_kw * C,
-            "samples": n,
-        })
+        rows.append(
+            {
+                "time": ts,
+                "x_fcr_kw": C,
+                "droop_mean": true_mean,
+                "model_droop": model_droop,
+                "mean_gap_kwh": mean_gap_kwh,
+                "droop_abs_mean": float(np.mean(np.abs(d))),
+                "droop_abs_max": float(np.max(np.abs(d))),
+                "modeled_throughput_kwh": modeled_thru,
+                "true_throughput_kwh": true_thru,
+                "hidden_throughput_kwh": true_thru - modeled_thru,
+                "E_end_true": float(e[-1]),
+                "E_end_model": float(row["E_next_kWh"]),
+                "peak_over_upper_kwh": float(np.max(over)),
+                "peak_under_lower_kwh": float(np.max(under)),
+                "min_headroom_kwh": float(np.min(headroom)),
+                "reserve_kwh": r_kwh_per_kw * C,
+                "samples": n,
+            }
+        )
 
     rep = pd.DataFrame(rows).set_index("time")
 
@@ -245,8 +244,7 @@ def replay(run_dir: pathlib.Path, raw_freq_override: str | None) -> None:
         "-- Hidden SoC excursions / imbalance -------------------------",
         f"Steps breaching hard energy band : {n_breach} / {n_steps}",
         f"Total peak breach energy         : {breach_energy:,.2f} kWh",
-        f"Worst reserve-buffer utilization : {worst_util:.0%}  "
-        f"(reserve = {reserve_min:g} min/kW)",
+        f"Worst reserve-buffer utilization : {worst_util:.0%}  (reserve = {reserve_min:g} min/kW)",
         "",
         "-- Spike magnitude -------------------------------------------",
         f"Max(|droop|_peak / |droop|_mean) : {peak_to_mean:.1f}x   "

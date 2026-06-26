@@ -128,9 +128,7 @@ def align_and_validate_flexibility_bounds(
         raise ValueError("time_index must be timezone-aware")
 
     if expected_len is not None and len(time_index) != int(expected_len):
-        raise ValueError(
-            f"time_index length mismatch: got {len(time_index)}, expected {int(expected_len)}"
-        )
+        raise ValueError(f"time_index length mismatch: got {len(time_index)}, expected {int(expected_len)}")
 
     missing_cols = [c for c in REQUIRED_COLS if c != "time" and c not in bounds.columns]
     if missing_cols:
