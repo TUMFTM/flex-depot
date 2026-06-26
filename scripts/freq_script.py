@@ -38,7 +38,11 @@ def load_frequency_file(path: pathlib.Path) -> pd.DataFrame:
         )
 
     datetime_str = df[col_map["date"]].str.strip() + " " + df[col_map["time"]].str.strip()
-    df["DATETIME"] = pd.to_datetime(datetime_str, format="%d.%m.%Y %H:%M:%S")
+    df["DATETIME"] = (
+        pd.to_datetime(datetime_str, format="%d.%m.%Y %H:%M:%S")
+        .dt.tz_localize("Europe/Berlin", ambiguous="infer", nonexistent="shift_forward")
+        .dt.tz_convert("UTC")
+    )
 
     df["FREQUENCY_HZ"] = (
         df[col_map["freq"]]

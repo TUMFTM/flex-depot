@@ -12,14 +12,13 @@ import urllib.request
 import pandas as pd
 
 API = "https://api.energy-charts.info/price"
-TZ = "Europe/Berlin"
 
 def fetch_da_prices(start: str, end: str, bzn: str = "DE-LU") -> pd.Series:
     url = f"{API}?bzn={bzn}&start={start}&end={end}"
     with urllib.request.urlopen(url, timeout=60) as r:
         data = json.load(r)
 
-    idx = pd.to_datetime(data["unix_seconds"], unit="s", utc=True).tz_convert(TZ)
+    idx = pd.to_datetime(data["unix_seconds"], unit="s", utc=True)
     prices = (pd.Series(data["price"], index=idx, name="price") / 1000.0).round(5)
     prices.index.name = "time"
     return prices.dropna()
