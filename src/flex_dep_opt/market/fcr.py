@@ -1,6 +1,7 @@
 import warnings
 from zoneinfo import ZoneInfo
 
+import numpy as np
 import pandas as pd
 
 FCR_FREQ_DATETIME_COL = "DATETIME"
@@ -15,9 +16,17 @@ def droop_signal(
     deadband_hz: float,
     full_activation_hz: float,
 ) -> pd.Series:
+    """
+    FCR droop signal in [-1, +1]. No activation inside the deadband, then a
+    linear ramp from the deadband edge up to full activation
+    """
+    span = full_activation_hz - deadband_hz
+    if span <= 0:
+        raise ValueError("full_activation_hz must be greater than deadband_hz")
     delta_f = freq - nominal_hz
-    droop = (-delta_f / full_activation_hz).clip(-1.0, 1.0)
-    return droop.where(delta_f.abs() >= deadband_hz, 0.0)
+    excess = (delta_f.abs() - deadband_hz).clip(lower=0.0)
+    magnitude = (excess / span).clip(upper=1.0)
+    return -np.sign(delta_f) * magnitude
 
 
 def fcr_gate_closure_timestamp(

@@ -10,11 +10,17 @@ def test_droop_sign_and_deadband():
     freq = pd.Series([50.0, 50.005, 49.9, 50.1, 49.98])
     d = droop_signal(freq, **_KW)
 
+    # Ramp is linear from the deadband edge: magnitude = (|df| - 0.010) / (0.200 - 0.010).
+    span = 0.200 - 0.010
     assert d.iloc[0] == 0.0  # at nominal -> 0
     assert d.iloc[1] == 0.0  # inside deadband -> 0
-    assert abs(d.iloc[2] - 0.5) < 1e-9  # low freq  -> upward FCR -> droop > 0
-    assert abs(d.iloc[3] + 0.5) < 1e-9  # high freq -> downward FCR -> droop < 0
-    assert abs(d.iloc[4] - 0.1) < 1e-9  # past deadband -> kept (0.02 / 0.2)
+    assert abs(d.iloc[2] - (0.090 / span)) < 1e-9  # low freq  -> upward FCR -> droop > 0
+    assert abs(d.iloc[3] + (0.090 / span)) < 1e-9  # high freq -> downward FCR -> droop < 0
+    assert abs(d.iloc[4] - (0.010 / span)) < 1e-9  # just past deadband -> small activation
+
+    # Continuous at the deadband edge: |df| = 0.010 gives ~0, not a jump to 0.05.
+    edge = droop_signal(pd.Series([50.0 - 0.010]), **_KW)
+    assert abs(edge.iloc[0]) < 1e-9
 
 
 def test_droop_clipped_to_unit_interval():
