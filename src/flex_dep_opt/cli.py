@@ -2,12 +2,12 @@ import argparse
 import multiprocessing as mp
 import os
 import tempfile
-import tomllib
 from functools import partial
 from pathlib import Path
 
 import pandas as pd
 import toml
+import tomllib
 
 from flex_dep_opt.config.settings import Settings
 from flex_dep_opt.workflows.mpc_workflow import run_mpc

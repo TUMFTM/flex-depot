@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pandas as pd
 
-
 LOCAL_TIMEZONE = "Europe/Berlin"
 INTERNAL_TIMEZONE = "UTC"
 

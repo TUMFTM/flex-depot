@@ -23,13 +23,13 @@ from flex_dep_opt.io.results_io import (
     save_table_to_csv,
     write_latest_run_pointer,
 )
+from flex_dep_opt.io.time_utils import LOCAL_TIMEZONE, local_config_timestamp_to_utc, validate_regular_index
 from flex_dep_opt.market.fcr import (
     FCR_DROOP_COL,
     fcr_gate_closure_timestamp,
     get_fcr_frequency_data,
     get_fcr_prices,
 )
-from flex_dep_opt.io.time_utils import LOCAL_TIMEZONE, local_config_timestamp_to_utc, validate_regular_index
 from flex_dep_opt.market.trading_rules import (
     build_market_activity_mask_for_time,
     gate_closure_timestamp,
@@ -117,17 +117,18 @@ class _TqdmLoggingHandler(logging.Handler):
             self.handleError(record)
 
 
-_root_logger = logging.getLogger()
-if not any(isinstance(h, _TqdmLoggingHandler) for h in _root_logger.handlers):
-    for h in list(_root_logger.handlers):
-        _root_logger.removeHandler(h)
-    _handler = _TqdmLoggingHandler()
-    _handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
-    _root_logger.addHandler(_handler)
-    _root_logger.setLevel(logging.INFO)
-logging.getLogger("gurobipy").setLevel(logging.WARNING)
-logging.getLogger("pyomo").setLevel(logging.WARNING)
-logging.getLogger("pyomo.core").setLevel(logging.ERROR)
+def _configure_logging() -> None:
+    root_logger = logging.getLogger()
+    if not any(isinstance(h, _TqdmLoggingHandler) for h in root_logger.handlers):
+        for h in list(root_logger.handlers):
+            root_logger.removeHandler(h)
+        handler = _TqdmLoggingHandler()
+        handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+        root_logger.addHandler(handler)
+        root_logger.setLevel(logging.INFO)
+    logging.getLogger("gurobipy").setLevel(logging.WARNING)
+    logging.getLogger("pyomo").setLevel(logging.WARNING)
+    logging.getLogger("pyomo.core").setLevel(logging.ERROR)
 
 
 def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
@@ -146,6 +147,7 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
     Gate-closure times are computed in the market layer via `gate_closure_timestamp()`.
     This ensures mask enforcement and commit logging use the exact same rules.
     """
+    _configure_logging()
     run_started_at = datetime.now(ZoneInfo(LOCAL_TIMEZONE))
 
     # ============================================================
