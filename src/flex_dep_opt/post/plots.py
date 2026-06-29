@@ -767,3 +767,49 @@ def plot_mpc_dispatch_plotly(
     )
 
     return fig
+
+def plot_mpc_fcr_plotly(fcr, fcr_resampled, title) -> go.Figure:
+
+    fig = make_subplots(
+        rows=1, cols=1,
+        subplot_titles=("Symmetric FCR Capacity (4h Blocks)",),
+    )
+
+    fig.add_trace(go.Scatter(
+        x=fcr.index, 
+        y=fcr['inst_symmetric_limit'], 
+        name="Inst. Symm Limit (15m)",
+        line=dict(color='rgba(150,150,150,0.2)', width=1, dash='dot'),
+        showlegend=True
+    ), row=1, col=1)
+
+    fig.add_trace(go.Scatter(
+        x=fcr_resampled.index, 
+        y=fcr_resampled, 
+        name="FCR Capacity (+)",
+        line=dict(color='#2ca02c', width=3), 
+        line_shape='hv'
+    ), row=1, col=1)
+
+    fig.add_trace(go.Scatter(
+        x=fcr_resampled.index, 
+        y=-fcr_resampled,
+        name="FCR Capacity (-)",
+        line=dict(color='#2ca02c', width=3),
+        line_shape='hv',
+        fill='tonexty',
+        fillcolor='rgba(44, 160, 44, 0.1)'
+    ), row=1, col=1)
+
+    # 4. Layout & Styling
+    fig.update_layout(
+        title=title,
+        template="plotly_white",
+        height=600, 
+        hovermode="x unified",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    
+    fig.update_yaxes(title_text="FCR Capacity [kWh]", row=1, col=1)
+
+    return fig
