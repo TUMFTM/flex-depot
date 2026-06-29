@@ -93,7 +93,7 @@ def flexibility_commercialization(
     eta_d_val = float(depot.eta_depot2grid)
 
     # ============================================================
-    # 2) FCR pre-processing (slots, droop signal, throughput coef)
+    # 2) FCR pre-processing (slots, droop signal, hidden-cycling signal)
     # ============================================================
     use_fcr = False
     slot_steps: dict[int, list[int]] = {}
@@ -143,9 +143,7 @@ def flexibility_commercialization(
     fcr_headroom = max(fcr_cap_max_vals.values()) if (use_fcr and fcr_cap_max_vals) else 0.0
     p_market_bound = p_market_max_value + fcr_headroom
 
-    # Per-step signed droop d[t] in [-1, +1].
-    # d > 0  -> low frequency  -> upward FCR   -> depot exports
-    # d < 0  -> high frequency -> downward FCR -> depot imports
+    # Per-step signed droop d[t] in [-1, +1] (sign convention: see p_droop below).
     droop_by_t = np.zeros(N, dtype=float)
     hidden_droop_by_t = np.zeros(N, dtype=float)
     if use_fcr and fcr_frequency_data is not None and not fcr_frequency_data.empty:
@@ -235,6 +233,7 @@ def flexibility_commercialization(
 
         m.p_droop = pyo.Expression(m.T, rule=_p_droop_rule)
 
+        # EUR/MW price -> EUR/kW (/1000); prorate by covered fraction of the 4h product.
         m.fcr_slot_revenue = pyo.Expression(
             m.S_FCR,
             rule=lambda mdl, j: (
