@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pathlib
 import sys
-import tomllib
 
 import numpy as np
 import pandas as pd
+import tomllib
 
 from flex_dep_opt.market.fcr import droop_signal
 

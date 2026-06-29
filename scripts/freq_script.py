@@ -1,5 +1,6 @@
-import sys
 import pathlib
+import sys
+
 import pandas as pd
 
 from flex_dep_opt.market.fcr import droop_signal
