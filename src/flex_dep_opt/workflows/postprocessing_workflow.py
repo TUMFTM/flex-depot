@@ -12,6 +12,10 @@ from flex_dep_opt.post.metrics import (
     compute_market_aggregates,
     compute_kpis,
 )
+from flex_dep_opt.post.reference_energy_costs import (
+    DEFAULT_REFERENCE_ENERGY_COLUMN,
+    compute_reference_driving_energy_costs,
+)
 from flex_dep_opt.post.plots import plot_market_cashflows_plotly, plot_mpc_dispatch_plotly
 from flex_dep_opt.io.results_io import save_dispatch_to_csv, save_summary_to_csv, read_latest_run_pointer
 
@@ -119,6 +123,42 @@ def postprocess_mpc_results(cfg: dict) -> None:
 
     # KPIs: single row
     save_summary_to_csv(kpis, kpi_csv)
+
+    # -------------------------------------------------------------------------
+    # Optional static-price reference scenario for driving energy
+    # -------------------------------------------------------------------------
+    post_cfg = cfg.get("postprocessing", {}) or {}
+    if not isinstance(post_cfg, dict):
+        raise ValueError("settings.yaml: postprocessing must be a mapping if provided.")
+    ref_cfg = post_cfg.get("reference_driving_energy_costs", {}) or {}
+    if not isinstance(ref_cfg, dict):
+        raise ValueError("settings.yaml: postprocessing.reference_driving_energy_costs must be a mapping.")
+    if ref_cfg.get("enabled", False):
+        static_price = ref_cfg.get("static_price_eur_per_kwh")
+        if static_price is None:
+            raise ValueError(
+                "settings.yaml: postprocessing.reference_driving_energy_costs.static_price_eur_per_kwh "
+                "must be set when reference calculation is enabled."
+            )
+
+        flex_file = cfg["optimization"].get("flexibility", {}).get("bounds_file")
+        if not flex_file:
+            raise ValueError("settings.yaml: optimization.flexibility.bounds_file must be set.")
+
+        reference_df, reference_summary = compute_reference_driving_energy_costs(
+            flex_file,
+            start=start,
+            end=end,
+            static_price_eur_per_kwh=float(static_price),
+            energy_column=str(ref_cfg.get("energy_column", DEFAULT_REFERENCE_ENERGY_COLUMN)),
+        )
+        reference_csv = run_dir / "reference_driving_energy_costs.csv"
+        save_dispatch_to_csv(reference_df, reference_csv, include_time_column=True, output_tz=LOCAL_TIMEZONE)
+        print(
+            "Reference driving energy costs: "
+            f"{reference_summary['ref_energy_cost_eur']:.2f} EUR "
+            f"for {reference_summary['ref_driving_energy_kwh']:.2f} kWh"
+        )
 
     # -------------------------------------------------------------------------
     # HTML output paths (same base names as config entries)

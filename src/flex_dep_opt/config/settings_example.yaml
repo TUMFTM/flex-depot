@@ -40,7 +40,7 @@ optimization:
     terminal_weight_eur_per_kwh: 50                         # €/kWh
 
   flexibility:
-    bounds_file: "data/flexibility/vb_bounds_example.csv"
+    bounds_file: "data/flexibility/vb_bounds_example_new.csv"
     cycle_regularization:
       enabled: true
       cost_eur_per_kwh_throughput: 0.02                     # €/kWh
@@ -50,5 +50,9 @@ optimization:
     eta_depot2grid : 1.0                                    # efficiency export
     grid_connection_limit: 10000                            # grid connection limit in kWp
 
-
+postprocessing:
+  reference_driving_energy_costs:
+    enabled: true                                          # "true", "false"
+    static_price_eur_per_kwh: 0.30                          # EUR/kWh
+    energy_column: "Ref_driving_energy_kWh"                 # kWh per timestep
 
