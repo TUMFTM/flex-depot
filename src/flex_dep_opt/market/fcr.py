@@ -4,8 +4,6 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
-from flex_dep_opt.io.flexibility_io import read_flexibility_bounds_csv
-
 FCR_FREQ_DATETIME_COL = "DATETIME"
 FCR_DROOP_COL = "FREQ_DROOP_MEAN"
 FCR_DROOP_ABS_COL = "FREQ_DROOP_ABS_MEAN"
@@ -112,25 +110,3 @@ def get_fcr_prices(file_path: str) -> pd.Series:
         prices = prices.groupby(level=0).first()
 
     return prices
-
-
-def generate_fcr_availability_df(settings):
-    """
-    Symmetric FCR capacity availability derived from the flexibility bounds.
-
-    Returns the per-step bounds frame with an added ``inst_symmetric_limit``
-    column (min of the absolute upper/lower capacity bounds) and that series
-    resampled to 4 h auction blocks (min within each block).
-    """
-    flexibility_bounds_full = read_flexibility_bounds_csv(settings.optimization.flexibility.bounds_file)
-
-    symmetric_limit = flexibility_bounds_full.copy()
-    # for fcr we need the symmetric limit: min of the upper and lower capacity bounds
-    symmetric_limit["inst_symmetric_limit"] = (
-        symmetric_limit[["Capacity_upper_kWh", "Capacity_lower_kWh"]].abs().min(axis=1)
-    )
-
-    # resample to 4h blocks (min within each block) → capacity for 4h auctions
-    fcr_grouped = symmetric_limit["inst_symmetric_limit"].resample("4h", label="left", closed="left").min()
-
-    return symmetric_limit, fcr_grouped

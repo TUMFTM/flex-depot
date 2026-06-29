@@ -16,9 +16,7 @@ from flex_dep_opt.post.metrics import (
     compute_kpis,
     compute_market_aggregates,
 )
-from flex_dep_opt.post.plots import plot_market_cashflows_plotly, plot_mpc_fcr_plotly, plot_mpc_dispatch_plotly
-
-from flex_dep_opt.market.fcr import generate_fcr_availability_df
+from flex_dep_opt.post.plots import plot_market_cashflows_plotly, plot_mpc_dispatch_plotly
 
 
 def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | None = None) -> None:
@@ -206,7 +204,6 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
     # -------------------------------------------------------------------------
     dispatch_html = run_dir / "dispatch.html"
     cashflow_html = run_dir / "cashflow.html"
-    dev_html = run_dir / "dev.html"
 
     # -------------------------------------------------------------------------
     # Plot 1: dispatch report
@@ -259,16 +256,6 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
     )
     fig_cf.write_html(cashflow_html, include_plotlyjs="cdn")
     # webbrowser.open(cashflow_html.resolve().as_uri())
-
-    fcr, fcr_resampled = generate_fcr_availability_df(settings)
-
-    fig_dev = plot_mpc_fcr_plotly(
-        fcr=fcr,
-        fcr_resampled=fcr_resampled,
-        title="fcr test plot",
-    )
-    fig_dev.write_html(dev_html, include_plotlyjs="cdn")
-    # webbrowser.open(dev_html.resolve().as_uri())
 
     print(f"Result CSV files saved → {run_dir.as_posix()}")
     print(f"Result HTML plots saved → {run_dir.as_posix()}")
