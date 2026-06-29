@@ -195,7 +195,7 @@ def plot_market_cashflows_plotly(
     )
 
     kpi_rows = [
-        ("Flex-Depot Optimization", ""),
+        ("Flex-Depot Optimization (V2G & Driving)", ""),
         ("Gross Profit", f"{float(kpis['gross_profit_eur']):.1f} €"),
         ("      Trading Profit", f"{float(kpis['trading_profit_eur']):.1f} €"),
         ("      Trading Fees", f"{float(kpis['fees_eur']):.1f} €"),
@@ -211,7 +211,7 @@ def plot_market_cashflows_plotly(
         total_potential_eur = float(kpis["gross_profit_eur"]) - reference_gross_profit_eur
         kpi_rows.extend([
             ("", ""),
-            ("Reference Scenario", ""),
+            ("Reference Scenario (Driving only)", ""),
             ("Gross Profit", f"{reference_gross_profit_eur:.1f} €"),
             ("Driving Energy", f"{float(reference_summary['ref_driving_energy_kwh']):.1f} kWh"),
             ("Static Price", f"{float(reference_summary['ref_static_price_eur_per_kwh']):.3f} €/kWh"),
@@ -221,8 +221,8 @@ def plot_market_cashflows_plotly(
         ])
 
     section_labels = {
-        "Flex-Depot Optimization",
-        "Reference Scenario",
+        "Flex-Depot Optimization (V2G & Driving)",
+        "Reference Scenario (Driving only)",
         "Total Potential Flex-Depot Optimization",
     }
     section_rows = {
