@@ -59,6 +59,12 @@ _PENALTY_TERM_NAMES = (
     "obj_balance_penalty",
 )
 
+# Declined-slot breakeven: if forcing the block ON drives more than this fraction
+# of the opportunity cost into the FCR reserve-slack penalty, the slot had power
+# room but no SoC room. the "entry price" is then a penalty artifact, not an
+# economic signal, so we report no_soc_room instead.
+_BREAKEVEN_SOC_ROOM_PENALTY_FRAC = 0.5
+
 
 def _fcr_breakeven_metrics(
     terms_with: dict[str, float],
@@ -681,6 +687,20 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                                     covered_fraction=covered_fraction,
                                 )
                                 metrics["breakeven_status"] = "ok_entry_price"
+                                # SoC-room guard: the slot had power room (forced_z=1
+                                # was feasible) but if most of the opp cost is just
+                                # reserve-slack penalty, there was no SoC room and the
+                                # entry price is a penalty artifact, not an economic signal.
+                                forced_reserve_pen = (
+                                    terms_cf["obj_reserve_penalty"] - terms_a["obj_reserve_penalty"]
+                                )
+                                if forced_reserve_pen > _BREAKEVEN_SOC_ROOM_PENALTY_FRAC * abs(
+                                    metrics["opp_cost_eur"]
+                                ):
+                                    metrics = {
+                                        "breakeven_status": "no_soc_room",
+                                        **_FCR_BREAKEVEN_NAN,
+                                    }
                             breakeven_by_slot[slot] = metrics
                         except RuntimeError as e:
                             logger.warning(

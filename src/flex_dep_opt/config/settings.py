@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import toml
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict, TomlConfigSettingsSource
 
 
@@ -61,6 +61,17 @@ class TradingSettings(BaseModel):
     dayahead: TradingDayahead
     intraday: TradingIntraday
     fcr: FCRSettings
+
+    @model_validator(mode="after")
+    def _fcr_requires_realistic_mode(self) -> "TradingSettings":
+        # FCR always commits at its real D-1 gate closure; mode="none" leaves
+        # DA/ID always-open. Mixing them silently is a footgun, so reject it.
+        if self.fcr.enabled and self.mode == "none":
+            raise ValueError(
+                "optimization.trading.fcr.enabled=true requires trading.mode='realistic' "
+                "(FCR has no 'none'/always-open semantics)."
+            )
+        return self
 
 
 class ImbalanceSettings(BaseModel):
