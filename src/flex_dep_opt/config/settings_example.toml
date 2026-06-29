@@ -63,7 +63,7 @@ terminal_condition = true
 terminal_weight_eur_per_kwh = 50.0
 
 [optimization.flexibility]
-bounds_file = "data/flexibility/vb_bounds_example.csv"
+bounds_file = "data/flexibility/vb_bounds_example_new.csv"
 
 [optimization.flexibility.cycle_regularization]
 enabled = true
@@ -73,3 +73,10 @@ cost_eur_per_kwh_throughput = 0.02
 eta_grid2depot = 1.0
 eta_depot2grid = 1.0
 grid_connection_limit = 10000
+
+[postprocessing.reference_driving_energy_costs]
+# Static-price reference scenario for driving energy. Requires the bounds_file
+# above to contain the energy_column (vb_bounds_example_new.csv does).
+enabled = true
+static_price_eur_per_kwh = 0.1142
+energy_column = "Ref_driving_energy_kWh"

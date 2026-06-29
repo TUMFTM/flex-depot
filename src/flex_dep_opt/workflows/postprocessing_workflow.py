@@ -16,6 +16,10 @@ from flex_dep_opt.post.metrics import (
     compute_kpis,
     compute_market_aggregates,
 )
+from flex_dep_opt.post.reference_energy_costs import (
+    DEFAULT_REFERENCE_ENERGY_COLUMN,
+    compute_reference_driving_energy_costs,
+)
 from flex_dep_opt.post.plots import plot_market_cashflows_plotly, plot_mpc_dispatch_plotly
 
 
@@ -196,7 +200,50 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
     # cashflows: keep DatetimeIndex in the CSV for later analysis
     save_dispatch_to_csv(cf_df, cashflow_csv, include_time_column=True, output_tz=LOCAL_TIMEZONE)
 
-    # KPIs: single row
+    # -------------------------------------------------------------------------
+    # Optional static-price reference scenario for driving energy
+    # -------------------------------------------------------------------------
+    reference_df = None
+    reference_summary = None
+
+    ref_cfg = settings.postprocessing.reference_driving_energy_costs
+    if ref_cfg.enabled:
+        if ref_cfg.static_price_eur_per_kwh is None:
+            raise ValueError(
+                "postprocessing.reference_driving_energy_costs.static_price_eur_per_kwh "
+                "must be set when the reference calculation is enabled."
+            )
+
+        flex_file = settings.optimization.flexibility.bounds_file
+
+        reference_df, reference_summary = compute_reference_driving_energy_costs(
+            flex_file,
+            start=start,
+            end=end,
+            static_price_eur_per_kwh=float(ref_cfg.static_price_eur_per_kwh),
+            energy_column=str(ref_cfg.energy_column or DEFAULT_REFERENCE_ENERGY_COLUMN),
+        )
+        reference_csv = run_dir / "reference_driving_energy_costs.csv"
+        save_dispatch_to_csv(reference_df, reference_csv, include_time_column=True, output_tz=LOCAL_TIMEZONE)
+
+        reference_gross_profit_eur = -float(reference_summary["ref_energy_cost_eur"])
+        kpis.update({
+            "ref_gross_profit_eur": reference_gross_profit_eur,
+            "ref_driving_energy_kwh": float(reference_summary["ref_driving_energy_kwh"]),
+            "ref_static_price_eur_per_kwh": float(reference_summary["ref_static_price_eur_per_kwh"]),
+            "ref_energy_cost_eur": float(reference_summary["ref_energy_cost_eur"]),
+            "total_potential_gross_profit_delta_eur": (
+                float(kpis["gross_profit_eur"]) - reference_gross_profit_eur
+            ),
+        })
+
+        print(
+            "Reference driving energy costs: "
+            f"{reference_summary['ref_energy_cost_eur']:.2f} EUR "
+            f"for {reference_summary['ref_driving_energy_kwh']:.2f} kWh"
+        )
+
+    # KPIs: single row, including optional reference scenario fields
     save_summary_to_csv(kpis, kpi_csv)
 
     # -------------------------------------------------------------------------
@@ -252,6 +299,12 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
         energy_data=energy_data,
         cash_data=cash_data,
         kpis=kpis,
+        reference_df=(
+            reference_df.tz_convert(LOCAL_TIMEZONE)
+            if reference_df is not None
+            else None
+        ),
+        reference_summary=reference_summary,
         title="Market Cashflows",
     )
     fig_cf.write_html(cashflow_html, include_plotlyjs="cdn")

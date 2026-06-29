@@ -116,6 +116,18 @@ class OptimizationSettings(BaseModel):
     depot: DepotSettings
 
 
+class ReferenceDrivingEnergyCostsSettings(BaseModel):
+    enabled: bool = False
+    static_price_eur_per_kwh: float | None = None
+    energy_column: str = "Ref_driving_energy_kWh"
+
+
+class PostprocessingSettings(BaseModel):
+    reference_driving_energy_costs: ReferenceDrivingEnergyCostsSettings = Field(
+        default_factory=ReferenceDrivingEnergyCostsSettings
+    )
+
+
 BASE_DIR = Path(__file__).resolve().parent
 
 _DEFAULT_TOML = BASE_DIR / "settings_example.toml"
@@ -124,6 +136,7 @@ _DEFAULT_TOML = BASE_DIR / "settings_example.toml"
 class Settings(BaseSettings):
     simulation: SimulationSettings
     optimization: OptimizationSettings
+    postprocessing: PostprocessingSettings = Field(default_factory=PostprocessingSettings)
 
     _source_path: Path | None = PrivateAttr(default=None)
 
