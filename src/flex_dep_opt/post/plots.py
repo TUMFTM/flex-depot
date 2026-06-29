@@ -80,6 +80,8 @@ def plot_market_cashflows_plotly(
     energy_data: list[tuple[str, str, float]],
     cash_data: list[tuple[str, str, float]],
     kpis: Mapping[str, float | int],
+    reference_df: pd.DataFrame | None = None,
+    reference_summary: Mapping[str, float] | None = None,
     title: str = "Market Cashflows",
 ) -> go.Figure:
     """
@@ -93,6 +95,9 @@ def plot_market_cashflows_plotly(
         Sunburst tuples (mk, side, value>=0).
     kpis:
         KPI dict as produced by `compute_kpis(...)`.
+    reference_df / reference_summary:
+        Optional static-price reference scenario as produced by
+        `compute_reference_driving_energy_costs(...)`.
     """
     if not isinstance(cf_df.index, pd.DatetimeIndex):
         raise ValueError("cf_df index must be a DatetimeIndex")
@@ -143,6 +148,26 @@ def plot_market_cashflows_plotly(
         row=2, col=1
     )
 
+    if reference_df is not None and reference_summary is not None:
+        if not isinstance(reference_df.index, pd.DatetimeIndex):
+            raise ValueError("reference_df index must be a DatetimeIndex")
+        required_col = "Cumulative Reference Energy Cost [EUR]"
+        if required_col not in reference_df.columns:
+            raise ValueError(f"reference_df must contain '{required_col}'")
+
+        fig.add_trace(
+            go.Scatter(
+                x=reference_df.index,
+                y=-reference_df[required_col],
+                mode="lines",
+                name="Reference Scenario [€]",
+                line=dict(width=2, color="rgb(0,0,0)", dash="dash"),
+                visible="legendonly",
+                hovertemplate="%{y:.2f} €<extra></extra>",
+            ),
+            row=2, col=1
+        )
+
     # Row 3: Sunbursts
     fig.add_trace(
         go.Sunburst(
@@ -170,6 +195,7 @@ def plot_market_cashflows_plotly(
     )
 
     kpi_rows = [
+        ("Flex-Depot Optimization", ""),
         ("Gross Profit", f"{float(kpis['gross_profit_eur']):.1f} €"),
         ("      Trading Profit", f"{float(kpis['trading_profit_eur']):.1f} €"),
         ("      Trading Fees", f"{float(kpis['fees_eur']):.1f} €"),
@@ -178,6 +204,40 @@ def plot_market_cashflows_plotly(
         ("Net Volume", f"{float(kpis['net_kwh']):.1f} kWh"),
         ("      Sell Volume", f"{float(kpis['sell_kwh']):.1f} kWh"),
         ("      Buy Volume", f"{float(kpis['buy_kwh']):.1f} kWh"),
+    ]
+
+    if reference_summary is not None:
+        reference_gross_profit_eur = -float(reference_summary["ref_energy_cost_eur"])
+        total_potential_eur = float(kpis["gross_profit_eur"]) - reference_gross_profit_eur
+        kpi_rows.extend([
+            ("", ""),
+            ("Reference Scenario", ""),
+            ("Gross Profit", f"{reference_gross_profit_eur:.1f} €"),
+            ("Driving Energy", f"{float(reference_summary['ref_driving_energy_kwh']):.1f} kWh"),
+            ("Static Price", f"{float(reference_summary['ref_static_price_eur_per_kwh']):.3f} €/kWh"),
+            ("", ""),
+            ("Total Potential Flex-Depot Optimization", ""),
+            ("Gross Profit Delta", f"{total_potential_eur:.1f} €"),
+        ])
+
+    section_labels = {
+        "Flex-Depot Optimization",
+        "Reference Scenario",
+        "Total Potential Flex-Depot Optimization",
+    }
+    section_rows = {
+        i for i, (label, value) in enumerate(kpi_rows)
+        if label in section_labels and value == ""
+    }
+    fill_colors = [
+        [
+            "rgba(0,0,0,0.06)" if i in section_rows else "rgba(255,255,255,1.0)"
+            for i in range(len(kpi_rows))
+        ],
+        [
+            "rgba(0,0,0,0.06)" if i in section_rows else "rgba(255,255,255,1.0)"
+            for i in range(len(kpi_rows))
+        ],
     ]
 
     fig.add_trace(
@@ -192,6 +252,7 @@ def plot_market_cashflows_plotly(
             cells=dict(
                 values=[[r[0] for r in kpi_rows], [r[1] for r in kpi_rows]],
                 align=["left", "right"],
+                fill_color=fill_colors,
                 line_color="rgba(0,0,0,0.15)",
                 height=24,
                 font=dict(size=12),

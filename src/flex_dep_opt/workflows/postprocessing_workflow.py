@@ -121,12 +121,12 @@ def postprocess_mpc_results(cfg: dict) -> None:
     # cashflows: keep DatetimeIndex in the CSV for later analysis
     save_dispatch_to_csv(cf_df, cashflow_csv, include_time_column=True, output_tz=LOCAL_TIMEZONE)
 
-    # KPIs: single row
-    save_summary_to_csv(kpis, kpi_csv)
-
     # -------------------------------------------------------------------------
     # Optional static-price reference scenario for driving energy
     # -------------------------------------------------------------------------
+    reference_df = None
+    reference_summary = None
+
     post_cfg = cfg.get("postprocessing", {}) or {}
     if not isinstance(post_cfg, dict):
         raise ValueError("settings.yaml: postprocessing must be a mapping if provided.")
@@ -154,11 +154,26 @@ def postprocess_mpc_results(cfg: dict) -> None:
         )
         reference_csv = run_dir / "reference_driving_energy_costs.csv"
         save_dispatch_to_csv(reference_df, reference_csv, include_time_column=True, output_tz=LOCAL_TIMEZONE)
+
+        reference_gross_profit_eur = -float(reference_summary["ref_energy_cost_eur"])
+        kpis.update({
+            "ref_gross_profit_eur": reference_gross_profit_eur,
+            "ref_driving_energy_kwh": float(reference_summary["ref_driving_energy_kwh"]),
+            "ref_static_price_eur_per_kwh": float(reference_summary["ref_static_price_eur_per_kwh"]),
+            "ref_energy_cost_eur": float(reference_summary["ref_energy_cost_eur"]),
+            "total_potential_gross_profit_delta_eur": (
+                float(kpis["gross_profit_eur"]) - reference_gross_profit_eur
+            ),
+        })
+
         print(
             "Reference driving energy costs: "
             f"{reference_summary['ref_energy_cost_eur']:.2f} EUR "
             f"for {reference_summary['ref_driving_energy_kwh']:.2f} kWh"
         )
+
+    # KPIs: single row, including optional reference scenario fields
+    save_summary_to_csv(kpis, kpi_csv)
 
     # -------------------------------------------------------------------------
     # HTML output paths (same base names as config entries)
@@ -197,6 +212,12 @@ def postprocess_mpc_results(cfg: dict) -> None:
         energy_data=energy_data,
         cash_data=cash_data,
         kpis=kpis,
+        reference_df=(
+            reference_df.tz_convert(LOCAL_TIMEZONE)
+            if reference_df is not None
+            else None
+        ),
+        reference_summary=reference_summary,
         title="Market Cashflows",
     )
     fig_cf.write_html(cashflow_html, include_plotlyjs="cdn")
