@@ -1,9 +1,9 @@
 [simulation]
 start = "2025-10-01 00:00"
-end = "2025-10-08 00:00"
+end = "2025-10-05 23:45"
 timestep_hours = 0.25
-name = "illustrative_example"
-solver = "cbc"
+name = "batch_example"
+solver = "gurobi"
 
 [optimization.markets.dayahead]
 enabled = true
@@ -27,8 +27,8 @@ offset_minutes_before_delivery = 0 # trading until delivery time
 
 [optimization.trading.fcr]
 enabled = true
-prices_source = "data/prices/RESULT_OVERVIEW_CAPACITY_MARKET_FCR_2025-01-01_2025-12-31.xlsx"
-frequency_source = "data/prices/Frequenz_20250101_20251231_15min.csv"
+prices_source = "data/prices/prices_FCR_example.xlsx"
+frequency_source = "data/frequency/frequency_example.csv"
 acceptance_rate = 1.0
 acceptance_seed = 1
 breakeven_analysis = true
@@ -63,7 +63,7 @@ terminal_condition = true
 terminal_weight_eur_per_kwh = 50.0
 
 [optimization.flexibility]
-bounds_file = "data/flexibility/vb_bounds_example.csv"
+bounds_file = "data/flexibility/vb_bounds_example_new.csv"
 
 [optimization.flexibility.cycle_regularization]
 enabled = true
@@ -73,3 +73,8 @@ cost_eur_per_kwh_throughput = 0.02
 eta_grid2depot = 1.0
 eta_depot2grid = 1.0
 grid_connection_limit = 10000
+
+[postprocessing.reference_driving_energy_costs]
+enabled = true
+static_price_eur_per_kwh = 0.1142
+energy_column = "Ref_driving_energy_kWh"
