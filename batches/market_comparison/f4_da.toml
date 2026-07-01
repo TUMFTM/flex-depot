@@ -1,0 +1,11 @@
+[simulation]
+name = "f4_da"
+
+[optimization.markets.intraday]
+enabled = false
+
+[optimization.trading.fcr]
+enabled = false
+
+[optimization.flexibility]
+bounds_file = "data/flexibility/market/VBbounds_f4_e572kWh_p100kW_eta100.csv"

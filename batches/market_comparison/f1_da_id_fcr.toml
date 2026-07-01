@@ -1,0 +1,11 @@
+[simulation]
+name = "f1_da_id_fcr"
+
+[optimization.markets.intraday]
+enabled = true
+
+[optimization.trading.fcr]
+enabled = true
+
+[optimization.flexibility]
+bounds_file = "data/flexibility/market/VBbounds_f1_e572kWh_p100kW_eta100.csv"

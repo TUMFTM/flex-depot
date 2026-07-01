@@ -91,10 +91,15 @@ def get_fcr_frequency_data(file_path: str, tz: str = "Europe/Berlin") -> pd.Data
 def get_fcr_prices(file_path: str) -> pd.Series:
     df = pd.read_excel(file_path)
 
-    df["start_hour"] = df["PRODUCTNAME"].str.split("_").str[1].astype(int)
-    df["datetime"] = pd.to_datetime(df["DATE_FROM"]) + pd.to_timedelta(df["start_hour"], unit="h")
-
-    df = df.set_index("datetime").tz_localize("Europe/Berlin", ambiguous="infer", nonexistent="shift_forward")
+    if "DATETIME_UTC" in df.columns:
+        df["datetime"] = pd.to_datetime(df["DATETIME_UTC"], errors="coerce", utc=True)
+        if df["datetime"].isna().any():
+            raise ValueError(f"Unparsable timestamps in 'DATETIME_UTC' in {file_path}")
+        df = df.set_index("datetime")
+    else:
+        df["start_hour"] = df["PRODUCTNAME"].str.split("_").str[1].astype(int)
+        df["datetime"] = pd.to_datetime(df["DATE_FROM"]) + pd.to_timedelta(df["start_hour"], unit="h")
+        df = df.set_index("datetime").tz_localize("Europe/Berlin", ambiguous="infer", nonexistent="shift_forward")
 
     price_col = "GERMANY_SETTLEMENTCAPACITY_PRICE_[EUR/MW]"
     prices = (
