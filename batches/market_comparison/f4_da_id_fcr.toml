@@ -1,5 +1,7 @@
 [simulation]
 name = "f4_da_id_fcr"
+start = "2026-01-07 07:15"
+end = "2026-01-12 07:15"
 
 [optimization.markets.intraday]
 enabled = true
@@ -8,4 +10,4 @@ enabled = true
 enabled = true
 
 [optimization.flexibility]
-bounds_file = "data/flexibility/market/VBbounds_f4_e572kWh_p100kW_eta100.csv"
+bounds_file = "data/flexibility/market/VBbounds_f4_e572kWh_p350kW_eta98.csv"
