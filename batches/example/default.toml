@@ -2,17 +2,17 @@
 start = "2025-10-01 00:00"
 end = "2025-10-05 23:45"
 timestep_hours = 0.25
-name = "batch_example"
+name = "example"
 solver = "gurobi"
 
 [optimization.markets.dayahead]
 enabled = true
-source = "data/prices/prices_DA_example.csv"
+source = "data/example/prices/prices_DA_example.csv"
 fee_eur_per_kwh = 0.005                      # clearing fee + exchange fee + broker fee + ...
 
 [optimization.markets.intraday]
 enabled = true
-source = "data/prices/prices_IDC_example.csv"
+source = "data/example/prices/prices_IDC_example.csv"
 fee_eur_per_kwh = 0.008                       # clearing fee + exchange fee + broker fee + ...
 
 [optimization.trading]
@@ -27,8 +27,8 @@ offset_minutes_before_delivery = 0 # trading until delivery time
 
 [optimization.trading.fcr]
 enabled = true
-prices_source = "data/prices/prices_FCR_example.xlsx"
-frequency_source = "data/frequency/frequency_example.csv"
+prices_source = "data/example/prices/prices_FCR_example.xlsx"
+frequency_source = "data/example/frequency/frequency_example.csv"
 acceptance_rate = 1.0
 acceptance_seed = 1
 breakeven_analysis = true
@@ -47,8 +47,8 @@ full_activation_hz = 0.200
 
 [optimization.imbalance]
 enabled = true
-source_pos = "data/prices/prices_reBAPpos_example.csv"
-source_neg = "data/prices/prices_reBAPneg_example.csv"
+source_pos = "data/example/prices/prices_reBAPpos_example.csv"
+source_neg = "data/example/prices/prices_reBAPneg_example.csv"
 imbalance_volume_penalty_eur_per_kwh = 1000.0
 
 [optimization]
@@ -63,7 +63,7 @@ terminal_condition = true
 terminal_weight_eur_per_kwh = 50.0
 
 [optimization.flexibility]
-bounds_file = "data/flexibility/vb_bounds_example_new.csv"
+bounds_file = "data/example/flexibility/vb_bounds_example_new.csv"
 
 [optimization.flexibility.cycle_regularization]
 enabled = true

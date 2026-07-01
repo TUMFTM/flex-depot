@@ -1,5 +1,5 @@
 [simulation]
-name = "only_da"
+name = "da"
 
 [optimization.markets.dayahead]
 enabled = true

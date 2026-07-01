@@ -475,7 +475,7 @@ def flexibility_commercialization(
     # 10) Objective
     # ============================================================
     # Named per-term Expressions so the objective can be decomposed term-by-term
-    # (FCR breakeven analysis); the objective below is their exact sum.
+    # (FCR breakeven batches); the objective below is their exact sum.
     m.obj_energy_cashflow = pyo.Expression(
         expr=pyo.quicksum(-m.price[mk, t] * m.p_market[mk, t] * m.dt for mk in m.MARKETS for t in m.T)
     )

@@ -197,7 +197,7 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
     cashflow_csv = run_dir / "cashflow.csv"
     kpi_csv = run_dir / "kpis.csv"
 
-    # cashflows: keep DatetimeIndex in the CSV for later analysis
+    # cashflows: keep DatetimeIndex in the CSV for later batches
     save_dispatch_to_csv(cf_df, cashflow_csv, include_time_column=True, output_tz=LOCAL_TIMEZONE)
 
     # -------------------------------------------------------------------------

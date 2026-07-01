@@ -10,10 +10,21 @@ import toml
 import tomllib
 
 from flex_dep_opt.config.settings import Settings
+from flex_dep_opt.io.results_io import make_run_dir
 from flex_dep_opt.workflows.mpc_workflow import run_mpc
 from flex_dep_opt.workflows.postprocessing_workflow import postprocess_mpc_results
 
 DEFAULT_TOML_NAME = "default.toml"
+
+
+def _make_batch_results_root(configs_dir: Path) -> Path:
+    batches_root = Path("batches").resolve()
+    try:
+        batch_name = configs_dir.resolve().relative_to(batches_root)
+    except ValueError:
+        batch_name = Path(configs_dir.name)
+    batch_label = batch_name.as_posix().replace("/", "_")
+    return make_run_dir(Path("results") / "batches", batch_label)
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
@@ -81,7 +92,7 @@ def main():
     p_batch.add_argument(
         "--manifest",
         default=None,
-        help="Manifest CSV path (default: <configs_dir>/results/manifest.csv).",
+        help="Manifest CSV path (default: results/batches/<batch>__<timestamp>/manifest.csv).",
     )
 
     args = parser.parse_args()
@@ -104,7 +115,7 @@ def main():
         if not configs:
             raise SystemExit(f"No *.toml configs found in {args.configs_dir}")
 
-        results_root = str(configs_dir / "results")
+        results_root = str(_make_batch_results_root(configs_dir))
         run = partial(_run_one, default_path=default_path, results_root=results_root)
         if args.jobs > 1:
             ctx = mp.get_context("spawn")
@@ -115,5 +126,5 @@ def main():
 
         manifest = Path(args.manifest) if args.manifest else Path(results_root) / "manifest.csv"
         pd.DataFrame(rows).to_csv(manifest, index=False)
-        print(f"Batch done: {len(rows)} runs → {manifest}")
+        print(f"Batch done: {len(rows)} runs -> {manifest}")
         return
