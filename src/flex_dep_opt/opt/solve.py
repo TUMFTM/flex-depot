@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
-
+import os
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
-import os
 import pyomo.environ as pyo
 
 
@@ -24,13 +23,14 @@ def _cbc_executable() -> str | None:
 
     return None
 
-def _ensure_solver_available(solver_name: str) -> None:
-    """
-    Raise a RuntimeError if the requested solver is not available to Pyomo.
-    """
-    solver_name = solver_name.lower()
 
-    if solver_name == "gurobi":
+def _make_solver(solver_name: str):
+    """
+    Build a Pyomo solver factory, raising a RuntimeError if it is unavailable.
+    """
+    name = solver_name.lower()
+
+    if name == "gurobi":
         try:
             import gurobipy  # noqa: F401
         except ImportError as e:
@@ -38,25 +38,24 @@ def _ensure_solver_available(solver_name: str) -> None:
                 "Gurobi (gurobipy) not found. Install it in your environment with: pip install gurobipy"
             ) from e
         solver = pyo.SolverFactory("gurobi")
-
-    elif solver_name == "cbc":
+    elif name == "cbc":
         cbc_exe = _cbc_executable()
         solver = pyo.SolverFactory("cbc", executable=cbc_exe) if cbc_exe else pyo.SolverFactory("cbc")
-
     else:
-        # If you want to allow more solvers later, keep this generic.
-        solver = pyo.SolverFactory(solver_name)
+        solver = pyo.SolverFactory(name)
 
     if not solver.available(exception_flag=False):
         hint = ""
-        if solver_name == "cbc":
+        if name == "cbc":
             hint = (
                 " CBC not available. Install via conda: `conda install -c conda-forge coincbc` "
                 "or ensure `cbc` is on PATH / set CBC_PATH to cbc.exe."
             )
-        elif solver_name == "gurobi":
+        elif name == "gurobi":
             hint = " Gurobi solver not available to Pyomo. Check license and gurobipy installation."
-        raise RuntimeError(f"Solver '{solver_name}' not available to Pyomo.{hint}")
+        raise RuntimeError(f"Solver '{name}' not available to Pyomo.{hint}")
+
+    return solver
 
 
 def _apply_solver_options(
@@ -64,9 +63,9 @@ def _apply_solver_options(
     solver_name: str,
     *,
     silent: bool = True,
-    time_limit_s: Optional[int] = None,
-    mip_gap: Optional[float] = None,
-    threads: Optional[int] = None,
+    time_limit_s: int | None = None,
+    mip_gap: float | None = None,
+    threads: int | None = None,
 ) -> None:
     solver_name = solver_name.lower()
 
@@ -101,9 +100,9 @@ def solve_model(
     model: pyo.ConcreteModel,
     *,
     solver_name: str = "gurobi",
-    time_limit_s: Optional[int] = None,
-    mip_gap: Optional[float] = None,
-    threads: Optional[int] = None,
+    time_limit_s: int | None = None,
+    mip_gap: float | None = None,
+    threads: int | None = 8,
     tee: bool = False,
 ) -> pyo.results.SolverResults:
     """
@@ -127,18 +126,11 @@ def solve_model(
     RuntimeError
         If the solver is not available or no acceptable solution is reported.
     """
-    _ensure_solver_available(solver_name)
-
-    solver_name_l = solver_name.lower()
-    if solver_name_l == "cbc":
-        cbc_exe = _cbc_executable()
-        opt = pyo.SolverFactory("cbc", executable=cbc_exe) if cbc_exe else pyo.SolverFactory("cbc")
-    else:
-        opt = pyo.SolverFactory(solver_name_l)
+    opt = _make_solver(solver_name)
 
     _apply_solver_options(
         opt,
-        solver_name_l,
+        solver_name.lower(),
         silent=not tee,
         time_limit_s=time_limit_s,
         mip_gap=mip_gap,
@@ -147,7 +139,7 @@ def solve_model(
 
     results = opt.solve(model, tee=tee)
 
-    status_ok = (results.solver.status == pyo.SolverStatus.ok)
+    status_ok = results.solver.status == pyo.SolverStatus.ok
     term = results.solver.termination_condition
 
     if not status_ok:
@@ -165,10 +157,38 @@ def solve_model(
     return results
 
 
-
 # =============================================================================
 # Result extraction
 # =============================================================================
+OBJECTIVE_TERM_NAMES = (
+    "obj_energy_cashflow",
+    "obj_fcr_revenue",
+    "obj_imb_cashflow",
+    "obj_fee_cost",
+    "obj_cycling_cost",
+    "obj_imb_vol_penalty",
+    "obj_term_penalty",
+    "obj_e_slack_penalty",
+    "obj_reserve_penalty",
+    "obj_balance_penalty",
+)
+
+
+def extract_objective_terms(model: pyo.ConcreteModel) -> dict[str, float]:
+    """
+    Evaluate the named objective-term expressions of a solved model.
+
+    Returns a dict with one entry per OBJECTIVE_TERM_NAMES (0.0 if the model
+    was built without that component) plus "objective" for the total.
+    """
+    terms: dict[str, float] = {}
+    for name in OBJECTIVE_TERM_NAMES:
+        comp = getattr(model, name, None)
+        terms[name] = float(pyo.value(comp)) if comp is not None else 0.0
+    terms["objective"] = float(pyo.value(model.obj))
+    return terms
+
+
 def extract_dispatch(model: pyo.ConcreteModel, time_index: pd.DatetimeIndex) -> pd.DataFrame:
     """
     Extract dispatch time series from a solved multi-market model.
@@ -196,9 +216,7 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index: pd.DatetimeIndex) -> 
     T_list = list(model.T)
     T_len = len(T_list)
     if len(time_index) != T_len:
-        raise ValueError(
-            f"time_index length ({len(time_index)}) does not match model horizon ({T_len})."
-        )
+        raise ValueError(f"time_index length ({len(time_index)}) does not match model horizon ({T_len}).")
 
     df = pd.DataFrame(index=time_index)
 
@@ -210,43 +228,48 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index: pd.DatetimeIndex) -> 
     df["p_dis_kw"] = [pyo.value(model.p_dis[t]) for t in T_list]
 
     # -------------------------
-    # Energy state (S or T)
+    # Energy state (S = 0..N): publish both E[t] and E[t+1] aligned to time_index.
     # -------------------------
-    # New model: E is indexed by S (0..N). We publish both E[t] and E[t+1] aligned to time_index.
-    if hasattr(model, "S"):
-        df["E_kWh"] = [pyo.value(model.E[t]) for t in T_list]            # state at timestamp (start of interval)
-        df["E_next_kWh"] = [pyo.value(model.E[t + 1]) for t in T_list]   # state after interval
-        # Optional: terminal value (single number) can be useful for debugging
-        df.attrs["E_terminal_kWh"] = float(pyo.value(model.E[T_len]))
-    else:
-        # Fallback to old convention
-        df["E_kWh"] = [pyo.value(model.E[t]) for t in T_list]
+    df["E_kWh"] = [pyo.value(model.E[t]) for t in T_list]  # state at timestamp (start of interval)
+    df["E_next_kWh"] = [pyo.value(model.E[t + 1]) for t in T_list]  # state after interval
+
+    # ---------------------------------------------------------------
+    # FCR (read straight from the model; no recomputation downstream)
+    # ---------------------------------------------------------------
+    if hasattr(model, "S_FCR") and hasattr(model, "_fcr_slot_starts"):
+        # Per-slot bid broadcast to every step inside the slot window.
+        x_fcr_by_t = [0.0] * T_len
+        slot_duration = pd.Timedelta(hours=getattr(model, "_fcr_product_hours", 4.0))
+        for j in model.S_FCR:
+            slot_start = model._fcr_slot_starts[j]
+            slot_end = slot_start + slot_duration
+            x_cleared = float(pyo.value(model.x_fcr[j]))
+            if x_cleared <= 0.0:
+                continue
+            for t, ts in enumerate(time_index):
+                if slot_start <= ts < slot_end:
+                    x_fcr_by_t[t] = x_cleared
+
+        df["x_fcr_kw"] = x_fcr_by_t
+        # p_droop is the FCR activation power in the same convention as p_net
+        # and the market positions: + = depot imports, - = depot exports.
+        df["p_droop_kw"] = [float(pyo.value(model.p_droop[t])) for t in T_list]
 
     # -------------------------
     # Market positions (T)
     # -------------------------
-    if hasattr(model, "MARKETS"):
-        for mk in model.MARKETS:
-            col = f"p_{str(mk).lower()}_kw"
-            df[col] = [pyo.value(model.p_market[mk, t]) for t in T_list]
+    for mk in model.MARKETS:
+        col = f"p_{str(mk).lower()}_kw"
+        df[col] = [pyo.value(model.p_market[mk, t]) for t in T_list]
 
     # -------------------------
     # Bands for plotting/debug (align to T)
     # -------------------------
-    if hasattr(model, "E_lower") and hasattr(model, "S"):
-        df["E_lower_kWh"] = [pyo.value(model.E_lower[t]) for t in T_list]
-        df["E_upper_kWh"] = [pyo.value(model.E_upper[t]) for t in T_list]
-        # Optional: next-step bounds aligned to the same row (useful to see upcoming tightening)
-        df["E_lower_next_kWh"] = [pyo.value(model.E_lower[t + 1]) for t in T_list]
-        df["E_upper_next_kWh"] = [pyo.value(model.E_upper[t + 1]) for t in T_list]
-    elif hasattr(model, "E_lower"):
-        # Old convention
-        df["E_lower_kWh"] = [pyo.value(model.E_lower[t]) for t in T_list]
-        df["E_upper_kWh"] = [pyo.value(model.E_upper[t]) for t in T_list]
+    df["E_lower_kWh"] = [pyo.value(model.E_lower[t]) for t in T_list]
+    df["E_upper_kWh"] = [pyo.value(model.E_upper[t]) for t in T_list]
 
-    if hasattr(model, "P_lower"):
-        df["P_lower_kw"] = [pyo.value(model.P_lower[t]) for t in T_list]
-        df["P_upper_kw"] = [pyo.value(model.P_upper[t]) for t in T_list]
+    df["P_lower_kw"] = [pyo.value(model.P_lower[t]) for t in T_list]
+    df["P_upper_kw"] = [pyo.value(model.P_upper[t]) for t in T_list]
 
     # -------------------------
     # Imbalance reBAP (optional)

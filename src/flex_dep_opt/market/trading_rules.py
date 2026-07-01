@@ -1,31 +1,24 @@
 from __future__ import annotations
-from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
+from flex_dep_opt.config.settings import OptimizationSettings
 from flex_dep_opt.io.time_utils import LOCAL_TIMEZONE
 
 
 # =============================================================================
 # Gate-closure helpers (single source of truth)
 # =============================================================================
-def _parse_hhmm(value: str, default: Tuple[int, int] = (12, 0)) -> Tuple[int, int]:
-    """
-    Parse a 'HH:MM' string to integers.
-
-    Falls back to `default` if parsing fails (keeps simulations robust).
-    """
-    try:
-        hh_str, mm_str = value.split(":")
-        return int(hh_str), int(mm_str)
-    except Exception:
-        return default
+def _parse_hhmm(value: str) -> tuple[int, int]:
+    """Parse a 'HH:MM' string to integers."""
+    hh_str, mm_str = value.split(":")
+    return int(hh_str), int(mm_str)
 
 
 def gate_closure_timestamp(
     market: str,
     delivery_time: pd.Timestamp,
-    optimization_cfg: dict,
+    optimization_cfg: OptimizationSettings,
     *,
     market_tz: str = LOCAL_TIMEZONE,
 ) -> pd.Timestamp:
@@ -60,7 +53,7 @@ def gate_closure_timestamp(
     ValueError
         If `market` is unknown.
     """
-    trading_cfg = optimization_cfg.get("trading", {})
+    trading_cfg = optimization_cfg.trading
     if delivery_time.tzinfo is None:
         delivery_local = delivery_time.tz_localize(market_tz, ambiguous="raise", nonexistent="raise")
         output_tz = market_tz
@@ -69,23 +62,21 @@ def gate_closure_timestamp(
         delivery_local = delivery_time.tz_convert(market_tz)
 
     if market == "DA":
-        da_cfg = trading_cfg.get("dayahead", {})
-        gc_hour_str = da_cfg.get("gate_closure_hour", "12:00")
-        closes_prev = bool(da_cfg.get("closes_previous_day", True))
+        da_cfg = trading_cfg.dayahead
+        gc_hour_str = da_cfg.gate_closure_hour
+        closes_prev = da_cfg.closes_previous_day
 
-        gc_h, gc_m = _parse_hhmm(gc_hour_str, default=(12, 0))
+        gc_h, gc_m = _parse_hhmm(gc_hour_str)
 
         base_date = (
-            delivery_local.normalize() - pd.Timedelta(days=1)
-            if closes_prev
-            else delivery_local.normalize()
+            delivery_local.normalize() - pd.Timedelta(days=1) if closes_prev else delivery_local.normalize()
         )
         # `normalize()` preserves tz-awareness; adding Timedelta keeps tz-awareness
         return (base_date + pd.Timedelta(hours=gc_h, minutes=gc_m)).tz_convert(output_tz)
 
     if market == "ID":
-        id_cfg = trading_cfg.get("intraday", {})
-        offset_min = int(id_cfg.get("offset_minutes_before_delivery", 30))
+        id_cfg = trading_cfg.intraday
+        offset_min = id_cfg.offset_minutes_before_delivery
         return (delivery_local - pd.Timedelta(minutes=offset_min)).tz_convert(output_tz)
 
     raise ValueError(f"Unknown market: {market}")
@@ -94,20 +85,16 @@ def gate_closure_timestamp(
 # =============================================================================
 # Market selection helpers
 # =============================================================================
-def _enabled_markets_from_cfg(optimization_cfg: dict) -> List[str]:
+def _enabled_markets_from_cfg(optimization_cfg: OptimizationSettings) -> list[str]:
     """
     Return enabled markets as a list of market codes ("DA", "ID", ...).
-
-    The expected structure is:
-        optimization_cfg["markets"]["dayahead"]["enabled"]
-        optimization_cfg["markets"]["intraday"]["enabled"]
     """
-    market_cfg = optimization_cfg["markets"]
+    market_cfg = optimization_cfg.markets
 
-    enabled: List[str] = []
-    if market_cfg.get("dayahead", {}).get("enabled", False):
+    enabled: list[str] = []
+    if market_cfg.dayahead.enabled:
         enabled.append("DA")
-    if market_cfg.get("intraday", {}).get("enabled", False):
+    if market_cfg.intraday.enabled:
         enabled.append("ID")
     return enabled
 
@@ -118,8 +105,8 @@ def _enabled_markets_from_cfg(optimization_cfg: dict) -> List[str]:
 def build_market_activity_mask_for_time(
     current_time: pd.Timestamp,
     delivery_times: pd.DatetimeIndex,
-    optimization_cfg: dict,
-) -> Dict[str, pd.Series]:
+    optimization_cfg: OptimizationSettings,
+) -> dict[str, pd.Series]:
     """
     Build market activity masks for ONE MPC step.
 
@@ -143,12 +130,12 @@ def build_market_activity_mask_for_time(
 
     Returns
     -------
-    Dict[str, pd.Series]
+    dict[str, pd.Series]
         One boolean series per enabled market, indexed by `delivery_times`.
         If no markets are enabled, returns an empty dict.
     """
-    trading_cfg = optimization_cfg.get("trading", {})
-    mode = trading_cfg.get("mode", "none")
+    trading_cfg = optimization_cfg.trading
+    mode = trading_cfg.mode
 
     if current_time.tzinfo is None:
         current_cmp = current_time.tz_localize(LOCAL_TIMEZONE, ambiguous="raise", nonexistent="raise")
@@ -156,7 +143,7 @@ def build_market_activity_mask_for_time(
         current_cmp = current_time
 
     enabled_markets = _enabled_markets_from_cfg(optimization_cfg)
-    mask_by_market: Dict[str, pd.Series] = {}
+    mask_by_market: dict[str, pd.Series] = {}
 
     # -------------------------------------------------------------------------
     # Mode "none": everything open (baseline / debugging)
@@ -190,4 +177,3 @@ def build_market_activity_mask_for_time(
 
     # Unknown mode: return empty masks (explicit and safe)
     return mask_by_market
-

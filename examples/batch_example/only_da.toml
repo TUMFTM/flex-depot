@@ -1,0 +1,11 @@
+[simulation]
+name = "only_da"
+
+[optimization.markets.dayahead]
+enabled = true
+
+[optimization.markets.intraday]
+enabled = false
+
+[optimization.trading.fcr]
+enabled = false

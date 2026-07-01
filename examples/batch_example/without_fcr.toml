@@ -1,0 +1,5 @@
+[simulation]
+name = "without_fcr"
+
+[optimization.trading.fcr]
+enabled = false

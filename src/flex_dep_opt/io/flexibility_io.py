@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from typing import List
 import pandas as pd
 
-
-REQUIRED_COLS: List[str] = [
+REQUIRED_COLS: list[str] = [
     "time",
     "Power_lower_kW",
     "Power_upper_kW",
@@ -89,20 +87,18 @@ def align_and_validate_flexibility_bounds(
     bounds: pd.DataFrame,
     time_index: pd.DatetimeIndex,
     *,
-    require_complete: bool = True,
-    check_band_consistency: bool = True,
     expected_len: int | None = None,
 ) -> pd.DataFrame:
     """
-    Align flexibility bounds to a target time_index and optionally validate consistency.
+    Align flexibility bounds to a target time_index and validate consistency.
 
     Steps
     -----
     1) Ensure DatetimeIndex and required columns
     2) (Optional) ensure `time_index` has an expected length (useful for N vs N+1)
     3) Sort and reindex to the target time_index
-    4) Validate completeness (optional)
-    5) Validate band consistency (optional):
+    4) Validate completeness (no missing timestamps after reindexing)
+    5) Validate band consistency:
          - Power_lower_kW <= Power_upper_kW
          - Capacity_lower_kWh <= Capacity_upper_kWh
 
@@ -112,10 +108,6 @@ def align_and_validate_flexibility_bounds(
         Raw bounds DataFrame (time-indexed).
     time_index:
         Target index to align to. For MPC/state alignment this is often the *state index* of length N+1.
-    require_complete:
-        If True, raises if any timestamps are missing after reindexing.
-    check_band_consistency:
-        If True, checks lower <= upper for power and energy bands.
     expected_len:
         Optional length check for `time_index`. This is a lightweight guardrail to avoid accidental mixing of decision index (N) and state index (N+1).
         Example: pass expected_len=N+1 when aligning state bounds.
@@ -136,9 +128,7 @@ def align_and_validate_flexibility_bounds(
         raise ValueError("time_index must be timezone-aware")
 
     if expected_len is not None and len(time_index) != int(expected_len):
-        raise ValueError(
-            f"time_index length mismatch: got {len(time_index)}, expected {int(expected_len)}"
-        )
+        raise ValueError(f"time_index length mismatch: got {len(time_index)}, expected {int(expected_len)}")
 
     missing_cols = [c for c in REQUIRED_COLS if c != "time" and c not in bounds.columns]
     if missing_cols:
@@ -150,23 +140,22 @@ def align_and_validate_flexibility_bounds(
     # -------------------------------------------------------------------------
     # Completeness check: do we have bounds for every required timestamp?
     # -------------------------------------------------------------------------
-    if require_complete and b.isnull().any().any():
+    if b.isnull().any().any():
         missing_idx = b[b.isnull().any(axis=1)].index[:5]
         raise ValueError(f"Missing flexibility bounds for timestamps (examples): {list(missing_idx)}")
 
     # -------------------------------------------------------------------------
     # Physical / logical consistency: lower bounds must not exceed upper bounds
     # -------------------------------------------------------------------------
-    if check_band_consistency:
-        bad_power = b["Power_lower_kW"] > b["Power_upper_kW"]
-        bad_energy = b["Capacity_lower_kWh"] > b["Capacity_upper_kWh"]
+    bad_power = b["Power_lower_kW"] > b["Power_upper_kW"]
+    bad_energy = b["Capacity_lower_kWh"] > b["Capacity_upper_kWh"]
 
-        if bad_power.any():
-            ex = b.index[bad_power][:5]
-            raise ValueError(f"Inconsistent power band (lower > upper) at: {list(ex)}")
+    if bad_power.any():
+        ex = b.index[bad_power][:5]
+        raise ValueError(f"Inconsistent power band (lower > upper) at: {list(ex)}")
 
-        if bad_energy.any():
-            ex = b.index[bad_energy][:5]
-            raise ValueError(f"Inconsistent energy band (lower > upper) at: {list(ex)}")
+    if bad_energy.any():
+        ex = b.index[bad_energy][:5]
+        raise ValueError(f"Inconsistent energy band (lower > upper) at: {list(ex)}")
 
     return b

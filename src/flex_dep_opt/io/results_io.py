@@ -1,14 +1,13 @@
 from __future__ import annotations
 
+import re
+from collections.abc import Mapping
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
-import shutil
-
-import re
-from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from flex_dep_opt.io.time_utils import LOCAL_TIMEZONE
 
@@ -29,22 +28,10 @@ def save_dispatch_to_csv(
     output_tz: str = LOCAL_TIMEZONE,
 ) -> str:
     """
-    Save a dispatch-like DataFrame to CSV.
+    Save a dispatch-like DataFrame to CSV with the timestamp as a dedicated
+    column named `time_col` (not an unnamed index column).
 
-    This helper standardizes the common convention in the project:
-    - A dedicated timestamp column named `time` (default), not an unnamed index column.
-
-    Parameters
-    ----------
-    df:
-        DataFrame to write. Index may be a DatetimeIndex (recommended).
-    path:
-        Output path (string or Path).
-    include_time_column:
-        If True and df has a DatetimeIndex, the index is written as a column `time_col`.
-        If False, the DataFrame is written as-is (index is not written).
-    time_col:
-        Name of the timestamp column to create when `include_time_column=True`.
+    The DataFrame must have a DatetimeIndex or already carry a `time_col` column.
 
     Returns
     -------
@@ -131,36 +118,6 @@ def make_run_dir(base_dir: str | Path, run_name: str, *, tz: str = "Europe/Berli
     return folder
 
 
-def save_settings_yaml_file(settings_path: str | Path, out_dir: str | Path) -> str:
-    """
-    Copy the original settings YAML file into a run output directory.
-
-    Parameters
-    ----------
-    settings_path:
-        Path to the YAML file that was loaded by the CLI.
-    out_dir:
-        Output directory (the run folder).
-
-    Returns
-    -------
-    str
-        Absolute path to the copied YAML file.
-    """
-    settings_path = Path(settings_path)
-    if not settings_path.exists():
-        raise FileNotFoundError(f"Settings YAML not found: {settings_path}")
-
-    out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    # Keep original filename (usually settings_example.yaml)
-    out_path = out_dir / settings_path.name
-
-    shutil.copy2(settings_path, out_path)
-    return str(out_path.resolve())
-
-
 def write_latest_run_pointer(run_dir: str | Path, results_root: str | Path = "results") -> str:
     """
     Write a pointer file results/LATEST.txt containing the absolute path to the latest run directory.
@@ -184,16 +141,13 @@ def read_latest_run_pointer(results_root: str | Path = "results") -> Path:
 
     if not latest_path.exists():
         raise FileNotFoundError(
-            f"No latest run pointer found at {latest_path.resolve()}. "
-            "Run `run-sim` first."
+            f"No latest run pointer found at {latest_path.resolve()}. Run `run-sim` first."
         )
 
     run_dir = Path(latest_path.read_text(encoding="utf-8").strip())
 
     if not run_dir.exists():
-        raise FileNotFoundError(
-            f"Latest run directory from LATEST.txt does not exist: {run_dir}"
-        )
+        raise FileNotFoundError(f"Latest run directory from LATEST.txt does not exist: {run_dir}")
 
     return run_dir
 

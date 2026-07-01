@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, Tuple
+from collections.abc import Mapping
 
 import pandas as pd
 
@@ -8,17 +8,18 @@ import pandas as pd
 # =============================================================================
 # Helpers
 # =============================================================================
-def infer_market_position_columns(dispatch: pd.DataFrame) -> List[str]:
+def infer_market_position_columns(dispatch: pd.DataFrame) -> list[str]:
     """
     Return all dispatch columns that represent per-market positions p_<mk>_kw.
 
     Excludes physical variables (p_ch/p_dis/p_net) and imbalance variables.
     """
     return [
-        c for c in dispatch.columns
+        c
+        for c in dispatch.columns
         if c.startswith("p_")
         and c.endswith("_kw")
-        and c not in ("p_ch_kw", "p_dis_kw", "p_net_kw", "p_imb_pos_kw", "p_imb_neg_kw")
+        and c not in ("p_ch_kw", "p_dis_kw", "p_net_kw", "p_droop_kw", "p_imb_pos_kw", "p_imb_neg_kw")
     ]
 
 
@@ -113,7 +114,6 @@ def compute_market_aggregates(
     timestep_hours: float,
 ) -> tuple[
     dict[str, tuple[float, float]],
-    dict[str, tuple[float, float]],
     list[tuple[str, str, float]],
     list[tuple[str, str, float]],
 ]:
@@ -124,8 +124,6 @@ def compute_market_aggregates(
     -------
     energy_by_mk:
         mk -> (buy_kwh, sell_kwh), both >= 0
-    cash_by_mk:
-        mk -> (buy_eur, sell_eur), both >= 0 (magnitudes)
     energy_data:
         list (mk, side, value>=0) for sunburst (Buy/Sell)
     cash_data:
@@ -140,7 +138,6 @@ def compute_market_aggregates(
     market_cols = infer_market_position_columns(dispatch)
 
     energy_by_mk: dict[str, tuple[float, float]] = {}
-    cash_by_mk: dict[str, tuple[float, float]] = {}
 
     energy_data: list[tuple[str, str, float]] = []
     cash_data: list[tuple[str, str, float]] = []
@@ -169,7 +166,6 @@ def compute_market_aggregates(
         sell_c = float((cash_eur[sell_mask]).sum()) if sell_mask.any() else 0.0
 
         energy_by_mk[mk] = (buy_e, sell_e)
-        cash_by_mk[mk] = (buy_c, sell_c)
 
         if buy_e > 0:
             energy_data.append((mk, "Buy", buy_e))
@@ -208,7 +204,6 @@ def compute_market_aggregates(
             imb_cost_eur = float((pos_price * p_pos + neg_price * p_neg).sum() * dt)
 
             energy_by_mk["IMB"] = (buy_e, sell_e)
-            cash_by_mk["IMB"] = (imb_cost_eur, 0.0)
 
             if buy_e > 0:
                 energy_data.append(("IMB", "Buy", buy_e))
@@ -217,7 +212,67 @@ def compute_market_aggregates(
             if imb_cost_eur > 0:
                 cash_data.append(("IMB", "Cost", imb_cost_eur))
 
-    return energy_by_mk, cash_by_mk, energy_data, cash_data
+    return energy_by_mk, energy_data, cash_data
+
+
+def compute_fcr_cashflow_per_slot(
+    index: pd.DatetimeIndex,
+    fcr_commit_df: pd.DataFrame | None,
+) -> pd.Series | None:
+    """
+    Book per-slot FCR revenue (EUR, from fcr_commit.csv) as a single value at the
+    first index inside each slot window. The bar chart shows one bar per 4 h slot
+    instead of a low-height bar repeated across 16 quarter-hour steps, which is
+    far more readable; cumulative profit steps up at slot start and is flat in
+    between. Returns None when there is no accepted FCR revenue to report.
+    """
+    if fcr_commit_df is None or fcr_commit_df.empty:
+        return None
+    if "slot_start" not in fcr_commit_df.columns or "fcr_revenue_eur" not in fcr_commit_df.columns:
+        return None
+
+    cf = pd.Series(0.0, index=index)
+    any_revenue = False
+    for _, row in fcr_commit_df.iterrows():
+        rev = float(row["fcr_revenue_eur"])
+        if rev == 0.0:
+            continue
+        slot_start = row["slot_start"]
+        # Place the full slot revenue at the first dispatch step inside the slot.
+        in_slot = index[index >= slot_start]
+        if in_slot.empty:
+            continue
+        cf.loc[in_slot[0]] = cf.loc[in_slot[0]] + rev
+        any_revenue = True
+
+    return cf if any_revenue else None
+
+
+def compute_fcr_activation_energy(
+    dispatch: pd.DataFrame,
+    *,
+    timestep_hours: float,
+) -> tuple[float, float] | None:
+    """
+    Total activation energy moved by FCR over the horizon, split into:
+      buy_kwh  = energy taken in (downward FCR activations, depot charges)
+      sell_kwh = energy delivered out (upward FCR activations, depot discharges)
+
+    Returns None if the dispatch has no FCR column.
+
+    Sign convention in dispatch (`p_droop_kw = -droop * x_fcr`, import-positive):
+      p_droop > 0 -> depot imports (Buy, downward FCR)
+      p_droop < 0 -> depot exports (Sell, upward FCR)
+    """
+    if "p_droop_kw" not in dispatch.columns:
+        return None
+    dt = float(timestep_hours)
+    p = dispatch["p_droop_kw"].astype(float)
+    buy_kwh = float(p[p > 0].sum()) * dt
+    sell_kwh = float(-p[p < 0].sum()) * dt
+    if buy_kwh == 0.0 and sell_kwh == 0.0:
+        return None
+    return buy_kwh, sell_kwh
 
 
 def compute_kpis(
@@ -225,7 +280,7 @@ def compute_kpis(
     energy_by_mk: Mapping[str, tuple[float, float]],
     fee_eur_per_kwh_by_market: Mapping[str, float],
     *,
-    commit: Optional[pd.DataFrame] = None,
+    commit: pd.DataFrame | None = None,
 ) -> dict[str, float | int]:
     """
     Compute KPIs for reporting.
@@ -235,7 +290,8 @@ def compute_kpis(
     - gross_profit_eur:
         Total cashflow plus fee term (fees are negative).
     - trading_profit_eur:
-        Profit excluding fees and imbalance cost.
+        Scheduled-market (DA/ID) cashflow only — excludes fees, imbalance
+        cost, and FCR revenue.
     - fees_eur:
         Applied to absolute traded energy volume in DA/ID.
     - imb_cost_eur:
@@ -261,16 +317,23 @@ def compute_kpis(
     if commit is not None and not commit.empty:
         if ("committed_new" in commit.columns) and ("commit_now" in commit.columns):
             trade_steps = int(
-                commit[(commit["committed_new"] != 0.0) & (commit["commit_now"] == True)].shape[0]
+                commit[(commit["committed_new"] != 0.0) & commit["commit_now"].astype(bool)].shape[0]
             )
 
     imb_cost_eur = 0.0
     if "IMB Cashflow [€/step]" in cf_df.columns:
         imb_cost_eur = float(cf_df["IMB Cashflow [€/step]"].sum())
 
-    gross_profit_eur = float(cf_df["Total Cashflow [€/step]"].sum()) + fees_eur                             # (market CF + IMB CF (neg)) + fees (neg)
-    trading_profit_eur = float(cf_df["Total Cashflow [€/step]"].sum()) - imb_cost_eur                       # (market CF + IMB CF (neg)) - IMB CF (neg) = market CF
+    fcr_cf_eur = 0.0
+    if "FCR Cashflow [€/step]" in cf_df.columns:
+        fcr_cf_eur = float(cf_df["FCR Cashflow [€/step]"].sum())
 
+    total_cf_eur = float(cf_df["Total Cashflow [€/step]"].sum())
+
+    gross_profit_eur = total_cf_eur + fees_eur  # total CF (DA/ID + IMB + FCR) plus fees (negative)
+    trading_profit_eur = (
+        total_cf_eur - imb_cost_eur - fcr_cf_eur
+    )  # total CF less IMB and FCR -> pure scheduled-market (DA/ID) CF
 
     return {
         "gross_profit_eur": gross_profit_eur,
@@ -282,4 +345,3 @@ def compute_kpis(
         "sell_kwh": float(sell_kwh),
         "buy_kwh": float(buy_kwh),
     }
-
