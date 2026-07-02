@@ -1,4 +1,4 @@
-# FLEX-DEPOT
+# FLEX-DEPOT 
 
 FLEX-DEPOT is a Python project for optimizing flexibility at a logistics depot incorporating electric trucks. It combines market price series, flexibility power and energy bands, and market trading rules into a single rolling-horizon optimization (MPC).
 
@@ -270,3 +270,5 @@ Within the TOML configuration file all parameters for a simulation run can be se
 | `postprocessing.reference_driving_energy_costs.enabled` | bool | Enable static-price reference energy benchmark | `true` / `false` |
 | `postprocessing.reference_driving_energy_costs.static_price_eur_per_kwh` | float / null | Static benchmark price | EUR/kWh or `null` |
 | `postprocessing.reference_driving_energy_costs.energy_column` | str | Flexibility CSV column used for reference energy | column name |
+
+###
