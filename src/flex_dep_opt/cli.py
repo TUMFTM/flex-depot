@@ -1,7 +1,9 @@
 import argparse
+import logging
 import multiprocessing as mp
 import os
 import tempfile
+import traceback
 from functools import partial
 from pathlib import Path
 
@@ -13,6 +15,8 @@ from flex_dep_opt.config.settings import Settings
 from flex_dep_opt.io.results_io import make_run_dir
 from flex_dep_opt.workflows.mpc_workflow import run_mpc
 from flex_dep_opt.workflows.postprocessing_workflow import postprocess_mpc_results
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_TOML_NAME = "default.toml"
 
@@ -54,16 +58,27 @@ def _load_merged(config_path: str, default_path: str | None) -> Settings:
 
 
 def _run_one(config_path: str, default_path: str | None = None, results_root: str | None = None) -> dict:
-    settings = _load_merged(config_path, default_path)
-    run_dir = Path(results_root) / Path(config_path).stem if results_root else None
-    run_dir = run_mpc(settings, run_dir=run_dir)
-    postprocess_mpc_results(settings, run_dir=run_dir)
+    run_dir: Path | None = Path(results_root) / Path(config_path).stem if results_root else None
+    try:
+        settings = _load_merged(config_path, default_path)
+        run_dir = run_mpc(settings, run_dir=run_dir)
+        postprocess_mpc_results(settings, run_dir=run_dir)
 
-    row = {"config": config_path, "run_dir": str(run_dir)}
-    kpis_csv = run_dir / "kpis.csv"
-    if kpis_csv.exists():
-        row.update(pd.read_csv(kpis_csv).iloc[0].to_dict())
-    return row
+        row = {"config": config_path, "status": "ok", "run_dir": str(run_dir)}
+        kpis_csv = run_dir / "kpis.csv"
+        if kpis_csv.exists():
+            row.update(pd.read_csv(kpis_csv).iloc[0].to_dict())
+        return row
+
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error("Run failed for %s:\n%s", config_path, tb)
+        if run_dir is not None:
+            run_dir.mkdir(parents=True, exist_ok=True)
+            (run_dir / "FAILED.txt").write_text(
+                f"Config: {config_path}\nError: {e}\n\n{tb}", encoding="utf-8"
+            )
+        return {"config": config_path, "status": "failed", "run_dir": str(run_dir) if run_dir else "", "error": str(e)}
 
 
 def main():
@@ -126,5 +141,9 @@ def main():
 
         manifest = Path(args.manifest) if args.manifest else Path(results_root) / "manifest.csv"
         pd.DataFrame(rows).to_csv(manifest, index=False)
-        print(f"Batch done: {len(rows)} runs -> {manifest}")
+
+        n_ok = sum(1 for r in rows if r.get("status") == "ok")
+        n_failed = sum(1 for r in rows if r.get("status") == "failed")
+        status_str = f"{n_ok} ok, {n_failed} failed" if n_failed else f"{n_ok} ok"
+        print(f"Batch done: {len(rows)} runs ({status_str}) -> {manifest}")
         return
