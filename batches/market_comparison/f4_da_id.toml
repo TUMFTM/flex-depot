@@ -1,7 +1,7 @@
 [simulation]
 name = "f4_da_id"
 start = "2026-01-07 07:15"
-end = "2026-01-12 07:15"
+end = "2026-02-07 07:15"
 
 [optimization.markets.intraday]
 enabled = true
