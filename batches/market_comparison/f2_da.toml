@@ -1,7 +1,7 @@
 [simulation]
 name = "f2_da"
 start = "2026-01-01 08:30"
-end = "2026-02-01 08:30"
+end = "2026-03-25 23:45"
 
 [optimization.markets.intraday]
 enabled = false
