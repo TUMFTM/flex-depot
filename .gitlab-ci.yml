@@ -1,7 +1,11 @@
+# Pipelines run only on demand:
+#   - push with "[run]" anywhere in the commit message, or
+#   - manually via Build > Pipelines > "New pipeline" (variables can be
+#     overridden there, e.g. BATCH_DIR).
 workflow:
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "push"'
     - if: '$CI_PIPELINE_SOURCE == "web"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_MESSAGE =~ /\[run\]/'
     - when: never
 
 stages:
