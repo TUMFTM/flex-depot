@@ -1,0 +1,11 @@
+[simulation]
+name = "f1_c02"
+start = "2026-01-06 13:30"
+end = "2026-03-25 23:45"
+
+[optimization.flexibility]
+bounds_file = "data/flexibility/market/VBbounds_f1_e572kWh_p350kW_eta98.csv"
+
+[optimization.flexibility.cycle_regularization]
+enabled = true
+cost_eur_per_kwh_throughput = 0.02
