@@ -18,7 +18,7 @@ stages:
 
 variables:
   # PARAM MODIFICATION HERE
-  BATCH_DIR: "batches/power_sensitivity"  # batch directory passed to run-batch
+  BATCH_DIR: "batches/market_comparison"  # batch directory passed to run-batch
   JOBS: "4"                               # parallel scenario runs on the workstation
 
 # Builds the environment image (Python deps + gurobipy) and pushes it to the
