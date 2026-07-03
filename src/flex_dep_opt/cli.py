@@ -117,7 +117,12 @@ def main():
         "run-batch", help="Run sim+post for every TOML in a directory, write a KPI manifest."
     )
     p_batch.add_argument("configs_dir", help="Directory containing one TOML config per run.")
-    p_batch.add_argument("--jobs", type=int, default=1, help="Parallel processes (default: 1).")
+    p_batch.add_argument(
+        "--jobs",
+        type=int,
+        default=os.cpu_count() or 1,
+        help="Parallel processes (default: all CPU cores). Pair with solver_threads=1 per solve.",
+    )
     p_batch.add_argument(
         "--manifest",
         default=None,
