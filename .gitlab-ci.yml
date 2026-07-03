@@ -3,6 +3,10 @@
 #   - manually via Build > Pipelines > "New pipeline" (variables can be
 #     overridden there, e.g. BATCH_DIR).
 workflow:
+  # Simulation pipelines are compute runs, not tests: a newer commit must not
+  # cancel queued/running runs of older commits.
+  auto_cancel:
+    on_new_commit: none
   rules:
     - if: '$CI_PIPELINE_SOURCE == "web"'
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_MESSAGE =~ /\[run\]/'
@@ -50,7 +54,7 @@ run_batch:
   image: "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA"
   needs:
     - build_image
-  timeout: 48h
+  timeout: 72h
   script:
     - |
       if [ -f "$GUROBI_LICENSE" ]; then
