@@ -1,0 +1,11 @@
+[simulation]
+name = "f5_eta98"
+start = "2026-01-07 20:45"
+end = "2026-03-25 23:45"
+
+[optimization.flexibility]
+bounds_file = "data/flexibility/efficiency/eta_0.98/VBbounds_f5_e572kWh_p350kW_eta98.csv"
+
+[optimization.depot]
+eta_grid2depot = 0.98
+eta_depot2grid = 0.98
