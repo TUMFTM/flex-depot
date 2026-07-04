@@ -56,7 +56,7 @@ virtual_arbitrage = false
 
 [optimization.mpc]
 da_horizon_hours = 48
-id_horizon_hours = 1
+id_horizon_hours = 48
 fcr_price_horizon_hours = 48
 fcr_frequency_horizon_minutes = 0
 terminal_condition = true
