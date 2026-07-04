@@ -10,4 +10,4 @@ enabled = false
 enabled = false
 
 [optimization.flexibility]
-bounds_file = "data/flexibility/market/VBbounds_f6_e572kWh_p350kW_eta98.csv"
+bounds_file = "data/flexibility/market/VBbounds_f6_e572kWh_p150kW_eta98.csv"
