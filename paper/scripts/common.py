@@ -86,15 +86,50 @@ def resolve_run_dir(run_dir: str, manifest_dir: Path) -> Path:
     raise FileNotFoundError(f"Run directory not found: {run_dir} (also tried {fallback})")
 
 
+def _annualization_from_simulation(sim: dict, source: object) -> float:
+    start = pd.Timestamp(sim["start"]).tz_localize(LOCAL_TIMEZONE)
+    end = pd.Timestamp(sim["end"]).tz_localize(LOCAL_TIMEZONE)
+    sim_hours = (end - start) / pd.Timedelta(hours=1)
+    if sim_hours <= 0:
+        raise ValueError(f"Non-positive simulation horizon in {source}")
+    return HOURS_PER_YEAR / sim_hours
+
+
 def annualization_factor(run_dir: Path) -> float:
     """Annualization factor derived from the settings.toml snapshot saved in
     the run directory."""
     with open(run_dir / "settings.toml", "rb") as f:
         settings = tomllib.load(f)
-    sim = settings["simulation"]
-    start = pd.Timestamp(sim["start"]).tz_localize(LOCAL_TIMEZONE)
-    end = pd.Timestamp(sim["end"]).tz_localize(LOCAL_TIMEZONE)
-    sim_hours = (end - start) / pd.Timedelta(hours=1)
-    if sim_hours <= 0:
-        raise ValueError(f"Non-positive simulation horizon in {run_dir / 'settings.toml'}")
-    return HOURS_PER_YEAR / sim_hours
+    return _annualization_from_simulation(settings["simulation"], run_dir / "settings.toml")
+
+
+def annualization_factor_from_config(config_path: Path) -> float:
+    """Annualization factor derived from a batch run config, falling back to
+    the sibling default.toml for keys the run config does not override. Used
+    when the run directories (and their settings.toml snapshots) are gone."""
+    with open(config_path, "rb") as f:
+        sim = tomllib.load(f).get("simulation", {})
+    if "start" not in sim or "end" not in sim:
+        default_path = config_path.parent / "default.toml"
+        with open(default_path, "rb") as f:
+            sim = {**tomllib.load(f).get("simulation", {}), **sim}
+    return _annualization_from_simulation(sim, config_path)
+
+
+def manifest_row_annualization(row: pd.Series, manifest_dir: Path) -> float:
+    """Annualization factor for one manifest row.
+
+    Prefers the sim_start/sim_end columns written by run-batch, which make a
+    copied manifest.csv self-contained. Falls back to the settings.toml
+    snapshot in the run directory, then to the batch config tracked in the
+    repo (relevant when only the manifest was copied off the compute
+    machine)."""
+    start, end = row.get("sim_start"), row.get("sim_end")
+    if pd.notna(start) and pd.notna(end):
+        return _annualization_from_simulation(
+            {"start": start, "end": end}, f"manifest row for {row.get('config')}"
+        )
+    try:
+        return annualization_factor(resolve_run_dir(str(row["run_dir"]), manifest_dir))
+    except FileNotFoundError:
+        return annualization_factor_from_config(Path(str(row["config"])))

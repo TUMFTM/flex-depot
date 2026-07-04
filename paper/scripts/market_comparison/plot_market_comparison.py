@@ -16,9 +16,8 @@ from common import (
     MM_TO_INCH,
     SMALL_FONT_PT,
     TUM_COLORS,
-    annualization_factor,
     apply_paper_style,
-    resolve_run_dir,
+    manifest_row_annualization,
 )
 
 FIG_WIDTH_IN = FULL_WIDTH_IN
@@ -82,9 +81,7 @@ def load_plot_data(manifest: Path, metric: str) -> pd.DataFrame:
     unknown_fleets = sorted(set(plot_df["fleet"]) - set(FLEET_SIZES))
     if unknown_fleets:
         raise ValueError(f"No fleet size defined in common.FLEET_SIZES for: {unknown_fleets}")
-    annualization = df["run_dir"].map(
-        lambda rd: annualization_factor(resolve_run_dir(rd, manifest.parent))
-    )
+    annualization = df.apply(manifest_row_annualization, axis=1, manifest_dir=manifest.parent)
     plot_df["n_vehicles"] = plot_df["fleet"].map(FLEET_SIZES)
     plot_df[f"{metric}_per_year"] = plot_df[metric] * annualization
     plot_df[f"{metric}_per_year_per_bet"] = plot_df[f"{metric}_per_year"] / plot_df["n_vehicles"]

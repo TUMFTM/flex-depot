@@ -59,12 +59,20 @@ def _load_merged(config_path: str, default_path: str | None) -> Settings:
 
 def _run_one(config_path: str, default_path: str | None = None, results_root: str | None = None) -> dict:
     run_dir: Path | None = Path(results_root) / Path(config_path).stem if results_root else None
+    # sim_start/sim_end make the manifest self-contained for annualization,
+    # so plots work from the manifest.csv alone (run dirs are often too big
+    # to copy off the compute machine)
+    sim_times: dict[str, str] = {}
     try:
         settings = _load_merged(config_path, default_path)
+        sim_times = {
+            "sim_start": settings.simulation.start.isoformat(),
+            "sim_end": settings.simulation.end.isoformat(),
+        }
         run_dir = run_mpc(settings, run_dir=run_dir)
         postprocess_mpc_results(settings, run_dir=run_dir)
 
-        row = {"config": config_path, "status": "ok", "run_dir": str(run_dir)}
+        row = {"config": config_path, "status": "ok", "run_dir": str(run_dir), **sim_times}
         kpis_csv = run_dir / "kpis.csv"
         if kpis_csv.exists():
             row.update(pd.read_csv(kpis_csv).iloc[0].to_dict())
@@ -78,7 +86,13 @@ def _run_one(config_path: str, default_path: str | None = None, results_root: st
             (run_dir / "FAILED.txt").write_text(
                 f"Config: {config_path}\nError: {e}\n\n{tb}", encoding="utf-8"
             )
-        return {"config": config_path, "status": "failed", "run_dir": str(run_dir) if run_dir else "", "error": str(e)}
+        return {
+            "config": config_path,
+            "status": "failed",
+            "run_dir": str(run_dir) if run_dir else "",
+            **sim_times,
+            "error": str(e),
+        }
 
 
 def main():
