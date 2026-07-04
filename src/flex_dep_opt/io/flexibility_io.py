@@ -34,7 +34,10 @@ def read_flexibility_bounds_csv(path: str, tz: str = "UTC") -> pd.DataFrame:
     - Fails on duplicate timestamps
     - Ensures tz-aware DatetimeIndex
     """
-    df = pd.read_csv(path)
+    # round_trip: the default C-engine float parser is not correctly rounded and
+    # can flip the ordering of lower/upper bounds that collapse to the same
+    # value up to ~1 ULP (observed for fleet 6 at 2026-01-10 20:45 UTC).
+    df = pd.read_csv(path, float_precision="round_trip")
 
     missing = [c for c in REQUIRED_COLS if c not in df.columns]
     if missing:
@@ -88,6 +91,7 @@ def align_and_validate_flexibility_bounds(
     time_index: pd.DatetimeIndex,
     *,
     expected_len: int | None = None,
+    band_tolerance: float = 1e-6,
 ) -> pd.DataFrame:
     """
     Align flexibility bounds to a target time_index and validate consistency.
@@ -101,6 +105,9 @@ def align_and_validate_flexibility_bounds(
     5) Validate band consistency:
          - Power_lower_kW <= Power_upper_kW
          - Capacity_lower_kWh <= Capacity_upper_kWh
+       Violations up to `band_tolerance` (float noise on collapsed bands) are
+       repaired by snapping the lower bound onto the upper bound; larger
+       violations raise.
 
     Parameters
     ----------
@@ -111,6 +118,9 @@ def align_and_validate_flexibility_bounds(
     expected_len:
         Optional length check for `time_index`. This is a lightweight guardrail to avoid accidental mixing of decision index (N) and state index (N+1).
         Example: pass expected_len=N+1 when aligning state bounds.
+    band_tolerance:
+        Maximum lower-over-upper violation (kW / kWh) that is treated as float
+        noise and repaired instead of raising.
 
     Returns
     -------
@@ -147,15 +157,21 @@ def align_and_validate_flexibility_bounds(
     # -------------------------------------------------------------------------
     # Physical / logical consistency: lower bounds must not exceed upper bounds
     # -------------------------------------------------------------------------
-    bad_power = b["Power_lower_kW"] > b["Power_upper_kW"]
-    bad_energy = b["Capacity_lower_kWh"] > b["Capacity_upper_kWh"]
+    for lower_col, upper_col, label in (
+        ("Power_lower_kW", "Power_upper_kW", "power"),
+        ("Capacity_lower_kWh", "Capacity_upper_kWh", "energy"),
+    ):
+        violation = b[lower_col] - b[upper_col]
 
-    if bad_power.any():
-        ex = b.index[bad_power][:5]
-        raise ValueError(f"Inconsistent power band (lower > upper) at: {list(ex)}")
+        # Collapsed bands (lower == upper) carry ~1-ULP float noise; snap them
+        # instead of failing the whole run.
+        tiny = (violation > 0) & (violation <= band_tolerance)
+        if tiny.any():
+            b.loc[tiny, lower_col] = b.loc[tiny, upper_col]
 
-    if bad_energy.any():
-        ex = b.index[bad_energy][:5]
-        raise ValueError(f"Inconsistent energy band (lower > upper) at: {list(ex)}")
+        bad = violation > band_tolerance
+        if bad.any():
+            ex = b.index[bad][:5]
+            raise ValueError(f"Inconsistent {label} band (lower > upper) at: {list(ex)}")
 
     return b
