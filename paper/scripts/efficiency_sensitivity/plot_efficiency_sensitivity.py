@@ -1,0 +1,44 @@
+"""Placeholder: paper plots for the efficiency sensitivity batch.
+
+Run configs are named f<fleet>_eta<pct> (e.g. f1_eta95), varying the charging
+efficiency from 90 to 100 %. Will be implemented once the batch results are
+available.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Create paper-ready efficiency sensitivity plots from a batch manifest."
+    )
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        required=True,
+        help="Path to the batch manifest.csv.",
+    )
+    parser.add_argument(
+        "--output-base",
+        type=Path,
+        default=Path("paper/figures/efficiency_sensitivity/efficiency_sensitivity"),
+        help="Output path without extension. PDF, SVG, PNG and CSV are written.",
+    )
+    parser.add_argument("--dpi", type=int, default=300, help="PNG export DPI.")
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    sys.exit(
+        f"Not implemented yet: efficiency sensitivity plotting (manifest: {args.manifest}). "
+        "Waiting for batch results."
+    )
+
+
+if __name__ == "__main__":
+    main()
