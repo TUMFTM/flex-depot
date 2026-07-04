@@ -4,7 +4,7 @@ start = "2026-01-06 12:45"
 end = "2026-03-25 23:45"
 
 [optimization.flexibility]
-bounds_file = "data/flexibility/efficiency/eta_0.94/VBbounds_f3_e572kWh_p350kW_eta94.csv"
+bounds_file = "data/flexibility/efficiency/eta_0.94/VBbounds_f3_e572kWh_p150kW_eta94.csv"
 
 [optimization.depot]
 eta_grid2depot = 0.94

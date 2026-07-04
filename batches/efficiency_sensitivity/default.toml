@@ -56,14 +56,14 @@ virtual_arbitrage = false
 
 [optimization.mpc]
 da_horizon_hours = 48
-id_horizon_hours = 1
+id_horizon_hours = 48
 fcr_price_horizon_hours = 48
 fcr_frequency_horizon_minutes = 0
 terminal_condition = true
 terminal_weight_eur_per_kwh = 50.0
 
 [optimization.flexibility]
-bounds_file = "data/flexibility/efficiency/eta_0.98/VBbounds_f1_e572kWh_p350kW_eta98.csv"
+bounds_file = "data/flexibility/efficiency/eta_0.98/VBbounds_f1_e572kWh_p150kW_eta98.csv"
 
 [optimization.flexibility.cycle_regularization]
 enabled = true
