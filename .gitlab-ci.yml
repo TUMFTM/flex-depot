@@ -19,7 +19,6 @@ stages:
 variables:
   # PARAM MODIFICATION HERE
   BATCH_DIR: "batches/idhorizon_sensitivity"  # batch directory passed to run-batch
-  JOBS: "4"                               # parallel scenario runs on the workstation
 
 # Builds the environment image (Python deps + gurobipy) and pushes it to the
 # project container registry. Layers are cached via the :latest tag, so this
@@ -65,7 +64,7 @@ run_batch:
       fi
     - pip install --no-deps -e .
     - python -c "import pyomo.environ as pyo, sys; ok = pyo.SolverFactory('gurobi').available(False); print('gurobi available:', ok); sys.exit(0 if ok else 1)"
-    - python -m flex_dep_opt run-batch "$BATCH_DIR" --jobs "$JOBS"
+    - python -m flex_dep_opt run-batch "$BATCH_DIR"  # --jobs defaults to all CPU cores
   artifacts:
     when: always
     expire_in: 2 weeks

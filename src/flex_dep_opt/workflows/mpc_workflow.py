@@ -518,7 +518,13 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
             try:
                 _set_E0(model)
                 _set_terminal_terms(model)
-                solve_model(model, solver_name=sim_cfg.solver)
+                solve_model(
+                    model,
+                    solver_name=sim_cfg.solver,
+                    threads=sim_cfg.solver_threads,
+                    mip_gap=sim_cfg.solver_mip_gap,
+                    time_limit_s=sim_cfg.solver_time_limit_s,
+                )
                 solved = True
                 used_rebap = False
 
@@ -541,7 +547,13 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                     try:
                         _set_E0(model2)
                         _set_terminal_terms(model2)
-                        solve_model(model2, solver_name=sim_cfg.solver)
+                        solve_model(
+                            model2,
+                            solver_name=sim_cfg.solver,
+                            threads=sim_cfg.solver_threads,
+                            mip_gap=sim_cfg.solver_mip_gap,
+                            time_limit_s=sim_cfg.solver_time_limit_s,
+                        )
                         solved = True
                         used_rebap = True
                         model = model2
@@ -665,7 +677,13 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                                 continue
                         model.z_fcr[j].fix(forced_z)
                         try:
-                            solve_model(model, solver_name=sim_cfg.solver)
+                            solve_model(
+                                model,
+                                solver_name=sim_cfg.solver,
+                                threads=sim_cfg.solver_threads,
+                                mip_gap=sim_cfg.solver_mip_gap,
+                                time_limit_s=sim_cfg.solver_time_limit_s,
+                            )
                             terms_cf = extract_objective_terms(model)
                             if bid_val > 0:
                                 metrics = _fcr_breakeven_metrics(

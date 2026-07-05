@@ -13,6 +13,11 @@ class SimulationSettings(BaseModel):
     timestep_hours: float = 0.25
     name: str = "example_simulation"
     solver: Literal["cbc", "gurobi"] = "cbc"
+    # Default 8 matches the previous hard-coded solve_model default; set 1 for
+    # batch runs that parallelize across scenarios (--jobs).
+    solver_threads: int | None = 8
+    solver_mip_gap: float | None = None
+    solver_time_limit_s: int | None = None
 
 
 class MarketDetail(BaseModel):
