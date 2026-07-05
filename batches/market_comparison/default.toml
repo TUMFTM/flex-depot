@@ -4,6 +4,7 @@ end = "2026-03-25 23:45"
 timestep_hours = 0.25
 name = "market_comparison"
 solver = "gurobi"
+solver_threads = 1
 
 [optimization.markets.dayahead]
 enabled = true

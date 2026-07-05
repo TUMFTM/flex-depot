@@ -4,6 +4,7 @@ end = "2025-10-05 23:45"
 timestep_hours = 0.25
 name = "example"
 solver = "gurobi"
+solver_threads = 1
 
 [optimization.markets.dayahead]
 enabled = true
