@@ -121,7 +121,7 @@ def main():
         "--jobs",
         type=int,
         default=os.cpu_count() or 1,
-        help="Parallel processes (default: all CPU cores). Pair with solver_threads=1 per solve.",
+        help="Parallel processes (default: all CPU cores).",
     )
     p_batch.add_argument(
         "--manifest",
