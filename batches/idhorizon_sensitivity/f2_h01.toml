@@ -1,0 +1,10 @@
+[simulation]
+name = "f2_h01"
+start = "2026-01-06 13:30"
+end = "2026-03-25 23:45"
+
+[optimization.mpc]
+id_horizon_hours = 1
+
+[optimization.flexibility]
+bounds_file = "data/flexibility/market/VBbounds_f2_e572kWh_p150kW_eta98.csv"
