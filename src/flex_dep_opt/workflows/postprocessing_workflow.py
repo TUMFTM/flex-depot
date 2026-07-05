@@ -310,6 +310,15 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
     fig_cf.write_html(cashflow_html, include_plotlyjs="cdn")
     # webbrowser.open(cashflow_html.resolve().as_uri())
 
+    # -------------------------------------------------------------------------
+    # Optional cleanup: commit logs are only needed as input to this step and
+    # dominate the run directory size; drop them once KPIs and plots exist.
+    # -------------------------------------------------------------------------
+    if not settings.postprocessing.save_commits:
+        commit_csv.unlink(missing_ok=True)
+        fcr_commit_csv.unlink(missing_ok=True)
+        print("Commit CSVs removed (postprocessing.save_commits = false)")
+
     print(f"Result CSV files saved → {run_dir.as_posix()}")
     print(f"Result HTML plots saved → {run_dir.as_posix()}")
     print("Postprocessing finished")

@@ -128,6 +128,11 @@ class ReferenceDrivingEnergyCostsSettings(BaseModel):
 
 
 class PostprocessingSettings(BaseModel):
+    # False: delete commit.csv / fcr_commit.csv after successful postprocessing
+    # (they are the dominant disk cost per run; kpis.csv, dispatch.csv and the
+    # HTML plots are kept). They must still be written by the simulation since
+    # postprocessing reads them back from the run directory.
+    save_commits: bool = True
     reference_driving_energy_costs: ReferenceDrivingEnergyCostsSettings = Field(
         default_factory=ReferenceDrivingEnergyCostsSettings
     )

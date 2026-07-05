@@ -75,6 +75,9 @@ eta_grid2depot = 0.98
 eta_depot2grid = 0.98
 grid_connection_limit = 10000
 
+[postprocessing]
+save_commits = false
+
 [postprocessing.reference_driving_energy_costs]
 enabled = true
 static_price_eur_per_kwh = 0.1142
