@@ -1,6 +1,6 @@
 [simulation]
 name = "f5_h08"
-start = "2026-01-06 13:30"
+start = "2026-01-07 20:45"
 end = "2026-03-25 23:45"
 
 [optimization.mpc]
