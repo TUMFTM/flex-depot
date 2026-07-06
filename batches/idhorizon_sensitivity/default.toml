@@ -27,7 +27,7 @@ closes_previous_day = true
 offset_minutes_before_delivery = 0
 
 [optimization.trading.fcr]
-enabled = true
+enabled = false
 prices_source = "data/prices/prices_FCR_2026-01-01_2026-05-31.xlsx"
 frequency_source = "data/frequency/frequency_2026-01-01_2026-06-30.csv"
 acceptance_rate = 1.0
