@@ -1,6 +1,6 @@
 [simulation]
 start = "2026-01-01 00:00"
-end = "2026-03-25 23:45"
+end = "2026-05-31 23:45"
 timestep_hours = 0.25
 name = "market_comparison"
 solver = "gurobi"
@@ -13,7 +13,7 @@ fee_eur_per_kwh = 0.005
 
 [optimization.markets.intraday]
 enabled = true
-source = "data/prices/prices_ID_2026-01-01_2026-04-02.csv"
+source = "data/prices/prices_ID_2026-01-01_2026-05-31_tiled.csv"
 fee_eur_per_kwh = 0.008
 
 [optimization.trading]
