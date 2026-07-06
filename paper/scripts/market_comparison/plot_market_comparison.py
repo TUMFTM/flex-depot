@@ -5,9 +5,12 @@ import re
 import sys
 from pathlib import Path
 
+import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common import (
@@ -52,23 +55,35 @@ HATCHES = {
     "DA+ID": "///",
     "DA+ID+FCR": "xxx",
 }
+# Thin gray hatching so the black unidirectional benchmark markers stand out
+# against the hatched bars.
+HATCH_COLOR = "0.45"
+plt.rcParams["hatch.linewidth"] = 0.4
 
 
-def _parse_run_name(row: pd.Series) -> tuple[str, str]:
+def _apply_hatch_color(patch) -> None:
+    """Gray hatch on a black-edged patch. Matplotlib couples the hatch color
+    to an explicitly set edgecolor, so override the private attribute
+    (matplotlib >= 3.11 exposes this as the hatchcolor parameter)."""
+    patch._hatch_color = mcolors.to_rgba(HATCH_COLOR)
+
+
+def _parse_run_name(row: pd.Series) -> tuple[str, str, str]:
     candidates = [
         Path(str(row["config"])).stem if pd.notna(row.get("config")) else "",
         Path(str(row["run_dir"])).name if pd.notna(row.get("run_dir")) else "",
     ]
     for name in candidates:
-        match = re.fullmatch(r"f(\d+)_(da(?:_id)?(?:_fcr)?)", name)
+        match = re.fullmatch(r"f(\d+)_(da(?:_id)?(?:_fcr)?)(_uni)?", name)
         if match:
             fleet = f"F{int(match.group(1))}"
             setup = SETUP_FROM_SUFFIX[match.group(2)]
-            return fleet, setup
+            direction = "uni" if match.group(3) else "bidi"
+            return fleet, setup, direction
     raise ValueError(f"Could not parse fleet/setup from manifest row: {row.to_dict()}")
 
 
-def load_plot_data(manifest: Path, metric: str) -> pd.DataFrame:
+def _load_manifest(manifest: Path, metric: str) -> pd.DataFrame:
     df = pd.read_csv(manifest)
     required = {"config", "run_dir", metric}
     missing = required.difference(df.columns)
@@ -76,27 +91,58 @@ def load_plot_data(manifest: Path, metric: str) -> pd.DataFrame:
         raise ValueError(f"Manifest is missing required columns: {sorted(missing)}")
 
     parsed = df.apply(_parse_run_name, axis=1, result_type="expand")
-    parsed.columns = ["fleet", "setup"]
-    plot_df = pd.concat([parsed, df[[metric]].astype(float)], axis=1)
-    unknown_fleets = sorted(set(plot_df["fleet"]) - set(FLEET_SIZES))
+    parsed.columns = ["fleet", "setup", "direction"]
+    out = pd.concat([parsed, df[[metric]].astype(float)], axis=1)
+    unknown_fleets = sorted(set(out["fleet"]) - set(FLEET_SIZES))
     if unknown_fleets:
         raise ValueError(f"No fleet size defined in common.FLEET_SIZES for: {unknown_fleets}")
     annualization = df.apply(manifest_row_annualization, axis=1, manifest_dir=manifest.parent)
-    plot_df["n_vehicles"] = plot_df["fleet"].map(FLEET_SIZES)
-    plot_df[f"{metric}_per_year"] = plot_df[metric] * annualization
-    plot_df[f"{metric}_per_year_per_bet"] = plot_df[f"{metric}_per_year"] / plot_df["n_vehicles"]
+    out["n_vehicles"] = out["fleet"].map(FLEET_SIZES)
+    out[f"{metric}_per_year"] = out[metric] * annualization
+    out[f"{metric}_per_year_per_bet"] = out[f"{metric}_per_year"] / out["n_vehicles"]
+    return out
 
-    duplicate_mask = plot_df.duplicated(["fleet", "setup"], keep=False)
-    if duplicate_mask.any():
-        duplicates = plot_df.loc[duplicate_mask, ["fleet", "setup"]]
-        raise ValueError(f"Duplicate fleet/setup combinations in manifest:\n{duplicates}")
 
-    fleet_order = sorted(plot_df["fleet"].unique(), key=lambda value: int(value[1:]))
+def _pivot_direction(df: pd.DataFrame, metric: str, direction: str) -> pd.DataFrame:
+    """Reindex one direction's rows onto the full fleet x setup grid and fail
+    on gaps, so missing runs surface as errors instead of silent holes."""
+    subset = df[df["direction"] == direction].drop(columns=["direction"])
+    fleet_order = sorted(df["fleet"].unique(), key=lambda value: int(value[1:]))
     index = pd.MultiIndex.from_product([fleet_order, SETUP_ORDER], names=["fleet", "setup"])
-    plot_df = plot_df.set_index(["fleet", "setup"]).reindex(index).reset_index()
-    if plot_df[metric].isna().any():
-        missing_rows = plot_df.loc[plot_df[metric].isna(), ["fleet", "setup"]]
-        raise ValueError(f"Missing market comparison rows:\n{missing_rows}")
+    subset = subset.set_index(["fleet", "setup"]).reindex(index).reset_index()
+    if subset[metric].isna().any():
+        missing_rows = subset.loc[subset[metric].isna(), ["fleet", "setup"]]
+        raise ValueError(f"Missing {direction} market comparison rows:\n{missing_rows}")
+    return subset
+
+
+def load_plot_data(manifest: Path, metric: str, manifest_uni: Path | None = None) -> pd.DataFrame:
+    """Wide plot table: one row per fleet/setup with bidirectional values and,
+    when unidirectional runs exist, matching *_uni columns.
+
+    Unidirectional runs are recognized by their _uni name suffix within a
+    combined manifest; a separate uni-only manifest (whose run names carry no
+    suffix) can be supplied via manifest_uni instead.
+    """
+    df = _load_manifest(manifest, metric)
+    if manifest_uni is not None:
+        uni_df = _load_manifest(manifest_uni, metric)
+        uni_df["direction"] = "uni"
+        df = pd.concat([df[df["direction"] == "bidi"], uni_df], ignore_index=True)
+
+    duplicate_mask = df.duplicated(["fleet", "setup", "direction"], keep=False)
+    if duplicate_mask.any():
+        duplicates = df.loc[duplicate_mask, ["fleet", "setup", "direction"]]
+        raise ValueError(f"Duplicate fleet/setup/direction combinations:\n{duplicates}")
+
+    plot_df = _pivot_direction(df, metric, "bidi")
+    if (df["direction"] == "uni").any():
+        value_cols = [metric, f"{metric}_per_year", f"{metric}_per_year_per_bet"]
+        uni = _pivot_direction(df, metric, "uni")
+        uni = uni[["fleet", "setup", *value_cols]].rename(
+            columns={col: f"{col}_uni" for col in value_cols}
+        )
+        plot_df = plot_df.merge(uni, on=["fleet", "setup"], validate="one_to_one")
 
     return plot_df
 
@@ -116,6 +162,9 @@ def _draw_panel(ax: plt.Axes, plot_df: pd.DataFrame, value_col: str, ylabel: str
         "DA+ID+FCR": width,
     }
 
+    uni_col = f"{value_col}_uni"
+    has_uni = uni_col in plot_df.columns
+
     for setup in SETUP_ORDER:
         subset = plot_df[plot_df["setup"] == setup].set_index("fleet").loc[fleets]
         values_keur = subset[value_col].to_numpy() / 1e3
@@ -129,12 +178,28 @@ def _draw_panel(ax: plt.Axes, plot_df: pd.DataFrame, value_col: str, ylabel: str
             linewidth=0.6,
             hatch=HATCHES[setup],
         )
+        for patch in container.patches:
+            _apply_hatch_color(patch)
         ax.bar_label(
             container,
             labels=[_bar_label(v) for v in values_keur],
             fontsize=BAR_LABEL_FONT_PT,
             padding=2,
         )
+        if has_uni:
+            # Unidirectional level as a benchmark marker on the bidirectional
+            # bar; exactly bar-wide so markers of neighboring bars at similar
+            # heights do not merge into one line.
+            uni_keur = subset[uni_col].to_numpy() / 1e3
+            centers = x + offsets[setup]
+            ax.hlines(
+                uni_keur,
+                centers - 0.5 * width,
+                centers + 0.5 * width,
+                color="black",
+                linewidth=1.4,
+                zorder=3,
+            )
 
     ax.set_ylabel(ylabel)
     ax.set_xticks(x, fleets)
@@ -180,12 +245,30 @@ def make_figure(plot_df: pd.DataFrame, metric: str, output_base: Path) -> Path:
 
     # shared legend above the top panel, outside the axes to avoid any
     # collision with bars or labels
+    handles = [
+        Patch(
+            facecolor=FILL_COLORS[setup],
+            hatch=HATCHES[setup],
+            edgecolor="black",
+            linewidth=0.6,
+            label=setup,
+        )
+        for setup in SETUP_ORDER
+    ]
+    for handle in handles:
+        _apply_hatch_color(handle)
+    if f"{metric}_per_year_uni" in plot_df.columns:
+        handles.append(
+            Line2D([0], [0], color="black", linewidth=1.4, label="Unidirectional")
+        )
     ax_a.legend(
-        ncols=3,
+        handles=handles,
+        ncols=len(handles),
         frameon=False,
         loc="lower center",
         bbox_to_anchor=(0.5, 1.0),
         borderaxespad=0.0,
+        columnspacing=1.2,
     )
 
     output_base.parent.mkdir(parents=True, exist_ok=True)
@@ -203,7 +286,19 @@ def parse_args() -> argparse.Namespace:
         "--manifest",
         type=Path,
         required=True,
-        help="Path to the batch manifest.csv.",
+        help=(
+            "Path to the batch manifest.csv. Runs whose names end in _uni are "
+            "drawn as unidirectional benchmark markers on the bidirectional bars."
+        ),
+    )
+    parser.add_argument(
+        "--manifest-uni",
+        type=Path,
+        default=None,
+        help=(
+            "Optional separate manifest.csv holding the unidirectional runs "
+            "(legacy two-batch layout where uni run names carry no _uni suffix)."
+        ),
     )
     parser.add_argument(
         "--output-base",
@@ -221,7 +316,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    plot_df = load_plot_data(args.manifest, args.metric)
+    plot_df = load_plot_data(args.manifest, args.metric, args.manifest_uni)
     args.output_base.parent.mkdir(parents=True, exist_ok=True)
     plot_df.to_csv(args.output_base.with_suffix(".csv"), index=False)
     print(f"Wrote {args.output_base.with_suffix('.csv')}")

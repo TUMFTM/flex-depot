@@ -1,6 +1,6 @@
 [simulation]
-name = "f4_da_id"
-start = "2026-01-07 07:15"
+name = "f3_da_id_uni"
+start = "2026-01-06 12:45"
 end = "2026-03-25 23:45"
 
 [optimization.markets.intraday]
@@ -10,4 +10,4 @@ enabled = true
 enabled = false
 
 [optimization.flexibility]
-bounds_file = "data/flexibility/market/unidirectional/VBbounds_f4_e572kWh_p150kW_eta98.csv"
+bounds_file = "data/flexibility/market/unidirectional/VBbounds_f3_e572kWh_p150kW_eta98.csv"

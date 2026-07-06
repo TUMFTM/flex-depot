@@ -18,7 +18,7 @@ stages:
 
 variables:
   # PARAM MODIFICATION HERE
-  BATCH_DIR: "batches/market_comparison_uni"  # batch directory passed to run-batch
+  BATCH_DIR: "batches/market_comparison"  # batch directory passed to run-batch
 
 # Builds the environment image (Python deps + gurobipy) and pushes it to the
 # project container registry. Layers are cached via the :latest tag, so this
