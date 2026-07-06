@@ -92,7 +92,7 @@ def load_plot_data(manifest: Path, metric: str) -> pd.DataFrame:
     return plot_df.sort_values(["fleet", "horizon_h"]).reset_index(drop=True)
 
 
-def make_figure(plot_df: pd.DataFrame, metric: str, output_base: Path) -> Path:
+def make_figure(plot_df: pd.DataFrame, metric: str, output_base: Path, xscale: str = "log") -> Path:
     fig, ax = plt.subplots(figsize=(FIG_WIDTH_IN, FIG_HEIGHT_IN), constrained_layout=True)
 
     value_col = f"{metric}_per_year_per_bet"
@@ -116,10 +116,13 @@ def make_figure(plot_df: pd.DataFrame, metric: str, output_base: Path) -> Path:
     # log axis keeps the 1-8 h points readable. Ticks sit exactly on the
     # simulated horizons.
     horizons = sorted(plot_df["horizon_h"].unique())
-    ax.set_xscale("log", base=2)
-    ax.set_xticks(horizons)
-    ax.set_xticklabels([str(h) for h in horizons])
-    ax.minorticks_off()
+    if xscale == "log":
+        ax.set_xscale("log", base=2)
+        ax.set_xticks(horizons)
+        ax.set_xticklabels([str(h) for h in horizons])
+        ax.minorticks_off()
+    else:
+        ax.set_xticks(horizons)
 
     ax.set_xlabel("Intraday trading horizon (h)")
     ax.set_ylabel("Annual gross profit per BET vs.\nstatic-price charging (k€/a)")
@@ -166,6 +169,12 @@ def parse_args() -> argparse.Namespace:
         default="total_potential_gross_profit_delta_eur",
         help="Manifest column to plot on the y-axis.",
     )
+    parser.add_argument(
+        "--xscale",
+        choices=("log", "linear"),
+        default="log",
+        help="Scaling of the horizon axis.",
+    )
     return parser.parse_args()
 
 
@@ -176,7 +185,7 @@ def main() -> None:
     plot_df.to_csv(args.output_base.with_suffix(".csv"), index=False)
     print(f"Wrote {args.output_base.with_suffix('.csv')}")
 
-    pdf_path = make_figure(plot_df, args.metric, args.output_base)
+    pdf_path = make_figure(plot_df, args.metric, args.output_base, args.xscale)
     print(f"Wrote {pdf_path}")
 
 
