@@ -112,8 +112,8 @@ def make_figure(plot_df: pd.DataFrame, metric: str, output_base: Path) -> Path:
             markeredgewidth=0.4,
         )
 
-    ax.set_xlabel("Per-vehicle charging power (kW)")
-    ax.set_ylabel("Annual gross profit per BET vs.\nstatic-price charging (k€/a)")
+    ax.set_xlabel("Per BET charging power (kW)")
+    ax.set_ylabel("Annualized gross profit per BET vs.\nstatic-price charging (k€/a)")
     # ticks on the actual simulated power levels; the linear axis keeps the
     # (non-equidistant) spacing honest
     ax.set_xticks(sorted(plot_df["power_kw"].unique()))

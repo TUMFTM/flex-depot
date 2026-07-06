@@ -157,13 +157,13 @@ def make_figure(plot_df: pd.DataFrame, metric: str, output_base: Path) -> Path:
         ax_a,
         plot_df,
         f"{metric}_per_year",
-        "Annual gross profit vs.\nstatic-price charging (k€/a)",
+        "Annualized gross profit vs.\nstatic-price charging (k€/a)",
     )
     _draw_panel(
         ax_b,
         plot_df,
         f"{metric}_per_year_per_bet",
-        "Annual gross profit per BET vs.\nstatic-price charging (k€/a)",
+        "Annualized gross profit per BET vs.\nstatic-price charging (k€/a)",
     )
     ax_b.set_xlabel("Fleet")
 

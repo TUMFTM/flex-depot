@@ -125,7 +125,7 @@ def make_figure(plot_df: pd.DataFrame, metric: str, output_base: Path, xscale: s
         ax.set_xticks(horizons)
 
     ax.set_xlabel("Intraday trading horizon (h)")
-    ax.set_ylabel("Annual gross profit per BET vs.\nstatic-price charging (k€/a)")
+    ax.set_ylabel("Annualized gross profit per BET vs.\nstatic-price charging (k€/a)")
     ax.set_ylim(bottom=0)
     ax.grid(axis="y", color="#bfbfbf", linewidth=0.5, alpha=0.8)
     ax.set_axisbelow(True)

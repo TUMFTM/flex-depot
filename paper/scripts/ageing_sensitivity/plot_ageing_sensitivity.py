@@ -135,8 +135,8 @@ def make_figure(plot_df: pd.DataFrame, metric: str, output_base: Path) -> Path:
             markeredgewidth=0.4,
         )
 
-    ax.set_xlabel("Cycle ageing cost (ct/kWh throughput)")
-    ax.set_ylabel("Annual gross profit per BET vs.\nstatic-price charging (k€/a)")
+    ax.set_xlabel("Energy throughput cost (ct/kWh)")
+    ax.set_ylabel("Annualized gross profit per BET vs.\nstatic-price charging (k€/a)")
     ax.set_xticks(sorted((plot_df["cost_eur_per_kwh"] * 100.0).unique()))
     ax.set_ylim(bottom=0)
     ax.grid(axis="y", color="#bfbfbf", linewidth=0.5, alpha=0.8)

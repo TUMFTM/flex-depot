@@ -112,8 +112,8 @@ def make_figure(plot_df: pd.DataFrame, metric: str, output_base: Path) -> Path:
             markeredgewidth=0.4,
         )
 
-    ax.set_xlabel("Charging efficiency (%)")
-    ax.set_ylabel("Annual gross profit per BET vs.\nstatic-price charging (k€/a)")
+    ax.set_xlabel("(Dis-)Charging efficiency (%)")
+    ax.set_ylabel("Annualized gross profit per BET vs.\nstatic-price charging (k€/a)")
     ax.set_xticks(sorted(plot_df["efficiency_pct"].unique()))
     ax.set_ylim(bottom=0)
     ax.grid(axis="y", color="#bfbfbf", linewidth=0.5, alpha=0.8)
