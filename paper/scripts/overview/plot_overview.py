@@ -64,8 +64,8 @@ TUM_GREEN = getattr(common, "COL_FCR", "#A2AD00")    # market: FCR
 TUM_DARKBLUE = "#003359"
 GRAY_EDGE = "#8C8C8C"
 GRAY_FILL = "#EFEFEF"
-HIGHLIGHT = "#B55CA5"     # tum-pink: "this study" accent
-HIGHLIGHT_BG = "#F6EAF4"  # tum-pink-4: transparent-looking pink fill
+HIGHLIGHT = "#114584"     # tum-blue-dark-3: "this study" accent
+HIGHLIGHT_BG = "#E3EEFA"  # tum-blue-light-4: transparent-looking light fill
 
 def tint(hexcol, f=0.82):
     """Mix a color with white (f = white fraction)."""
@@ -197,7 +197,7 @@ ax_a = fig.add_axes([A["x0"] + 0.012, 0.700, A["x1"] - A["x0"] - 0.024, 0.145])
 ax_a.set(xlim=(0, 10), ylim=(0, 5.4)); ax_a.set_aspect("equal"); ax_a.axis("off")
 draw_truck(ax_a, x0=1.65, y0=1.3)   # truck spans 6.7 units: center in xlim 0..10
 ax_a.text(5, 4.7, f"{len(FLEET_SIZES)} fleets  |  {sum(FLEET_SIZES.values())} trucks | 2.15 mio. km",
-          fontsize=5.4, ha="center", va="center", color="0.25")
+          fontsize=FS_SMALL, ha="center", va="center", color="0.25")
 ftext((A["x0"] + A["x1"]) / 2, 0.678, "Real telemetry data,\n6 home depots",
       fs=FS_SMALL, c="0.30")
 badge((A["x0"] + A["x1"]) / 2, 0.636, "Paper et al. [1]†", GRAY_FILL, GRAY_EDGE, "0.25")
@@ -209,7 +209,7 @@ ax_b = fig.add_axes([B["x0"] + 0.012, 0.700, B["x1"] - B["x0"] - 0.024, 0.145])
 ax_b.set(xlim=(0, 10), ylim=(0, 5.4)); ax_b.set_aspect("equal"); ax_b.axis("off")
 draw_truck(ax_b, x0=1.65, y0=1.3, battery=True)
 ax_b.text(5, 4.7, "Diesel \u2192 BET",
-          fontsize=5.4, ha="center", va="center", color="0.25")
+          fontsize=FS_SMALL, ha="center", va="center", color="0.25")
 ftext((B["x0"] + B["x1"]) / 2, 0.678, "Depot arrival & departure times,\nCharging demand per BET",
       fs=FS_SMALL, c="0.30")
 badge((B["x0"] + B["x1"]) / 2, 0.636, "Paper et al. [1]†", GRAY_FILL, GRAY_EDGE, "0.25")
@@ -228,13 +228,13 @@ ax_c1.set_ylabel("Power", fontsize=FS_SMALL, labelpad=1)
 ax_c2 = fig.add_axes([C["x0"] + 0.042, 0.708, C["x1"] - C["x0"] - 0.070, 0.070])
 ax_c2.fill_between(t, e_lo, e_up, fc=band_f, ec=band_c, lw=0.7)
 ax_c2.set(xlim=(0, 24), xticks=[], yticks=[])
-ax_c2.set_xlabel("time", fontsize=FS_SMALL, labelpad=2)
+ax_c2.set_xlabel("Time", fontsize=FS_SMALL, labelpad=2)
 ax_c2.set_ylabel("Energy", fontsize=FS_SMALL, labelpad=1)
 for ax in (ax_c1, ax_c2):
     ax.tick_params(length=1.5, pad=1)
     for s in ("top", "right"):
         ax.spines[s].set_visible(False)
-ftext((C["x0"] + C["x1"]) / 2, 0.662, "Virtual battery per depot \u00b7 "
+ftext((C["x0"] + C["x1"]) / 2, 0.672, "Virtual battery per depot \u00b7 "
       "P, \u03b7, uni/bidi variations", fs=FS_SMALL, c="0.30")
 badge((C["x0"] + C["x1"]) / 2, 0.636, "Park et al. [2]†", GRAY_FILL, GRAY_EDGE, "0.25")
 
@@ -256,12 +256,12 @@ price_id = np.interp(h_id, h, price) + rng_id.normal(0, 8, h_id.size)
 ax_d.step(h_id, np.clip(price_norm(price_id), 0.02, 1.0), where="post",
           color=MARKET["ID"], lw=0.6)
 ax_d.add_patch(Rectangle((24, 0.04), 12, 0.96, fc=MARKET["ID"], alpha=0.13, ec="none"))
-ax_d.text(30, 0.985, "ID trading", fontsize=5.2, color=MARKET["ID"],
+ax_d.text(30, 0.985, "ID trading", fontsize=FS_SMALL, color=MARKET["ID"],
           ha="center", va="top")
 for gx, gc, lbl, halign, dx in ((8, MARKET["FCR"], "FCR gc", "right", -0.4),
                                  (12, MARKET["DA"], "DA gc", "left", 0.4)):
     ax_d.vlines(gx, 0.04, 1.0, color=gc, lw=0.8, ls=(0, (3, 2)))
-    ax_d.text(gx + dx, 0.985, lbl, fontsize=5.2, color=gc, ha=halign, va="top")
+    ax_d.text(gx + dx, 0.985, lbl, fontsize=FS_SMALL, color=gc, ha=halign, va="top")
 ax_d.set(xlim=(0, 36), ylim=(0, 1.02), yticks=[],
          xticks=[0, 12, 24, 36])
 ax_d.tick_params(length=1.5, pad=1, labelbottom=False)
@@ -277,7 +277,7 @@ fcr_vals = [0.35, 0.28, 0.42, 0.55, 0.45, 0.62, 0.38, 0.52, 0.70]
 ax_f.stairs(fcr_vals, fcr_edges, fill=True, fc=tint(MARKET["FCR"], 0.6), ec="none")
 ax_f.stairs(fcr_vals, fcr_edges, fill=False, ec=MARKET["FCR"], lw=0.8)
 ax_f.vlines(8, 0, 1, color=MARKET["FCR"], lw=0.8, ls=(0, (3, 2)))
-ax_f.text(0.6, 0.95, "FCR capacity (4 h)", fontsize=5.2,
+ax_f.text(0.6, 0.95, "FCR capacity (4 h)", fontsize=FS_SMALL,
           color=MARKET["FCR"], ha="left", va="top")
 ax_f.set(xlim=(0, 36), ylim=(0, 1.0), yticks=[], xticks=[0, 12, 24, 36])
 ax_f.set_xticklabels(["D\u22121, 0 h", "12 h", "D, 0 h", "delivery"])
@@ -320,7 +320,7 @@ for i, (scen, (total, uni)) in enumerate(res.items()):
 # neutral gray box stands in for the (differently colored) bidi bars
 ax_e.legend(handles=[Patch(fc="0.85", ec="black", lw=0.5, label="Bidirectional"),
                      Line2D([0], [0], color="black", lw=1.2, label="Unidirectional")],
-            frameon=False, fontsize=5.2, loc="upper left",
+            frameon=False, fontsize=FS_SMALL, loc="upper left",
             handlelength=1.2, labelspacing=0.3, borderaxespad=0.1)
 ax_e.set(xticks=range(len(res)), xticklabels=list(res), yticks=[])
 ax_e.set_ylabel("Annualized profit", fontsize=FS_SMALL, labelpad=1)
@@ -353,7 +353,6 @@ farrow((D["x1"] + 0.006, 0.30), (E["x0"] - 0.006, 0.30))
 ftext(0.966, 0.036, "† authors' prior work", fs=FS_SMALL, c="0.30", ha="right")
 
 # ---------------------------------------------------------- export -----
-for ext in ("png", "svg", "pdf"):
-    fig.savefig(FIG_DIR / f"fig1_overview.{ext}", dpi=300 if ext == "png" else None,
-                facecolor="white", bbox_inches=None)
+for ext in ("svg", "pdf"):
+    fig.savefig(FIG_DIR / f"overview.{ext}", facecolor="white", bbox_inches=None)
 print(f"figures written to {FIG_DIR.resolve()}")
