@@ -15,7 +15,9 @@ paper/
 ```
 
 Batches: `market_comparison`, `power_sensitivity`, `efficiency_sensitivity`,
-`ageing_sensitivity`. The efficiency/ageing scripts are placeholders until
+`ageing_sensitivity`, plus `overview` (methodology pipeline figure, Fig. 1;
+currently drawn from synthetic placeholder data, no batch results needed).
+The efficiency/ageing scripts are placeholders until
 their batch results are available; update the `REPLACE_ME` manifest path in
 the corresponding `.bat` once a run exists.
 
