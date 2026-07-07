@@ -335,7 +335,7 @@ for j, line in enumerate(["Markets: DA / +ID / +FCR",
                           "(Dis-)Charging power & efficiency,",
                           "Ageing, ID horizon"]):
     ftext(dx, 0.385 - 0.052 * j, line, fs=FS_TEXT, c="0.15", ha="left")
-ftext(dx, 0.150, "6 fleets, 150 BETs\nJan\u2013Aug 2026, 15 min\nannualized per BET",
+ftext(dx, 0.150, "6 fleets, 5-84 BETs per fleet\nJan\u2013Aug 2026, 15 min\nannualized per BET",
       fs=FS_SMALL, c="0.35", ha="left")
 
 # ---------------------------------------------------------- arrows -----

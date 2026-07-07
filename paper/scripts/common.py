@@ -40,6 +40,8 @@ def apply_paper_style() -> None:
             "ytick.major.width": 0.6,
             "pdf.fonttype": 42,
             "ps.fonttype": 42,
+            # keep SVG text as text (not paths) so figures stay editable
+            "svg.fonttype": "none",
         }
     )
 

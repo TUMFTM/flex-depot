@@ -135,6 +135,7 @@ def make_figure(plot_df: pd.DataFrame, metric: str, output_base: Path) -> Path:
     output_base.parent.mkdir(parents=True, exist_ok=True)
     pdf_path = output_base.with_suffix(".pdf")
     fig.savefig(pdf_path)
+    fig.savefig(output_base.with_suffix(".svg"))
     plt.close(fig)
     return pdf_path
 
