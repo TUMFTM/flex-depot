@@ -1,6 +1,6 @@
 [simulation]
-start = "2025-10-01 00:00"
-end = "2025-10-08 00:00"
+start = "2026-01-08 00:00"
+end = "2026-01-12 00:00"
 timestep_hours = 0.25
 name = "illustrative_example"
 solver = "gurobi"
@@ -8,12 +8,12 @@ solver = "gurobi"
 [optimization.markets.dayahead]
 enabled = true
 source = "data/example/prices/prices_DA_example.csv"
-fee_eur_per_kwh = 0.005                      # clearing fee + exchange fee + broker fee + ...
+fee_eur_per_kwh = 0.00005                     # clearing fee + exchange fee + broker fee + ...
 
 [optimization.markets.intraday]
 enabled = true
 source = "data/example/prices/prices_IDC_example.csv"
-fee_eur_per_kwh = 0.008                       # clearing fee + exchange fee + broker fee + ...
+fee_eur_per_kwh = 0.0001                      # clearing fee + exchange fee + broker fee + ...
 
 [optimization.trading]
 mode = "realistic"
@@ -31,8 +31,8 @@ prices_source = "data/example/prices/prices_FCR_example.xlsx"
 frequency_source = "data/example/frequency/frequency_example.csv"
 acceptance_rate = 1.0
 acceptance_seed = 1
-breakeven_analysis = true
-breakeven_include_zero_bid = true
+breakeven_analysis = false
+breakeven_include_zero_bid = false
 gate_closure_hour = "08:00"
 gate_closure_closes_previous_day = true
 gate_closure_timezone = "Europe/Berlin"
@@ -56,22 +56,22 @@ virtual_arbitrage = false
 
 [optimization.mpc]
 da_horizon_hours = 48
-id_horizon_hours = 1
+id_horizon_hours = 48
 fcr_price_horizon_hours = 48
 fcr_frequency_horizon_minutes = 0
 terminal_condition = true
 terminal_weight_eur_per_kwh = 50.0
 
 [optimization.flexibility]
-bounds_file = "data/example/flexibility/vb_bounds_example_new.csv"
+bounds_file = "data/example/flexibility/vb_bounds_example.csv"
 
 [optimization.flexibility.cycle_regularization]
 enabled = true
 cost_eur_per_kwh_throughput = 0.02
 
 [optimization.depot]
-eta_grid2depot = 1.0
-eta_depot2grid = 1.0
+eta_grid2depot = 0.98
+eta_depot2grid = 0.98
 grid_connection_limit = 10000
 
 [postprocessing.reference_driving_energy_costs]
