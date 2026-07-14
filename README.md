@@ -1,14 +1,16 @@
 # FLEX-DEPOT
 
+[![Tests](https://github.com/TUMFTM/flex-depot/actions/workflows/test.yml/badge.svg)](https://github.com/TUMFTM/flex-depot/actions/workflows/test.yml)
+
 FLEX-DEPOT is a Python project for optimizing flexibility at a logistics depot incorporating electric trucks. It combines market
 price series, flexibility power and energy bands, and market trading rules into a single rolling-horizon optimization (MPC). 
 The core of the project is a MILP/LP (depending on settings) [Pyomo](https://pyomo.readthedocs.io/en/stable/) model that decides market
 positions and physical power flow between depot and public grid while respecting aggregated asset power and energy flexibility bounds and gate-closure rules.
 
 Key capabilities:
-- Unified optimization for DA/ID spot markets. Ready to implement other markets.
-- (Optional) second optimization run with imbalance activated to ensure feasiblity.
+- Unified optimization for DA/ID spot markets and FCR reserve market.
 - Rolling-horizon MPC that commits market positions when gate closure is reached.
+- Optional imbalance settlement (reBAP) as a feasibility fallback.
 - CSV-based I/O for prices, flexibility bounds, and results.
 - Plotly-based visualization of dispatch, prices, and cashflows.
 
@@ -19,6 +21,13 @@ Department of Mobility Systems Engineering <br>
 TUM School of Engineering and Design <br>
 Technical University of Munich <br>
 [marcel.broedel@tum.de](mailto:marcel.broedel@tum.de)
+
+### Contributors
+Tien Doan, B.Sc. - Master's student <br>
+Adrian Würth, B.Sc. - Master's student <br>
+Woan-Ho Park, M.Sc. - Visiting research associate <br>
+Philipp Rosner, M.Sc. - Research associate <br>
+Roman Schade, M.Sc. - Master's student <br>
 
 ## Licensing
 FLEX-DEPOT is licensed under the [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) open source license. <br>
@@ -34,7 +43,7 @@ If you use FLEX-DEPOT in academic work, please cite **both**:
 2. The associated publication
 
 **Software:**
-Brödel, M. (2026). FLEX-DEPOT (Version 1.0.0). GitHub repository.  
+Brödel, M. (2026). FLEX-DEPOT (Version 2.0.0). GitHub repository.  
 https://github.com/TUMFTM/flex-depot
 
 **Publication:**
@@ -99,19 +108,16 @@ pip install -e .
 ```
 
 ### 4) Solver
-FLEX-DEPOT uses the [Pyomo](https://pyomo.readthedocs.io/en/stable/) compatible MILP solver [Gurobi](https://www.gurobi.com/solutions/gurobi-optimizer/). The open-source [cbc](https://github.com/coin-or) solver works well. The proprietary Gurobi solver is recommended however, as it is faster in execution, especially for large problems and offers a free academic license.
-For Gurobi, install the Python bindings:
+FLEX-DEPOT uses [Pyomo](https://pyomo.readthedocs.io/en/stable/) as the modelling interface. The open-source solver [HiGHS](https://highs.dev/) is included as a core dependency and requires no additional installation — `pip install -e .` is sufficient.
+
+To verify that HiGHS is available:
+```
+python -c "import pyomo.environ as pyo; print(pyo.SolverFactory('appsi_highs').available())"
+```
+
+Optionally, the proprietary [Gurobi](https://www.gurobi.com/) solver can be used instead (faster for large problems, free academic license available). Install the Python bindings and set `solver = "gurobi"` in the TOML config:
 ```
 pip install gurobipy==<your_gurobi_version>
-```
-Verify that your Gurobi version and license version are the same:
-```
-pip show gurobipy
-grbprobe
-```
-Verify that Pyomo can access Gurobi:
-```
-python -c "import pyomo.environ as pyo; print(pyo.SolverFactory('gurobi').available())"
 ```
 
 ### 5) Quick start (recommended)
@@ -127,12 +133,12 @@ These commands will run the example configuration and generate result files in t
 
 
 ## How to use
-FLEX-DEPOT uses two terminal commands, defined in ```cli.py```: 
-1. Running the simulation by ```python -m flex_dep_opt run-sim --config <settings.yaml_file_path>```
-2. Running the postprocessing by ```python -m flex_dep_opt run-post --config <settings.yaml_file_path>``` <br>
+FLEX-DEPOT uses two terminal commands, defined in ```cli.py```:
+1. Running the simulation by ```python -m flex_dep_opt run-sim --config <settings.toml_file_path>```
+2. Running the postprocessing by ```python -m flex_dep_opt run-post --config <settings.toml_file_path>```
 
 For sequential running of simulation and postprocessing, a batch file can be created and run, similar to ```run_example.bat```. <br>
-Within the YAML file all parameters for a simulation run can be set: 
+Within the TOML file all parameters for a simulation run can be set: 
 
 Simulation settings:
 
@@ -142,7 +148,7 @@ Simulation settings:
 | simulation.end               | str    | Simulation end time (inclusive)                            | YYYY-MM-DD HH:MM         |
 | simulation.timestep_hours    | float  | Simulation timestep in hours                               | 0.25 (others not tested) |
 | simulation.name              | str    | Identifier used for naming result files                    | arbitrary string         |
-| simulation.solver            | str    | Optimization solver backend                                | {gurobi, cbc}            |
+| simulation.solver            | str    | Optimization solver backend                                | {highs, gurobi, cbc}     |
 
 Market configuration: 
 
@@ -163,6 +169,24 @@ Trading rules:
 | optimization.trading.dayahead.gate_closure_hour             | str    | Day-ahead gate closure time                              | HH:MM                |
 | optimization.trading.dayahead.closes_previous_day           | bool   | Whether DA closes on day D-1                              | true / false         |
 | optimization.trading.intraday.offset_minutes_before_delivery| int    | Intraday trading offset before delivery                  | ≥ 0 (minutes)        |
+
+FCR reserve market:
+
+| Parameter                                                       | Type   | Description                                              | Valid values / format   |
+|----------------------------------------------------------------|--------|----------------------------------------------------------|-------------------------|
+| optimization.trading.fcr.enabled                               | bool   | Enable FCR reserve market participation                  | true / false            |
+| optimization.trading.fcr.prices_source                         | str    | Excel file with FCR capacity prices (one price per slot) | path to .xlsx           |
+| optimization.trading.fcr.frequency_source                      | str    | CSV file with grid frequency time series                 | path to CSV             |
+| optimization.trading.fcr.gate_closure_hour                     | str    | FCR gate closure time                                    | HH:MM                   |
+| optimization.trading.fcr.gate_closure_closes_previous_day      | bool   | Whether FCR gate closes on day D-1                       | true / false            |
+| optimization.trading.fcr.gate_closure_timezone                 | str    | Timezone for gate closure evaluation                     | e.g. "Europe/Berlin"    |
+| optimization.trading.fcr.product_hours                         | float  | Duration of one FCR product slot                         | 4.0 (hours)             |
+| optimization.trading.fcr.bid_block_mw                          | float  | Minimum bid increment                                    | ≥ 0 (MW)                |
+| optimization.trading.fcr.acceptance_rate                       | float  | Fraction of submitted bids that are accepted             | [0, 1]                  |
+| optimization.trading.fcr.energy_reserve_minutes                | float  | Required energy reserve per MW of FCR capacity           | ≥ 0 (minutes)           |
+| optimization.trading.fcr.frequency_nominal_hz                  | float  | Nominal grid frequency                                   | 50.0 (Hz)               |
+| optimization.trading.fcr.deadband_hz                           | float  | Frequency deadband around nominal                        | ≥ 0 (Hz)                |
+| optimization.trading.fcr.full_activation_hz                    | float  | Frequency deviation for full activation                  | ≥ deadband_hz (Hz)      |
 
 Imbalance settlement:
 
