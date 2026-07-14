@@ -1,7 +1,0 @@
-[simulation]
-name = "f2_p350"
-start = "2026-01-01 08:30"
-end = "2026-03-25 23:45"
-
-[optimization.flexibility]
-bounds_file = "data/flexibility/power/p350/VBbounds_f2_e572kWh_p350kW_eta98.csv"

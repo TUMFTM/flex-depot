@@ -1,5 +1,0 @@
-[simulation]
-name = "da_id"
-
-[optimization.trading.fcr]
-enabled = false
