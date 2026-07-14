@@ -132,7 +132,6 @@ def _configure_logging() -> None:
         handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
         root_logger.addHandler(handler)
         root_logger.setLevel(logging.INFO)
-    logging.getLogger("gurobipy").setLevel(logging.WARNING)
     logging.getLogger("pyomo").setLevel(logging.WARNING)
     logging.getLogger("pyomo.core").setLevel(logging.ERROR)
 
