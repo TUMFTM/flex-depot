@@ -191,6 +191,10 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
     kpis = compute_kpis(cf_df, energy_by_mk, fees_by_market, commit=commit_df)
     kpis.update(fcr_kpis)
 
+    pass2_steps = int(dispatch["used_rebap"].astype(bool).sum()) if "used_rebap" in dispatch.columns else 0
+    kpis["pass2_steps"] = pass2_steps
+    kpis["pass2_fraction_pct"] = round(pass2_steps / len(dispatch) * 100, 4) if len(dispatch) > 0 else 0.0
+
     # -------------------------------------------------------------------------
     # Optional: persist postprocessing results next to dispatch/commit outputs
     # -------------------------------------------------------------------------

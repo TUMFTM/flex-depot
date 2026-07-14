@@ -38,6 +38,7 @@ _GOLDEN = {
     # Integer counts — exact
     "trade_steps": 310,
     "fcr_slots_committed": 15,
+    "pass2_steps": 0,
 }
 
 
@@ -55,6 +56,7 @@ def test_example_kpis(tmp_path, monkeypatch):
     # Integer KPIs: exact
     assert int(kpis["trade_steps"]) == _GOLDEN["trade_steps"]
     assert int(kpis["fcr_slots_committed"]) == _GOLDEN["fcr_slots_committed"]
+    assert int(kpis["pass2_steps"]) == _GOLDEN["pass2_steps"]
 
     # Float KPIs: 0.1 % relative tolerance
     for key in (
