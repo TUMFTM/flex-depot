@@ -12,7 +12,7 @@ class SimulationSettings(BaseModel):
     end: datetime
     timestep_hours: float = 0.25
     name: str = "example_simulation"
-    solver: Literal["cbc", "gurobi"] = "cbc"
+    solver: Literal["cbc", "gurobi", "highs"] = "cbc"
     # Default 8 matches the previous hard-coded solve_model default; set 1 for
     # batch runs that parallelize across scenarios (--jobs).
     solver_threads: int | None = 8

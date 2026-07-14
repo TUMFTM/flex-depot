@@ -38,6 +38,14 @@ def _make_solver(solver_name: str):
                 "Gurobi (gurobipy) not found. Install it in your environment with: pip install gurobipy"
             ) from e
         solver = pyo.SolverFactory("gurobi")
+    elif name == "highs":
+        try:
+            import highspy  # noqa: F401
+        except ImportError as e:
+            raise RuntimeError(
+                "HiGHS (highspy) not found. Install it with: pip install highspy"
+            ) from e
+        solver = pyo.SolverFactory("appsi_highs")
     elif name == "cbc":
         cbc_exe = _cbc_executable()
         solver = pyo.SolverFactory("cbc", executable=cbc_exe) if cbc_exe else pyo.SolverFactory("cbc")
@@ -46,7 +54,9 @@ def _make_solver(solver_name: str):
 
     if not solver.available(exception_flag=False):
         hint = ""
-        if name == "cbc":
+        if name == "highs":
+            hint = " HiGHS not available. Install with: pip install highspy"
+        elif name == "cbc":
             hint = (
                 " CBC not available. Install via conda: `conda install -c conda-forge coincbc` "
                 "or ensure `cbc` is on PATH / set CBC_PATH to cbc.exe."
@@ -78,6 +88,16 @@ def _apply_solver_options(
             opt.options["MIPGap"] = float(mip_gap)
         if threads is not None:
             opt.options["Threads"] = int(threads)
+
+    elif solver_name == "highs":
+        if silent:
+            opt.options["output_flag"] = False
+        if time_limit_s is not None:
+            opt.options["time_limit"] = float(time_limit_s)
+        if mip_gap is not None:
+            opt.options["mip_rel_gap"] = float(mip_gap)
+        if threads is not None:
+            opt.options["threads"] = int(threads)
 
     elif solver_name == "cbc":
         # CBC:
