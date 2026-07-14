@@ -119,19 +119,19 @@ def _apply_solver_options(
 def solve_model(
     model: pyo.ConcreteModel,
     *,
-    solver_name: str = "gurobi",
+    solver_name: str = "highs",
     time_limit_s: int | None = None,
     mip_gap: float | None = None,
     threads: int | None = 8,
     tee: bool = False,
 ) -> pyo.results.SolverResults:
     """
-    Solve a Pyomo model using the specified solver (e.g. "gurobi" or "cbc").
+    Solve a Pyomo model using the specified solver (e.g. "gurobi", "cbc", or "highs").
 
     Parameters
     ----------
     solver_name:
-        "gurobi" (default) or "cbc".
+        "highs" (default), "gurobi" or "cbc".
     time_limit_s:
         Optional wall-clock time limit in seconds.
     mip_gap:
