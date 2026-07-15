@@ -24,7 +24,7 @@ Technical University of Munich <br>
 
 ### Contributors
 Tien Doan, B.Sc. - Master's student <br>
-Adrian Würth, B.Sc. - Master's student <br>
+Adrian Simon Würth, B.Sc. - Master's student <br>
 Woan-Ho Park, M.Sc. - Visiting research associate <br>
 Philipp Rosner, M.Sc. - Research associate <br>
 Roman Schade, M.Sc. - Master's student <br>
