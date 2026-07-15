@@ -1,5 +1,4 @@
 import logging
-import random
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -180,11 +179,6 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
         if opt_cfg.trading.fcr.enabled
         else pd.Series(dtype=float, index=pd.DatetimeIndex([], tz="Europe/Berlin"))
     )
-    fcr_acceptance_rate = opt_cfg.trading.fcr.acceptance_rate
-    fcr_acceptance_seed = opt_cfg.trading.fcr.acceptance_seed
-    if fcr_acceptance_seed is not None:
-        random.seed(fcr_acceptance_seed)
-
     fcr_freq_source = opt_cfg.trading.fcr.frequency_source
     fcr_frequency_data_full: pd.DataFrame | None = None
     if opt_cfg.trading.fcr.enabled and fcr_freq_source:
@@ -641,7 +635,7 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                             )
                         )
 
-                # Breakeven counterfactuals: re-solve the same window once per slot with that slot's FCR decision flipped and every other FCR bid pinned at its solve-A value. Runs on the bid (before the acceptance draw) and is purely diagnostic — nothing reads the model after this block, and the acceptance draws below use the snapshotted bids, so results are identical flag on/off.
+                # Breakeven counterfactuals: re-solve the same window once per slot with that slot's FCR decision flipped and every other FCR bid pinned at its solve-A value. Purely diagnostic — nothing reads the model after this block, and the commitments below use the snapshotted bids, so results are identical flag on/off.
                 #   - committed slot: force it OFF (z_fcr=0) -> opportunity cost of holding it; margin >= 0.
                 #   - declined slot (zero bid, only with breakeven_include_zero_bid): force one block ON -> the "entry price" it would need; margin <= 0.
                 breakeven_by_slot: dict[pd.Timestamp, dict] = {}
@@ -733,8 +727,7 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                         model.z_fcr[k].unfix()
 
                 for j, slot, gate_ts, bid_val, rev_eur in closing_slots:
-                    accepted = bid_val > 0 and random.random() < fcr_acceptance_rate
-                    committed_val = bid_val if accepted else 0.0
+                    committed_val = bid_val
                     committed_fcr_slots[slot] = committed_val
                     fcr_price_val = float(window_fcr_prices.loc[slot])
                     # Hours of this 4 h slot covered by the sim horizon; revenue is prorated to match the optimizer's fcr_revenue term (price is for the full 4 h product).
@@ -756,7 +749,6 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                             "bid_kw": bid_val,
                             "x_fcr_kw": committed_val,
                             "x_fcr_mw": committed_val / 1000.0,
-                            "accepted": accepted,
                             "fcr_price": fcr_price_val,
                             "slot_hours": slot_hours,
                             "fcr_revenue_eur": (committed_val / 1000.0)
@@ -767,15 +759,10 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                     )
 
                     if bid_val > 0:
-                        if accepted:
-                            logger.info(
-                                f"[{current_time}] FCR slot accepted: {slot} - {committed_val:.1f} kW "
-                                f"@ {fcr_price_val:.2f} €/MW"
-                            )
-                        else:
-                            logger.info(
-                                f"[{current_time}] FCR slot rejected: {slot} - bid {bid_val:.1f} kW not accepted"
-                            )
+                        logger.info(
+                            f"[{current_time}] FCR slot committed: {slot} - {committed_val:.1f} kW "
+                            f"@ {fcr_price_val:.2f} €/MW"
+                        )
 
             # --------------------------------------------------------
             # 9.8) Roll energy state forward

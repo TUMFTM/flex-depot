@@ -183,7 +183,6 @@ FCR reserve market:
 | optimization.trading.fcr.gate_closure_timezone                 | str    | Timezone for gate closure evaluation                     | e.g. "Europe/Berlin"    |
 | optimization.trading.fcr.product_hours                         | float  | Duration of one FCR product slot                         | 4.0 (hours)             |
 | optimization.trading.fcr.bid_block_mw                          | float  | Minimum bid increment                                    | ≥ 0 (MW)                |
-| optimization.trading.fcr.acceptance_rate                       | float  | Fraction of submitted bids that are accepted             | [0, 1]                  |
 | optimization.trading.fcr.energy_reserve_minutes                | float  | Required energy reserve per MW of FCR capacity           | ≥ 0 (minutes)           |
 | optimization.trading.fcr.frequency_nominal_hz                  | float  | Nominal grid frequency                                   | 50.0 (Hz)               |
 | optimization.trading.fcr.deadband_hz                           | float  | Frequency deadband around nominal                        | ≥ 0 (Hz)                |

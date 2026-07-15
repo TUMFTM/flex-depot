@@ -44,8 +44,6 @@ class FCRSettings(BaseModel):
     enabled: bool = False
     prices_source: str
     frequency_source: str | None = None
-    acceptance_rate: Annotated[float, Field(gt=0.0, le=1.0)] = 1.0
-    acceptance_seed: int | None = None
     breakeven_analysis: bool = True
     breakeven_include_zero_bid: bool = False
     gate_closure_hour: str = "08:00"
