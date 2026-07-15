@@ -1,4 +1,4 @@
-# FLEX-DEPOT
+# FLEX-DEPOT <img src="images/flex-depot-icon.svg" height="36" align="top">
 
 [![Tests](https://github.com/marcelbroedel/flex-depot/actions/workflows/test.yml/badge.svg)](https://github.com/marcelbroedel/flex-depot/actions/workflows/test.yml)
 
