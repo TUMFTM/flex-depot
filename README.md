@@ -54,6 +54,7 @@ SoftwareX, 2026 (under review).
 Citation metadata is provided in `CITATION.cff`.
 
 ## Repository Architecture
+
 ![flex-depot-architecture.svg](images/flex-depot-architecture.svg)
 
 
