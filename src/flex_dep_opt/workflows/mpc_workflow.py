@@ -30,7 +30,7 @@ from flex_dep_opt.market.fcr import (
     get_fcr_frequency_data,
     get_fcr_prices,
 )
-from flex_dep_opt.market.trading_rules import (
+from flex_dep_opt.market.trading import (
     build_market_activity_mask_for_time,
     gate_closure_timestamp,
 )

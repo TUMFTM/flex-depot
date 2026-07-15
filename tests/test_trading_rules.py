@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pandas as pd
 
-from flex_dep_opt.market.trading_rules import gate_closure_timestamp
+from flex_dep_opt.market.trading import gate_closure_timestamp
 
 _CFG = SimpleNamespace(
     trading=SimpleNamespace(
