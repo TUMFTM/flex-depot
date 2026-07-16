@@ -6,7 +6,7 @@
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
     <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
-    <dc:date>2026-07-15T14:47:03.051203</dc:date>
+    <dc:date>2026-07-16T10:09:43.907536</dc:date>
     <dc:format>image/svg+xml</dc:format>
     <dc:creator>
      <cc:Agent>
@@ -29,26 +29,26 @@ z
 " style="fill: #ffffff"/>
   </g>
   <g id="patch_2">
-   <path d="M 38.111216 16.333378 
-L 108.470384 16.333378 
-L 38.111216 99.089161 
+   <path d="M 38.111216 57.292465 
+L 94.231028 57.292465 
+L 94.231028 16.333378 
+L 38.111216 16.333378 
+z
+" style="fill: #ffffff; stroke: #1a1a1a; stroke-width: 0.75; stroke-linejoin: miter"/>
+  </g>
+  <g id="patch_3">
+   <path d="M 113.496039 16.333378 
+L 183.855206 16.333378 
+L 113.496039 99.089161 
 z
 " style="fill: #ffffff"/>
   </g>
-  <g id="patch_3">
-   <path d="M 108.470384 99.089161 
-L 38.111216 99.089161 
-L 108.470384 16.333378 
+  <g id="patch_4">
+   <path d="M 183.855206 99.089161 
+L 113.496039 99.089161 
+L 183.855206 16.333378 
 z
 " style="fill: #e0e0e0"/>
-  </g>
-  <g id="patch_4">
-   <path d="M 127.735394 57.292465 
-L 183.855206 57.292465 
-L 183.855206 16.333378 
-L 127.735394 16.333378 
-z
-" style="fill: #ffffff; stroke: #1a1a1a; stroke-width: 0.75; stroke-linejoin: miter"/>
   </g>
   <g id="patch_5">
    <path d="M 260.077638 16.333378 
@@ -97,11 +97,11 @@ z
 " style="fill: #e0e0e0; stroke: #1a1a1a; stroke-width: 0.75; stroke-linejoin: miter"/>
   </g>
   <g id="patch_11">
-   <path d="M 38.111216 99.089161 
-L 108.470384 99.089161 
-L 108.470384 16.333378 
-L 38.111216 16.333378 
-L 38.111216 99.089161 
+   <path d="M 113.496039 99.089161 
+L 183.855206 99.089161 
+L 183.855206 16.333378 
+L 113.496039 16.333378 
+L 113.496039 99.089161 
 z
 " style="fill: none; stroke: #1a1a1a; stroke-width: 0.75; stroke-linejoin: miter"/>
   </g>
@@ -233,22 +233,22 @@ z
 " style="fill: #777777; stroke: #777777; stroke-width: 0.8; stroke-linecap: round"/>
   </g>
   <g id="patch_20">
-   <path d="M 1.000233 65.333513 
-Q 19.055143 65.333513 36.215626 65.333513 
+   <path d="M 1.000987 65.333513 
+Q 56.749 65.333513 111.602586 65.333513 
 " style="fill: none; stroke: #777777; stroke-width: 0.8; stroke-linecap: round"/>
-   <path d="M 33.815626 64.133513 
-L 36.215626 65.333513 
-L 33.815626 66.533513 
+   <path d="M 109.202586 64.133513 
+L 111.602586 65.333513 
+L 109.202586 66.533513 
 z
 " style="fill: #777777; stroke: #777777; stroke-width: 0.8; stroke-linecap: round"/>
   </g>
   <g id="patch_21">
-   <path d="M 1.000233 93.812224 
-Q 19.055143 93.812224 36.215626 93.812224 
+   <path d="M 1.000987 93.812224 
+Q 56.749 93.812224 111.602586 93.812224 
 " style="fill: none; stroke: #777777; stroke-width: 0.8; stroke-linecap: round"/>
-   <path d="M 33.815626 92.612224 
-L 36.215626 93.812224 
-L 33.815626 95.012224 
+   <path d="M 109.202586 92.612224 
+L 111.602586 93.812224 
+L 109.202586 95.012224 
 z
 " style="fill: #777777; stroke: #777777; stroke-width: 0.8; stroke-linecap: round"/>
   </g>
@@ -263,12 +263,12 @@ z
 " style="fill: #777777; stroke: #777777; stroke-width: 0.8; stroke-linecap: round"/>
   </g>
   <g id="patch_23">
-   <path d="M 109.472202 37.273607 
-Q 118.102184 37.273607 125.83774 37.273607 
+   <path d="M 95.232846 37.273607 
+Q 103.862829 37.273607 111.598384 37.273607 
 " style="fill: none; stroke: #777777; stroke-width: 0.8; stroke-linecap: round"/>
-   <path d="M 123.43774 36.073607 
-L 125.83774 37.273607 
-L 123.43774 38.473607 
+   <path d="M 109.198384 36.073607 
+L 111.598384 37.273607 
+L 109.198384 38.473607 
 z
 " style="fill: #777777; stroke: #777777; stroke-width: 0.8; stroke-linecap: round"/>
   </g>
@@ -283,22 +283,22 @@ z
 " style="fill: #777777; stroke: #777777; stroke-width: 0.8; stroke-linecap: round"/>
   </g>
   <g id="patch_25">
-   <path d="M 109.474375 77.813889 
-Q 184.277335 77.813889 258.185869 77.813889 
+   <path d="M 184.85544 65.333513 
+Q 221.968394 65.333513 258.186921 65.333513 
 " style="fill: none; stroke: #777777; stroke-width: 0.8; stroke-linecap: round"/>
-   <path d="M 255.785869 76.613889 
-L 258.185869 77.813889 
-L 255.785869 79.013889 
+   <path d="M 255.786921 64.133513 
+L 258.186921 65.333513 
+L 255.786921 66.533513 
 z
 " style="fill: #777777; stroke: #777777; stroke-width: 0.8; stroke-linecap: round"/>
   </g>
   <g id="patch_26">
-   <path d="M 109.474375 97.16266 
-Q 184.277335 97.16266 258.185869 97.16266 
+   <path d="M 184.85544 93.812224 
+Q 221.968394 93.812224 258.186921 93.812224 
 " style="fill: none; stroke: #777777; stroke-width: 0.8; stroke-linecap: round"/>
-   <path d="M 255.785869 95.96266 
-L 258.185869 97.16266 
-L 255.785869 98.36266 
+   <path d="M 255.786921 92.612224 
+L 258.186921 93.812224 
+L 255.786921 95.012224 
 z
 " style="fill: #777777; stroke: #777777; stroke-width: 0.8; stroke-linecap: round"/>
   </g>
@@ -435,10 +435,10 @@ z
 " style="fill: #777777"/>
   </g>
   <g id="text_1">
-   <text style="font-weight: 700; font-size: 8px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="73.2908" y="12.109301" transform="rotate(-0 73.2908 12.109301)">Prediction</text>
+   <text style="font-weight: 700; font-size: 8px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="66.171122" y="12.094301" transform="rotate(-0 66.171122 12.094301)">Aggregation</text>
   </g>
   <g id="text_2">
-   <text style="font-weight: 700; font-size: 8px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="155.7953" y="12.094301" transform="rotate(-0 155.7953 12.094301)">Aggregation</text>
+   <text style="font-weight: 700; font-size: 8px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="148.675622" y="12.094301" transform="rotate(-0 148.675622 12.094301)">Foresight Horizons</text>
   </g>
   <g id="text_3">
    <text style="font-weight: 700; font-size: 8px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="291.069176" y="12.109301" transform="rotate(-0 291.069176 12.109301)">Model</text>
@@ -453,25 +453,25 @@ z
    <text style="font-weight: 700; font-size: 8px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="411.684892" y="136.648197" transform="rotate(-0 411.684892 136.648197)">Execution</text>
   </g>
   <g id="text_7">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="73.2908" y="30.991398" transform="rotate(-0 73.2908 30.991398)">Flexibility: 48 h</text>
+   <text style="font-style: italic; font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="66.171122" y="35.186006" transform="rotate(-0 66.171122 35.186006)">Park et al.,</text>
   </g>
   <g id="text_8">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="73.2908" y="45.237316" transform="rotate(-0 73.2908 45.237316)">DA-Market: 48 h</text>
+   <text style="font-style: italic; font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="66.171122" y="46.074925" transform="rotate(-0 66.171122 46.074925)">2026†</text>
   </g>
   <g id="text_9">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="73.2908" y="59.476671" transform="rotate(-0 73.2908 59.476671)">IDC-Market: 48 h</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="148.675622" y="30.991398" transform="rotate(-0 148.675622 30.991398)">Flexibility: 48 h</text>
   </g>
   <g id="text_10">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="73.2908" y="73.716027" transform="rotate(-0 73.2908 73.716027)">FCR-Market: 48 h</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="148.675622" y="45.237316" transform="rotate(-0 148.675622 45.237316)">DA-Market: 48 h</text>
   </g>
   <g id="text_11">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="73.2908" y="87.94882" transform="rotate(-0 73.2908 87.94882)">Frequency: 0 min</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="148.675622" y="59.476671" transform="rotate(-0 148.675622 59.476671)">IDC-Market: 48 h</text>
   </g>
   <g id="text_12">
-   <text style="font-style: italic; font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="155.7953" y="35.186006" transform="rotate(-0 155.7953 35.186006)">Park et al.,</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="148.675622" y="73.716027" transform="rotate(-0 148.675622 73.716027)">FCR-Market: 48 h</text>
   </g>
   <g id="text_13">
-   <text style="font-style: italic; font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="155.7953" y="46.074925" transform="rotate(-0 155.7953 46.074925)">2026†</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="148.675622" y="87.94882" transform="rotate(-0 148.675622 87.94882)">Frequency: 0 min</text>
   </g>
   <g id="text_14">
    <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="291.069176" y="75.384682" transform="rotate(-0 291.069176 75.384682)">Mixed Integer</text>
@@ -507,90 +507,102 @@ z
    <text style="font-style: italic; font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="411.684892" y="173.391514" transform="rotate(-0 411.684892 173.391514)">Ideal</text>
   </g>
   <g id="text_25">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="411.684892" y="211.083926" transform="rotate(-0 411.684892 211.083926)">Imbalance</text>
+   <text style="font-size: 5.5px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #777777" x="411.684892" y="188.945736" transform="rotate(-0 411.684892 188.945736)">settlement:</text>
   </g>
   <g id="text_26">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="411.684892" y="221.966282" transform="rotate(-0 411.684892 221.966282)">Accounting</text>
+   <text style="font-size: 5.5px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #777777" x="411.684892" y="196.484219" transform="rotate(-0 411.684892 196.484219)">realized prices</text>
   </g>
   <g id="text_27">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="18.846206" y="24.283962" transform="rotate(-0 18.846206 24.283962)">Energy</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="411.684892" y="211.083926" transform="rotate(-0 411.684892 211.083926)">Imbalance</text>
   </g>
   <g id="text_28">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="18.846206" y="34.348397" transform="rotate(-0 18.846206 34.348397)">Data</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="411.684892" y="221.966282" transform="rotate(-0 411.684892 221.966282)">Accounting</text>
   </g>
   <g id="text_29">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="18.846206" y="52.775798" transform="rotate(-0 18.846206 52.775798)">Market</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="18.846206" y="24.283962" transform="rotate(-0 18.846206 24.283962)">Energy</text>
   </g>
   <g id="text_30">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="18.846206" y="62.827108" transform="rotate(-0 18.846206 62.827108)">Data</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="18.846206" y="34.348397" transform="rotate(-0 18.846206 34.348397)">Data</text>
   </g>
   <g id="text_31">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="18.846206" y="81.254509" transform="rotate(-0 18.846206 81.254509)">Grid</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="18.846206" y="52.775798" transform="rotate(-0 18.846206 52.775798)">Market</text>
   </g>
   <g id="text_32">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="18.846206" y="91.292694" transform="rotate(-0 18.846206 91.292694)">Frequency</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="18.846206" y="62.827108" transform="rotate(-0 18.846206 62.827108)">Data</text>
   </g>
   <g id="text_33">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="221.966422" y="33.510788" transform="rotate(-0 221.966422 33.510788)">Power Bounds</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="18.846206" y="81.254509" transform="rotate(-0 18.846206 81.254509)">Grid</text>
   </g>
   <g id="text_34">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="221.966422" y="47.743581" transform="rotate(-0 221.966422 47.743581)">Energy Bounds</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="18.846206" y="91.292694" transform="rotate(-0 18.846206 91.292694)">Frequency</text>
   </g>
   <g id="text_35">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="232.855341" y="74.553636" transform="rotate(-0 232.855341 74.553636)">Market Prices</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="221.966422" y="33.510788" transform="rotate(-0 221.966422 33.510788)">Power Bounds</text>
   </g>
   <g id="text_36">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="232.855341" y="93.812084" transform="rotate(-0 232.855341 93.812084)">Droop Signal</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="221.966422" y="47.743581" transform="rotate(-0 221.966422 47.743581)">Energy Bounds</text>
   </g>
   <g id="text_37">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="219.453595" y="118.940358" transform="rotate(-0 219.453595 118.940358)">Virtual Battery State</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="221.966422" y="61.989499" transform="rotate(-0 221.966422 61.989499)">Market Prices</text>
   </g>
   <g id="text_38">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="201.026194" y="161.658424" transform="rotate(-0 201.026194 161.658424)">Committed Positions &amp; FCR Capacity</text>
+   <text style="font-size: 5.5px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #777777" x="221.966422" y="73.355675" transform="rotate(-0 221.966422 73.355675)">decision:</text>
   </g>
   <g id="text_39">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="352.633448" y="33.510788" transform="rotate(-0 352.633448 33.510788)">VB Power</text>
+   <text style="font-size: 5.5px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #777777" x="221.966422" y="80.475353" transform="rotate(-0 221.966422 80.475353)">forecast or realized</text>
   </g>
   <g id="text_40">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="483.300474" y="33.504225" transform="rotate(-0 483.300474 33.504225)">Virtual Battery State</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="221.966422" y="90.461647" transform="rotate(-0 221.966422 90.461647)">Droop Signal</text>
   </g>
   <g id="text_41">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="352.633448" y="140.724758" transform="rotate(-0 352.633448 140.724758)">DA / ID Positions</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="219.453595" y="118.940358" transform="rotate(-0 219.453595 118.940358)">Virtual Battery State</text>
   </g>
   <g id="text_42">
-   <text style="font-size: 5.5px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #777777" x="352.633448" y="155.431058" transform="rotate(-0 352.633448 155.431058)">gate DA: D-1 12:00</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="201.026194" y="161.658424" transform="rotate(-0 201.026194 161.658424)">Committed Positions &amp; FCR Capacity</text>
   </g>
   <g id="text_43">
-   <text style="font-size: 5.5px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #777777" x="352.633448" y="162.974697" transform="rotate(-0 352.633448 162.974697)">gate ID: t-0 min</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="352.633448" y="33.510788" transform="rotate(-0 352.633448 33.510788)">VB Power</text>
   </g>
   <g id="text_44">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="352.633448" y="172.547343" transform="rotate(-0 352.633448 172.547343)">FCR Capacity Bids</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="483.300474" y="33.504225" transform="rotate(-0 483.300474 33.504225)">Virtual Battery State</text>
   </g>
   <g id="text_45">
-   <text style="font-size: 5.5px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #777777" x="352.633448" y="188.097815" transform="rotate(-0 352.633448 188.097815)">gate FCR: D-1 08:00</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="352.633448" y="140.724758" transform="rotate(-0 352.633448 140.724758)">DA / ID Positions</text>
   </g>
   <g id="text_46">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="481.625256" y="152.451286" transform="rotate(-0 481.625256 152.451286)">Committed Positions</text>
+   <text style="font-size: 5.5px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #777777" x="352.633448" y="155.431058" transform="rotate(-0 352.633448 155.431058)">gate DA: D-1 12:00</text>
   </g>
   <g id="text_47">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="481.625256" y="163.333642" transform="rotate(-0 481.625256 163.333642)">&amp; FCR Capacity</text>
+   <text style="font-size: 5.5px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #777777" x="352.633448" y="162.974697" transform="rotate(-0 352.633448 162.974697)">gate ID: t-0 min</text>
   </g>
   <g id="text_48">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="346.770184" y="210.246317" transform="rotate(-0 346.770184 210.246317)">Imbalance Prices</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="352.633448" y="172.547343" transform="rotate(-0 352.633448 172.547343)">FCR Capacity Bids</text>
   </g>
   <g id="text_49">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="469.061119" y="201.032616" transform="rotate(-0 469.061119 201.032616)">Imbalance</text>
+   <text style="font-size: 5.5px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #777777" x="352.633448" y="188.097815" transform="rotate(-0 352.633448 188.097815)">gate FCR: D-1 08:00</text>
   </g>
   <g id="text_50">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="469.061119" y="211.921535" transform="rotate(-0 469.061119 211.921535)">Positions</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="481.625256" y="152.451286" transform="rotate(-0 481.625256 152.451286)">Committed Positions</text>
   </g>
   <g id="text_51">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: start; fill: #1a1a1a" x="25.965883" y="229.923569" transform="rotate(-0 25.965883 229.923569)">Physical Modeling</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="481.625256" y="163.333642" transform="rotate(-0 481.625256 163.333642)">&amp; FCR Capacity</text>
   </g>
   <g id="text_52">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: start; fill: #1a1a1a" x="25.965883" y="244.162924" transform="rotate(-0 25.965883 244.162924)">Market Modeling</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="346.770184" y="210.246317" transform="rotate(-0 346.770184 210.246317)">Imbalance Prices</text>
   </g>
   <g id="text_53">
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="469.061119" y="201.032616" transform="rotate(-0 469.061119 201.032616)">Imbalance</text>
+  </g>
+  <g id="text_54">
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="469.061119" y="211.921535" transform="rotate(-0 469.061119 211.921535)">Positions</text>
+  </g>
+  <g id="text_55">
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: start; fill: #1a1a1a" x="25.965883" y="229.923569" transform="rotate(-0 25.965883 229.923569)">Physical Modeling</text>
+  </g>
+  <g id="text_56">
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: start; fill: #1a1a1a" x="25.965883" y="244.162924" transform="rotate(-0 25.965883 244.162924)">Market Modeling</text>
+  </g>
+  <g id="text_57">
    <text style="font-size: 6px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: end; fill: #4c4c4c" x="536.907459" y="251.282742" transform="rotate(-0 536.907459 251.282742)">† authors' prior work</text>
   </g>
  </g>
