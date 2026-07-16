@@ -5,7 +5,11 @@ from pathlib import Path
 import pandas as pd
 
 from flex_dep_opt.config.settings import Settings
-from flex_dep_opt.io.prices_io import build_fees_from_settings, build_prices_from_settings
+from flex_dep_opt.io.prices_io import (
+    build_fees_from_settings,
+    build_forecast_prices_from_settings,
+    build_prices_from_settings,
+)
 from flex_dep_opt.io.results_io import read_latest_run_pointer, save_dispatch_to_csv, save_summary_to_csv
 from flex_dep_opt.io.time_utils import LOCAL_TIMEZONE, local_config_timestamp_to_utc, validate_regular_index
 from flex_dep_opt.market.fcr import get_fcr_frequency_data
@@ -16,11 +20,11 @@ from flex_dep_opt.post.metrics import (
     compute_kpis,
     compute_market_aggregates,
 )
+from flex_dep_opt.post.plots import plot_market_cashflows_plotly, plot_mpc_dispatch_plotly
 from flex_dep_opt.post.reference_energy_costs import (
     DEFAULT_REFERENCE_ENERGY_COLUMN,
     compute_reference_driving_energy_costs,
 )
-from flex_dep_opt.post.plots import plot_market_cashflows_plotly, plot_mpc_dispatch_plotly
 
 
 def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | None = None) -> None:
@@ -194,6 +198,31 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
     pass2_steps = int(dispatch["used_rebap"].astype(bool).sum()) if "used_rebap" in dispatch.columns else 0
     kpis["pass2_steps"] = pass2_steps
     kpis["pass2_fraction_pct"] = round(pass2_steps / len(dispatch) * 100, 4) if len(dispatch) > 0 else 0.0
+
+    # -------------------------------------------------------------------------
+    # Price foresight: MPC decisions used forecast prices where configured;
+    # cashflows above are always settled on realized prices.
+    # -------------------------------------------------------------------------
+    mk_cfg = settings.optimization.markets
+    forecast_markets = [
+        mk
+        for mk, detail in (("DA", mk_cfg.dayahead), ("ID", mk_cfg.intraday))
+        if detail.enabled and detail.forecast_source
+    ]
+    kpis["price_foresight"] = "forecast" if forecast_markets else "perfect"
+
+    if forecast_markets:
+        forecast_prices_by_market = build_forecast_prices_from_settings(settings)
+        for mk in forecast_markets:
+            realized = prices_by_market[mk]
+            forecast = forecast_prices_by_market[mk].loc[start:end]
+            if not forecast.index.equals(realized.index):
+                raise ValueError(
+                    f"{mk} forecast prices do not cover the simulation window "
+                    f"[{realized.index[0]} .. {realized.index[-1]}] — cannot compute forecast MAE."
+                )
+            mae = float((forecast - realized).abs().mean())
+            kpis[f"{mk.lower()}_forecast_mae_eur_per_kwh"] = mae
 
     # -------------------------------------------------------------------------
     # Optional: persist postprocessing results next to dispatch/commit outputs

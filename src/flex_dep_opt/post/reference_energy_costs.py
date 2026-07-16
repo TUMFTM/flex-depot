@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pandas as pd
 
-
 DEFAULT_REFERENCE_ENERGY_COLUMN = "Ref_driving_energy_kWh"
 
 

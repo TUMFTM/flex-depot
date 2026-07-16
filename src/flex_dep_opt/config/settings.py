@@ -23,6 +23,9 @@ class SimulationSettings(BaseModel):
 class MarketDetail(BaseModel):
     enabled: bool = False
     source: str
+    # Optional decision-price forecast for the MPC; settlement always uses `source`.
+    # None = perfect price foresight (realized prices used inside the MPC window).
+    forecast_source: str | None = None
     fee_eur_per_kwh: float
 
 

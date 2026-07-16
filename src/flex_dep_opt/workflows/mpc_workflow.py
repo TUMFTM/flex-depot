@@ -14,7 +14,11 @@ from flex_dep_opt.io.flexibility_io import (
     align_and_validate_flexibility_bounds,
     read_flexibility_bounds_csv,
 )
-from flex_dep_opt.io.prices_io import build_fees_from_settings, build_prices_from_settings
+from flex_dep_opt.io.prices_io import (
+    build_fees_from_settings,
+    build_forecast_prices_from_settings,
+    build_prices_from_settings,
+)
 from flex_dep_opt.io.results_io import (
     make_run_dir,
     save_dispatch_to_csv,
@@ -215,6 +219,9 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
     # 4) Load prices, fees and simulation time index
     # ============================================================
     prices_by_market = build_prices_from_settings(settings)
+    # DECISION prices for the MPC window (forecast where configured, else realized).
+    # Settlement/postprocessing always uses the realized `prices_by_market`.
+    forecast_prices_by_market = build_forecast_prices_from_settings(settings)
     fees_by_market = build_fees_from_settings(settings)
 
     start = local_config_timestamp_to_utc(sim_cfg.start, local_tz=LOCAL_TIMEZONE)
@@ -227,6 +234,29 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
             timestep_hours=step_hours,
             name=f"{mk} price index",
         )
+        forecast_prices_by_market[mk] = forecast_prices_by_market[mk].loc[start:end]
+        validate_regular_index(
+            forecast_prices_by_market[mk].index,
+            timestep_hours=step_hours,
+            name=f"{mk} forecast price index",
+        )
+
+    # Every configured forecast must cover the exact realized decision index so
+    # window slicing can never silently produce NaNs.
+    mk_cfg = opt_cfg.markets
+    for mk, detail in (("DA", mk_cfg.dayahead), ("ID", mk_cfg.intraday)):
+        if not (detail.enabled and detail.forecast_source):
+            continue
+        realized_idx = prices_by_market[mk].index
+        forecast_idx = forecast_prices_by_market[mk].index
+        if not forecast_idx.equals(realized_idx):
+            raise ValueError(
+                f"{mk} forecast prices ({detail.forecast_source}) do not cover the full "
+                f"simulation window incl. horizon lookahead: expected {len(realized_idx)} steps "
+                f"[{realized_idx[0]} .. {realized_idx[-1]}], got {len(forecast_idx)} steps "
+                f"[{forecast_idx[0] if len(forecast_idx) else 'empty'} .. "
+                f"{forecast_idx[-1] if len(forecast_idx) else 'empty'}]."
+            )
 
     full_index = prices_by_market[next(iter(prices_by_market))].index
     validate_regular_index(full_index, timestep_hours=step_hours, name="simulation decision index")
@@ -244,6 +274,10 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
 
     imb_pos_full = prices_by_market.pop("IMB_POS", None)
     imb_neg_full = prices_by_market.pop("IMB_NEG", None)
+    # No forecast semantics for imbalance (reBAP is ex-post; PASS2 is a
+    # feasibility fallback, not a trading decision) — always realized.
+    forecast_prices_by_market.pop("IMB_POS", None)
+    forecast_prices_by_market.pop("IMB_NEG", None)
 
     # slice fcr prices to simulation window
     fcr_prices_full = fcr_prices_full.loc[(fcr_prices_full.index >= start) & (fcr_prices_full.index <= end)]
@@ -335,7 +369,8 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
             # --------------------------------------------------------
             # 9.2) Slice prices and flexibility bounds
             # --------------------------------------------------------
-            window_prices = {mk: prices_by_market[mk].loc[window_idx] for mk in prices_by_market}
+            # DECISION prices: forecast where configured, realized otherwise.
+            window_prices = {mk: forecast_prices_by_market[mk].loc[window_idx] for mk in prices_by_market}
 
             window_flexibility_bounds = (
                 align_and_validate_flexibility_bounds(

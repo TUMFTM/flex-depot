@@ -8,11 +8,13 @@ solver = "highs"
 [optimization.markets.dayahead]
 enabled = true
 source = "data/example/prices/prices_DA_example.csv"
+forecast_source = "data/example/prices/prices_DA_forecast_example.csv"  # optional MPC decision prices; omitted = perfect foresight
 fee_eur_per_kwh = 0.00005                     # clearing fee + exchange fee + broker fee + ...
 
 [optimization.markets.intraday]
 enabled = true
 source = "data/example/prices/prices_IDC_example.csv"
+forecast_source = "data/example/prices/prices_IDC_forecast_example.csv"  # optional MPC decision prices; omitted = perfect foresight
 fee_eur_per_kwh = 0.0001                      # clearing fee + exchange fee + broker fee + ...
 
 [optimization.trading]

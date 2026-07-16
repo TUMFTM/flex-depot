@@ -117,6 +117,35 @@ def build_prices_from_settings(settings: Settings, *, tz: str = "UTC") -> dict[s
     return prices_by_market
 
 
+def build_forecast_prices_from_settings(settings: Settings, *, tz: str = "UTC") -> dict[str, pd.Series]:
+    """
+    Build DECISION price series by market from settings (prices the MPC optimizes on).
+
+    Starts from the realized series of `build_prices_from_settings()` and overrides
+    the "DA" / "ID" entries with `read_prices_csv(forecast_source)` where a
+    `forecast_source` is configured, so all realized-series validation (NaT, NaN,
+    duplicates, sorting) applies to forecasts as well.
+
+    Fallback semantics
+    ------------------
+    Markets without a configured `forecast_source` keep the realized series,
+    i.e. perfect price foresight. Settlement (cashflows / KPIs) always uses
+    `build_prices_from_settings()`; this builder only affects the prices seen
+    inside the MPC optimization window.
+    """
+    prices_by_market = build_prices_from_settings(settings, tz=tz)
+
+    mk_cfg = settings.optimization.markets
+
+    if mk_cfg.dayahead.enabled and mk_cfg.dayahead.forecast_source:
+        prices_by_market["DA"] = read_prices_csv(mk_cfg.dayahead.forecast_source, tz=tz)
+
+    if mk_cfg.intraday.enabled and mk_cfg.intraday.forecast_source:
+        prices_by_market["ID"] = read_prices_csv(mk_cfg.intraday.forecast_source, tz=tz)
+
+    return prices_by_market
+
+
 def build_fees_from_settings(settings: Settings) -> dict[str, float]:
     """
     Build a dict of per-market transaction fees [EUR/kWh] keyed by market code.

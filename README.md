@@ -160,9 +160,11 @@ Market configuration:
 |----------------------------------------------------|--------|---------------------------------------------------------|-----------------------|
 | optimization.markets.dayahead.enabled              | bool   | Enable day-ahead market participation                   | true / false          |
 | optimization.markets.dayahead.source               | str    | CSV file with day-ahead price time series               | path to CSV           |
+| optimization.markets.dayahead.forecast_source      | str    | Optional CSV with price forecast used for MPC decisions; if omitted, realized prices are used (perfect foresight, upper-bound potential). Settlement always uses `source` | path to CSV (optional) |
 | optimization.markets.dayahead.fee_eur_per_kwh      | float  | Transaction fee applied to day-ahead trades             | ≥ 0 (€/kWh)           |
 | optimization.markets.intraday.enabled              | bool   | Enable intraday market participation                    | true / false          |
 | optimization.markets.intraday.source               | str    | CSV file with intraday price time series                | path to CSV           |
+| optimization.markets.intraday.forecast_source      | str    | Optional CSV with price forecast used for MPC decisions; if omitted, realized prices are used (perfect foresight, upper-bound potential). Settlement always uses `source` | path to CSV (optional) |
 | optimization.markets.intraday.fee_eur_per_kwh      | float  | Transaction fee applied to intraday trades              | ≥ 0 (€/kWh)           |
 
 Trading rules: 
