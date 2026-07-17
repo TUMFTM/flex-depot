@@ -96,7 +96,7 @@ def _run_one(config_path: str, default_path: str | None = None, results_root: st
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="flex-dep-opt")
+    parser = argparse.ArgumentParser(prog="flex-depot")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_mpc = sub.add_parser("run-sim")

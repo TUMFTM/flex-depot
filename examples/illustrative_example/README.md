@@ -1,4 +1,4 @@
-# Illustrative example (SoftwareX paper)
+# Illustrative example
 
 Four scenarios of increasing capability, all on the bundled example depot
 (identical flexibility bands, fees, penalties, terminal condition, HiGHS

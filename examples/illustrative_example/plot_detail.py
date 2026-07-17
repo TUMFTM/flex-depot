@@ -1,7 +1,6 @@
 """
 Time-series detail figure of the illustrative example (4-day window,
-190 mm double column, five rows — layout follows the SoftwareX-v1 dispatch
-figure, extended by an FCR row).
+190 mm double column, five rows).
 
 Reads dispatch.csv and the settings.toml snapshot from a run directory
 (default: the 4-day quick-start run in
@@ -18,8 +17,8 @@ settings_example.toml — scenario S3 setup over Fri 2026-02-06 to Tue
       (±x_fcr, one rectangle per 4 h slot), reBAP net position where
       present
 
-Style and palette are shared via figure_style.py (mirrors the
-predecessor-paper plots; market colors: DA = blue, ID = orange, FCR = green).
+Style and palette are shared via figure_style.py (market colors:
+DA = blue, ID = orange, FCR = green).
 
 Requires the optional plotting dependency:  pip install -e .[paper]
 
@@ -60,7 +59,7 @@ except ImportError:
 DEFAULT_RUN_DIR = Path("results/illustrative_example/detail_4day")
 LOCAL_TZ = "Europe/Berlin"
 
-IMB_COLOR = "#7850A0"  # reBAP purple (as in the SoftwareX-v1 dispatch figure)
+IMB_COLOR = "#7850A0"  # reBAP purple
 SELL_ALPHA = 0.35  # translucent = sell, solid = buy
 
 

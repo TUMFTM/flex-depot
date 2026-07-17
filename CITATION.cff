@@ -1,4 +1,4 @@
-cff-version: 2.0.0
+cff-version: 1.2.0
 message: >
   If you use this software in academic work, please cite BOTH the software
   repository and the associated publication listed below.
@@ -27,7 +27,7 @@ keywords:
   - "intraday"
   - "energy markets"
 version: "2.0.0"
-date-released: TODO
+date-released: "2026-07-17"
 
 # Related paper
 preferred-citation:
@@ -44,4 +44,4 @@ preferred-citation:
   title: "FLEX-DEPOT: An open-source framework for multi-market flexibility commercialization of a logistics depot incorporating electric trucks"
   journal: "SoftwareX"
   year: 2026
-  status: "under review"
+  status: submitted

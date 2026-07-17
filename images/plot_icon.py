@@ -11,10 +11,11 @@ Run:  python images/plot_icon.py
 """
 
 from __future__ import annotations
+
 from pathlib import Path
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.patches import Circle, FancyBboxPatch, Polygon, Rectangle
 
 HERE = Path(__file__).resolve().parent

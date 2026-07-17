@@ -11,6 +11,10 @@ requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Marcel Brödel", email = "marcel.broedel@tum.de" }]
 
+[project.urls]
+Repository = "https://github.com/marcelbroedel/flex-depot"
+Issues = "https://github.com/marcelbroedel/flex-depot/issues"
+
 dependencies = [
   "pandas>=2.0",
   "numpy>=1.24",
@@ -48,3 +52,7 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# figure-layout scripts use aligned multi-assignment lines
+"images/*" = ["E702"]

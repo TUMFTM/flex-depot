@@ -1,9 +1,9 @@
 """
-Shared style for the illustrative-example paper figures.
+Shared style for the illustrative-example figures.
 
-Mirrors paper/scripts/common.py of the predecessor paper: Times serif, 9 pt
-base / 8 pt small, thin axes, TUM palette (DA = blue, ID = orange,
-FCR = green; market colors are reserved for per-market quantities).
+Times serif, 9 pt base / 8 pt small, thin axes, TUM palette (DA = blue,
+ID = orange, FCR = green; market colors are reserved for per-market
+quantities).
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ BASE_FONT_PT = 9.0
 SMALL_FONT_PT = 8.0
 MM_TO_INCH = 1.0 / 25.4
 
-# TUM palette (paper/style/TUM.gpl of the predecessor paper)
+# TUM palette
 MARKET_COLORS = {
     "DA": "#0065BD",  # TUMBlue
     "ID": "#E37222",  # Orange
@@ -33,7 +33,7 @@ GRID_KW = {"axis": "y", "color": "#bfbfbf", "linewidth": 0.5, "alpha": 0.8}
 
 
 def apply_paper_style() -> None:
-    """Match paper/scripts/common.py of the predecessor paper."""
+    """Apply the shared serif figure style (print-oriented, editable SVG text)."""
     plt.rcParams.update(
         {
             "font.family": "serif",

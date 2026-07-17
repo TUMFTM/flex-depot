@@ -47,7 +47,7 @@ If you use FLEX-DEPOT in academic work, please cite **both**:
 
 **Software:**
 Brödel, M. (2026). FLEX-DEPOT (Version 2.0.0). GitHub repository.  
-https://github.com/TUMFTM/flex-depot
+https://github.com/marcelbroedel/flex-depot
 
 **Publication:**
 Brödel, M., Park, W.-H., Rosner, P., Lienkamp, M.  
@@ -81,7 +81,7 @@ Citation metadata is provided in `CITATION.cff`.
 
 ## Installation
 ### 1) Clone repository
-FLEX-DEPOT is available at the institute's [GitHub](https://github.com/TUMFTM) and can be cloned from there using
+FLEX-DEPOT is available on [GitHub](https://github.com/TUMFTM/flex-depot) and can be cloned from there using
 ```
 git clone https://github.com/TUMFTM/flex-depot
 ```
@@ -146,14 +146,25 @@ matplotlib).
 
 
 ## How to use
-FLEX-DEPOT uses two terminal commands, defined in ```cli.py```:
-1. Running the simulation by ```python -m flex_dep_opt run-sim --config <settings.toml_file_path>```
-2. Running the postprocessing by ```python -m flex_dep_opt run-post --config <settings.toml_file_path>```
+Installing the package provides the console command ```flex-depot``` (equivalently
+```python -m flex_dep_opt```) with three subcommands, defined in ```cli.py```:
+1. Running the simulation by ```flex-depot run-sim --config <settings.toml_file_path>```
+2. Running the postprocessing by ```flex-depot run-post --config <settings.toml_file_path>```
+3. Running a scenario batch by ```flex-depot run-batch <configs_dir>```: executes
+   simulation + postprocessing for every ```*.toml``` in the directory (in parallel,
+   ```--jobs <n>```, default: all CPU cores) and writes a KPI manifest CSV
+   (```--manifest <path>```, default: ```results/batches/<batch>__<timestamp>/manifest.csv```).
+   If the directory contains a ```default.toml```, each config is deep-merged onto it,
+   so per-run TOMLs only need to state the parameters that differ.
 
-Both commands accept an optional ```--run-dir <directory>``` to write to / read from a fixed run
-directory instead of the default timestamped ```results/<name>__<timestamp>/```.
+```run-sim``` and ```run-post``` accept an optional ```--run-dir <directory>``` to write to / read from a fixed run
+directory instead of the default timestamped ```results/<name>__<timestamp>/```. If ```--config``` is
+omitted, ```run-sim``` uses the bundled ```settings_example.toml``` and ```run-post``` postprocesses the
+latest run (from ```results/LATEST.txt```).
 
-For sequential running of simulation and postprocessing, a batch file can be created and run, similar to ```run_example.bat```. <br>
+Note: data paths inside the TOML configs are resolved relative to the current working
+directory — run the commands from the repository root (as ```run_example.bat``` / ```run_example.sh``` do).
+
 Within the TOML file all parameters for a simulation run can be set: 
 
 Simulation settings:
@@ -165,6 +176,9 @@ Simulation settings:
 | simulation.timestep_hours    | float  | Simulation timestep in hours                               | 0.25 (others not tested) |
 | simulation.name              | str    | Identifier used for naming result files                    | arbitrary string         |
 | simulation.solver            | str    | Optimization solver backend                                | {highs, gurobi, cbc}     |
+| simulation.solver_threads    | int    | Solver thread count (set 1 for parallel batch runs)        | ≥ 1 or unset (default 8) |
+| simulation.solver_mip_gap    | float  | Relative MIP gap termination criterion (optional)          | > 0 or unset             |
+| simulation.solver_time_limit_s | int  | Solver time limit per optimization (optional)              | ≥ 1 (seconds) or unset   |
 
 Market configuration: 
 
@@ -195,12 +209,16 @@ FCR reserve market:
 | optimization.trading.fcr.enabled                               | bool   | Enable FCR reserve market participation                  | true / false            |
 | optimization.trading.fcr.prices_source                         | str    | Excel file with FCR capacity prices (one price per slot) | path to .xlsx           |
 | optimization.trading.fcr.frequency_source                      | str    | CSV file with grid frequency time series                 | path to CSV             |
+| optimization.trading.fcr.breakeven_analysis                    | bool   | Report the FCR capacity price at which bidding breaks even (extra diagnostic solves) | true / false |
+| optimization.trading.fcr.breakeven_include_zero_bid            | bool   | Include the zero-bid alternative in the break-even analysis | true / false          |
 | optimization.trading.fcr.gate_closure_hour                     | str    | FCR gate closure time                                    | HH:MM                   |
 | optimization.trading.fcr.gate_closure_closes_previous_day      | bool   | Whether FCR gate closes on day D-1                       | true / false            |
 | optimization.trading.fcr.gate_closure_timezone                 | str    | Timezone for gate closure evaluation                     | e.g. "Europe/Berlin"    |
 | optimization.trading.fcr.product_hours                         | float  | Duration of one FCR product slot                         | 4.0 (hours)             |
 | optimization.trading.fcr.bid_block_mw                          | float  | Minimum bid increment                                    | ≥ 0 (MW)                |
 | optimization.trading.fcr.energy_reserve_minutes                | float  | Required energy reserve per MW of FCR capacity           | ≥ 0 (minutes)           |
+| optimization.trading.fcr.reserve_penalty_eur_per_kwh           | float  | Penalty on violating the FCR energy reserve (soft constraint) | ≥ 0 (€/kWh)        |
+| optimization.trading.fcr.balance_penalty_eur_per_kwh           | float  | Soft mid-band pull on the energy state during FCR slots (keeps distance to the reserve edge) | ≥ 0 (€/kWh) |
 | optimization.trading.fcr.frequency_nominal_hz                  | float  | Nominal grid frequency                                   | 50.0 (Hz)               |
 | optimization.trading.fcr.deadband_hz                           | float  | Frequency deadband around nominal                        | ≥ 0 (Hz)                |
 | optimization.trading.fcr.full_activation_hz                    | float  | Frequency deviation for full activation                  | ≥ deadband_hz (Hz)      |
@@ -210,7 +228,6 @@ Imbalance settlement:
 | Parameter                                                      | Type   | Description                                              | Valid values / format |
 |---------------------------------------------------------------|--------|----------------------------------------------------------|-----------------------|
 | optimization.imbalance.enabled                                | bool   | Enable imbalance settlement as fallback                  | true / false         |
-| optimization.imbalance.only_on_infeasible                     | bool   | Activate imbalance only if no feasible schedule exists   | true / false         |
 | optimization.imbalance.source_pos                             | str    | CSV file with positive imbalance prices                  | path to CSV          |
 | optimization.imbalance.source_neg                             | str    | CSV file with negative imbalance prices                  | path to CSV          |
 | optimization.imbalance.imbalance_volume_penalty_eur_per_kwh   | float  | Penalty on imbalance energy to discourage usage          | ≥ 0 (€/kWh)          |
@@ -222,6 +239,8 @@ Optimization logic:
 | optimization.virtual_arbitrage             | bool   | Allow offsetting buy/sell across markets                | true / false         |
 | optimization.mpc.da_horizon_hours          | int    | MPC prediction horizon for day-ahead optimization       | ≥ 1 (hours)          |
 | optimization.mpc.id_horizon_hours          | int    | MPC prediction horizon for intraday optimization        | ≥ 1 (hours)          |
+| optimization.mpc.fcr_price_horizon_hours   | int    | Horizon of known FCR capacity prices ahead of each MPC step | ≥ 1 (hours)      |
+| optimization.mpc.fcr_frequency_horizon_minutes | int | Horizon of known frequency/activation signal inside the MPC window (0 = unknown) | ≥ 0 (minutes) |
 | optimization.mpc.terminal_condition        | bool   | Enable soft terminal energy condition                   | true / false         |
 | optimization.mpc.terminal_weight_eur_per_kwh | float | Weight for terminal energy deviation penalty            | ≥ 0 (€/kWh)          |
 
@@ -240,3 +259,31 @@ Depot settings (only if desired, in addition to settings that are implicitly in 
 | optimization.depot.eta_grid2depot       | float  | Efficiency for grid-to-depot power flow             | (0, 1]                |
 | optimization.depot.eta_depot2grid       | float  | Efficiency for depot-to-grid power flow             | (0, 1]                |
 | optimization.depot.grid_connection_limit| float  | Symmetric grid connection limit                     | ≥ 0 (kW)              |
+
+Postprocessing (optional block, defaults shown apply if omitted):
+
+| Parameter                                                          | Type   | Description                                              | Valid values / format |
+|--------------------------------------------------------------------|--------|----------------------------------------------------------|-----------------------|
+| postprocessing.save_commits                                        | bool   | Keep commit.csv / fcr_commit.csv after postprocessing (false deletes them to save disk space) | true / false (default true) |
+| postprocessing.reference_driving_energy_costs.enabled              | bool   | Compute the uncontrolled-charging reference cost KPI     | true / false (default false) |
+| postprocessing.reference_driving_energy_costs.static_price_eur_per_kwh | float | Static electricity price for the reference cost     | ≥ 0 (€/kWh)           |
+| postprocessing.reference_driving_energy_costs.energy_column        | str    | Column in the flexibility CSV with the reference driving energy | column name (default `Ref_driving_energy_kWh`) |
+
+## Input data formats
+
+All input files must cover the configured simulation horizon (plus the MPC lookahead) at
+the simulation timestep. Timestamps must be timezone-aware (e.g. `2026-02-06 00:00:00+01:00`
+or UTC); config timestamps (`simulation.start` / `simulation.end`) are interpreted as
+`Europe/Berlin` local market time — German market conventions (DA/ID gate closures, FCR 4 h
+slots, reBAP) are the modelling baseline.
+
+| Input | Format | Required columns / notes |
+|-------|--------|--------------------------|
+| DA / ID / imbalance prices | CSV | `time`, `price`. **Prices in €/kWh** (not €/MWh; e.g. 0.06364 = 63.64 €/MWh). One row per simulation timestep; duplicates and gaps raise errors. |
+| Price forecasts (optional) | CSV | Same format as the realized price series; used for MPC decisions only, settlement always uses the realized series. |
+| Flexibility bounds | CSV | `time`, `Power_lower_kW`, `Power_upper_kW`, `Capacity_lower_kWh`, `Capacity_upper_kWh`; optional `Ref_driving_energy_kWh` (used by the reference-cost postprocessing). |
+| FCR capacity prices | XLSX | Column `GERMANY_SETTLEMENTCAPACITY_PRICE_[EUR/MW]` plus either `DATETIME_UTC` or `DATE_FROM` + `PRODUCTNAME` (the format of the German TSOs' tender-result export, regelleistung.net). One price per 4 h product slot, in €/MW. |
+| Grid frequency | CSV | `DATETIME` plus the pre-aggregated droop signal `FREQ_DROOP_MEAN` (mean normalized FCR activation in [-1, 1] per timestep); optional `FREQ_DROOP_ABS_MEAN`. |
+
+The bundled files under `data/example/` serve as format references; see
+[data/example/README.md](data/example/README.md) for their provenance and terms of use.

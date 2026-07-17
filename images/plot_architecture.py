@@ -20,14 +20,15 @@ Run:  python images/plot_architecture.py
 """
 
 from __future__ import annotations
+
 from pathlib import Path
 
-import numpy as np
 import matplotlib as mpl
 import matplotlib.lines as mlines
 import matplotlib.pyplot as plt
-from matplotlib.patches import FancyArrowPatch, Rectangle, Ellipse
+import numpy as np
 from matplotlib.font_manager import FontProperties
+from matplotlib.patches import Ellipse, FancyArrowPatch, Rectangle
 
 HERE = Path(__file__).resolve().parent
 

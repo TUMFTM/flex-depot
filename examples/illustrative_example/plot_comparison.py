@@ -12,8 +12,7 @@ cashflow composition per scenario (DA, ID, FCR capacity revenue, fees &
 imbalance) with the net cashflow marker and the S0 reference line, y-axis
 symmetric around zero.
 
-Style and palette are shared via figure_style.py (mirrors the
-predecessor-paper plots).
+Style and palette are shared via figure_style.py.
 
 Requires the optional plotting dependency:  pip install -e .[paper]
 
