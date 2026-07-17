@@ -15,8 +15,8 @@ settings_example.toml — scenario S3 setup over Fri 2026-02-06 to Tue
   (d) depot energy state within the energy band
   (e) committed positions: DA / ID stacked bars (buy = solid,
       sell = translucent), FCR committed capacity as symmetric band
-      (±x_fcr, one rectangle per 4 h slot), reBAP net position + PASS2
-      shading where present
+      (±x_fcr, one rectangle per 4 h slot), reBAP net position where
+      present
 
 Style and palette are shared via figure_style.py (mirrors the
 predecessor-paper plots; market colors: DA = blue, ID = orange, FCR = green).
@@ -171,17 +171,19 @@ def main() -> int:
             v = dispatch[col].to_numpy(dtype=float)
             pos = np.clip(v, 0, None)
             neg = np.clip(v, None, 0)
+            # reBAP is imbalance settlement, not a traded product
+            pos_lbl, neg_lbl = ("deficit", "surplus") if mk == "reBAP" else ("buy", "sell")
             if np.any(pos > 0):
                 ax.bar(x_num, pos, width=bar_width, bottom=bottom_pos, color=color, linewidth=0)
                 bottom_pos = bottom_pos + pos
                 if handles is not None:
-                    handles.append(Patch(facecolor=color, label=f"{mk} buy"))
+                    handles.append(Patch(facecolor=color, label=f"{mk} {pos_lbl}"))
             if np.any(neg < 0):
                 sell_color = mcolors.to_rgba(color, SELL_ALPHA)
                 ax.bar(x_num, neg, width=bar_width, bottom=bottom_neg, color=sell_color, linewidth=0)
                 bottom_neg = bottom_neg + neg
                 if handles is not None:
-                    handles.append(Patch(facecolor=sell_color, label=f"{mk} sell"))
+                    handles.append(Patch(facecolor=sell_color, label=f"{mk} {neg_lbl}"))
         # FCR activation (droop response): solid green bars stacked on top
         if droop.abs().max() > 0:
             v = droop.to_numpy(dtype=float)
@@ -200,16 +202,40 @@ def main() -> int:
     _draw_positions(ax_pos, handles_pos)
 
     # Zoom inset: the droop activation is tiny (tens of kW) against the
-    # ±x_fcr band — magnify a ±3 h window around the strongest activation.
-    if droop.abs().max() > 0:
-        t_peak = droop.abs().idxmax().tz_localize(None)
-        t0 = max(t_peak - pd.Timedelta(hours=3), x[0])
-        t1 = min(t_peak + pd.Timedelta(hours=3), x[-1])
-        in_window = (x >= t0) & (x <= t1)
-        y_zoom = 1.25 * max(float(droop.to_numpy()[in_window].max(initial=0.0)),
-                            float(-droop.to_numpy()[in_window].min(initial=0.0)), 40.0)
+    # ±x_fcr band and stacked on top of the DA/ID/reBAP bars — magnify the
+    # 6 h window where the activation is largest relative to the stacked
+    # bar extent (the y-limit the inset needs), so the FCR bars stay visible.
+    # Called after tight_layout: the inset sticks out above (e) and would
+    # otherwise blow up the inter-panel spacing.
+    def _add_zoom_inset():
+        stack_pos = np.zeros(len(dispatch))
+        stack_neg = np.zeros(len(dispatch))
+        for _, col, _ in position_series:
+            if col in dispatch.columns:
+                v = np.nan_to_num(dispatch[col].to_numpy(dtype=float))
+                stack_pos += np.clip(v, 0, None)
+                stack_neg += np.clip(v, None, 0)
+        v = np.nan_to_num(droop.to_numpy(dtype=float))
+        stack_pos += np.clip(v, 0, None)
+        stack_neg += np.clip(v, None, 0)
 
-        axins = ax_pos.inset_axes([0.44, 0.52, 0.20, 0.44])
+        droop_abs = np.abs(np.nan_to_num(droop.to_numpy(dtype=float)))
+        half = pd.Timedelta(hours=3)
+        best_score = -1.0
+        for t_c in x[droop_abs > 0]:
+            w0 = max(t_c - half, x[0])
+            w1 = min(w0 + 2 * half, x[-1])
+            w0 = w1 - 2 * half
+            in_w = (x >= w0) & (x <= w1)
+            y_ext = max(float(stack_pos[in_w].max(initial=0.0)),
+                        float(-stack_neg[in_w].min(initial=0.0)), 40.0)
+            score = float(droop_abs[in_w].sum()) / y_ext
+            if score > best_score:
+                best_score, t0, t1, y_zoom = score, w0, w1, 1.15 * y_ext
+
+        # placed above the panel (in the gap to (d) and the free lower part
+        # of (d)) so it does not cover any bars in (e)
+        axins = ax_pos.inset_axes([0.36, 1.08, 0.22, 0.68])
         _draw_positions(axins)
         axins.set_xlim(t0, t1)
         axins.set_ylim(-y_zoom, y_zoom)
@@ -220,16 +246,12 @@ def main() -> int:
             spine.set_linewidth(0.6)
         ax_pos.indicate_inset_zoom(axins, edgecolor="black", linewidth=0.6)
 
-    if "used_rebap" in dispatch.columns and dispatch["used_rebap"].astype(bool).any():
-        for ts, flag in dispatch["used_rebap"].astype(bool).items():
-            if flag:
-                t0 = ts.tz_localize(None)
-                ax_pos.axvspan(t0, t0 + pd.Timedelta(hours=0.25), color=IMB_COLOR, alpha=0.10, lw=0)
-        handles_pos.append(Patch(facecolor=mcolors.to_rgba(IMB_COLOR, 0.10), label="PASS2 active"))
     if (x_fcr > 0).any():
         handles_pos.append(
             Patch(facecolor=mcolors.to_rgba(MARKET_COLORS["FCR"], 0.18), label="FCR capacity (±)")
         )
+    # reBAP entries go last in the legend (rightmost column), after FCR
+    handles_pos.sort(key=lambda h: h.get_label().startswith("reBAP"))
     ax_pos.set_ylabel("Committed positions (kW)")
     ax_pos.margins(y=0.15)
 
@@ -242,7 +264,9 @@ def main() -> int:
     for ax, label in zip(axes, ("(a)", "(b)", "(c)", "(d)", "(e)")):
         ax.grid(**GRID_KW)
         ax.set_axisbelow(True)
-        ax.set_title(label, fontsize=BASE_FONT_PT, loc="left")
+        # y=1.0 pins the title; auto-positioning would push (e) above the
+        # zoom inset that sticks out of the panel
+        ax.set_title(label, fontsize=BASE_FONT_PT, loc="left", y=1.0)
 
     # collected legend above all panels
     legend_handles = [
@@ -270,7 +294,10 @@ def main() -> int:
     )
 
     fig.align_ylabels(axes)
-    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.955))
+    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.94))
+
+    if droop.abs().max() > 0:
+        _add_zoom_inset()
 
     fig_dir = Path("results/illustrative_example/figures")
     fig_dir.mkdir(parents=True, exist_ok=True)

@@ -33,7 +33,7 @@ gate_closure_hour = "12:00"
 closes_previous_day = true
 
 [optimization.trading.intraday]
-offset_minutes_before_delivery = 0 # trading until delivery time
+offset_minutes_before_delivery = 5 # continuous intraday gate closure 5 min before delivery
 
 [optimization.trading.fcr]
 enabled = true

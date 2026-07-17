@@ -38,6 +38,22 @@ weekly-persistence naive forecast — one error draw per delivery hour for DA,
 one per 15-min step for ID. MPC decisions use the forecast series; settlement
 (cashflows, KPIs) always uses the realized series.
 
+## Modelling note: FCR activation energy and reBAP
+
+With the realistic 5-min intraday gate closure
+(`trading.intraday.offset_minutes_before_delivery = 5`), the FCR activation
+of the running quarter-hour can no longer be netted on the intraday market.
+Most activation energy is absorbed physically within the flexibility band and
+re-balanced on ID in later quarter-hours (SoC management); a small residual
+settles at the imbalance price (reBAP), typically when the energy state sits
+at the FCR energy-reserve boundary. This mirrors German practice: FCR has no
+ex-post balancing-group correction (unlike aFRR/mFRR), so activation energy
+remains in the provider's balancing group and settles at reBAP — which is
+roughly cost-neutral on average because reBAP is correlated with the
+frequency deviation the provider is helping against. Not modelled (and thus
+conservative): deadband utilization and permitted over-fulfilment (up to
+120 %) for SoC steering during delivery, and pooling across several depots.
+
 ## How to run
 
 From the repository root (activated environment):

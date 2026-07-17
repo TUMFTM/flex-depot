@@ -9,7 +9,13 @@ FCR bidding, and the postprocessing chain.
 Golden values were produced with HiGHS on 2026-07-17 using the simulation
 window 2026-02-06 to 2026-02-10 (4 days, 384 steps at 15-min resolution) —
 the 4-day detail window of the illustrative example (S3 setup, see
-examples/illustrative_example/README.md).
+examples/illustrative_example/README.md), with the realistic 5-min intraday
+gate closure (offset_minutes_before_delivery = 5). The nonzero PASS2 steps
+and imbalance cost are expected: the current quarter-hour's FCR activation
+can no longer be netted on the intraday market, so residuals settle via
+reBAP — consistent with German practice, where FCR activation energy has no
+ex-post balancing-group correction (unlike aFRR/mFRR) and remains in the
+provider's balancing group (see the modelling note in the example README).
 """
 
 from pathlib import Path
@@ -27,20 +33,21 @@ EXAMPLE_TOML = REPO_ROOT / "src/flex_dep_opt/config/settings_example.toml"
 # Golden KPI values — update this dict after any intentional model change.
 _GOLDEN = {
     # Core economics
-    "gross_profit_eur": 126.011,
-    "trading_profit_eur": -64.454,
-    "fees_eur": -1.235,
+    "gross_profit_eur": 121.282,
+    "trading_profit_eur": -55.035,
+    "fees_eur": -1.221,
     "fcr_revenue_eur": 191.700,
+    "imb_cost_eur": -14.162,
     # Savings vs. uncontrolled charging
-    "total_potential_gross_profit_delta_eur": 512.141,
+    "total_potential_gross_profit_delta_eur": 507.412,
     # Energy balance
-    "net_kwh": -3061.612,
-    "sell_kwh": 5727.062,
-    "buy_kwh": 8788.674,
+    "net_kwh": -2985.521,
+    "sell_kwh": 5693.942,
+    "buy_kwh": 8679.464,
     # Integer counts — exact
-    "trade_steps": 220,
+    "trade_steps": 161,
     "fcr_slots_committed": 10,
-    "pass2_steps": 0,
+    "pass2_steps": 12,
 }
 
 
@@ -66,11 +73,10 @@ def test_example_kpis(tmp_path, monkeypatch):
         "trading_profit_eur",
         "fees_eur",
         "fcr_revenue_eur",
+        "imb_cost_eur",
         "total_potential_gross_profit_delta_eur",
         "net_kwh",
         "sell_kwh",
         "buy_kwh",
     ):
         assert float(kpis[key]) == pytest.approx(_GOLDEN[key], rel=1e-3), f"KPI mismatch: {key}"
-
-    assert float(kpis["imb_cost_eur"]) == pytest.approx(0.0, abs=1e-6)
