@@ -28,13 +28,15 @@ Adrian Simon Würth, B.Sc. - Master's student <br>
 Woan-Ho Park, M.Sc. - Visiting research associate <br>
 Philipp Rosner, M.Sc. - Research associate <br>
 Roman Schade, M.Sc. - Master's student <br>
+Rishabh Rai, B.Sc. - Bachelor's student <br>
+Wurilege Wurilege, M.Sc. - Master's student <br>
 
 ## Licensing
 FLEX-DEPOT is licensed under the [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) open source license. <br>
 The full license text can be found in the LICENSE file in the root directory of the repository.
 
 ## Related Publications
-Brödel, M., Park, W.-H., Rosner, P., Lienkamp, M.: "FLEX-DEPOT: An open-source framework for multi-market flexibility commercialization of a logistics depot incorporating electric trucks." <br>
+Brödel, M., Würth, A.S., Park, W.-H., Rosner, P., Lienkamp, M.: "FLEX-DEPOT: An open-source framework for multi-market flexibility commercialization of a logistics depot incorporating electric trucks." <br>
 Manuscript under review at SoftwareX, Elsevier (2026)
 
 Park, W.-H., Brödel, M., Rosner, P., Kim, Y.-S.: "Scalable EV Flexibility Aggregation with Guaranteed Disaggregation via Projection onto Reachable Sets: Application to Real Truck Fleet Data" <br>
@@ -50,7 +52,7 @@ Brödel, M. (2026). FLEX-DEPOT (Version 2.0.0). GitHub repository.
 https://github.com/marcelbroedel/flex-depot
 
 **Publication:**
-Brödel, M., Park, W.-H., Rosner, P., Lienkamp, M.  
+Brödel, M., Würth, A.S., Park, W.-H., Rosner, P., Lienkamp, M.  
 *FLEX-DEPOT: An open-source framework for multi-market flexibility commercialization of a logistics depot incorporating electric trucks.*  
 SoftwareX, 2026 (under review).
 
