@@ -4,16 +4,16 @@ Two-panel comparison figure of the illustrative-example scenarios S1-S4
 
 Panel (a): gross profit relative to uncontrolled charging at the static
 reference price (S0), i.e. the `total_potential_gross_profit_delta_eur` KPI,
-with a secondary axis in percent of the S0 cost and "+X € / +Y %" annotations
-on the bars. Bars use a neutral gray fill — the TUM market colors are
-reserved for per-market quantities (panel (b) and the detail figure); S4 is
-hatched to mark imperfect price foresight (redundant encoding for grayscale
-print). Panel (b): stacked cashflow composition per scenario (DA, ID, FCR
-capacity revenue, fees & imbalance) with the net cashflow marker and the S0
-reference line, y-axis symmetric around zero.
+with "+X € / +Y %" annotations on the bars. Bars use neutral gray tones per
+market setup — the TUM market colors are reserved for per-market quantities
+(panel (b) and the detail figure); S4 is hatched to mark imperfect price
+foresight (redundant encoding for grayscale print). Panel (b): stacked
+cashflow composition per scenario (DA, ID, FCR capacity revenue, fees &
+imbalance) with the net cashflow marker and the S0 reference line, y-axis
+symmetric around zero.
 
-Style follows the predecessor-paper plots (Times serif, 9 pt base / 8 pt bar
-labels, TUM palette: DA = blue, ID = orange, FCR = green).
+Style and palette are shared via figure_style.py (mirrors the
+predecessor-paper plots).
 
 Requires the optional plotting dependency:  pip install -e .[paper]
 
@@ -28,64 +28,32 @@ from pathlib import Path
 
 import pandas as pd
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 try:
     import matplotlib.colors as mcolors
     import matplotlib.pyplot as plt
+    from figure_style import (
+        BASE_FONT_PT,
+        GRID_KW,
+        MARKET_COLORS,
+        MM_TO_INCH,
+        SETUP_GRAYS,
+        SMALL_FONT_PT,
+        apply_paper_style,
+    )
     from matplotlib.patches import Patch
 except ImportError:
     sys.exit("matplotlib is required for the figure scripts: pip install -e .[paper]")
 
 DEFAULT_CSV = Path("results/illustrative_example/comparison.csv")
 
-BASE_FONT_PT = 9.0
-SMALL_FONT_PT = 8.0
-MM_TO_INCH = 1.0 / 25.4
-
-# TUM palette (paper/style/TUM.gpl of the predecessor paper)
-MARKET_COLORS = {
-    "DA": "#0065BD",  # TUMBlue
-    "ID": "#E37222",  # Orange
-    "FCR": "#A2AD00",  # Green
-    "Fees & imbalance": "#999999",  # Gray
-}
-# Neutral gray tones per market setup for the scenario-level bars in panel (a);
-# the market colors are reserved for per-market quantities (panel (b), detail
-# figure). Light to dark with increasing market access (TUM grays).
-SETUP_GRAYS = {
-    "DA": "#DAD7CB",  # LightGray
-    "DA+ID": "#999999",  # Gray
-    "DA+ID+FCR": "#6A757E",  # tum-grey-4
-}
-HATCH_COLOR = "#F0F0F0"  # near-white hatch, visible on the dark setup gray
-GRID_KW = {"axis": "y", "color": "#bfbfbf", "linewidth": 0.5, "alpha": 0.8}
 FORECAST_HATCH = "///"
-
-
-def apply_paper_style() -> None:
-    """Match paper/scripts/common.py of the predecessor paper."""
-    plt.rcParams.update(
-        {
-            "font.family": "serif",
-            "font.serif": ["Times New Roman", "Times", "STIXGeneral", "DejaVu Serif"],
-            "mathtext.fontset": "stix",
-            "font.size": BASE_FONT_PT,
-            "axes.labelsize": BASE_FONT_PT,
-            "xtick.labelsize": BASE_FONT_PT,
-            "ytick.labelsize": BASE_FONT_PT,
-            "legend.fontsize": SMALL_FONT_PT,
-            "axes.linewidth": 0.6,
-            "xtick.major.width": 0.6,
-            "ytick.major.width": 0.6,
-            "pdf.fonttype": 42,
-            "ps.fonttype": 42,
-            # keep SVG text as text (not paths) so figures stay editable
-            "svg.fonttype": "none",
-        }
-    )
+HATCH_COLOR = "#F0F0F0"  # near-white hatch, visible on the dark setup gray
 
 
 def _panel_advantage(ax, df: pd.DataFrame) -> None:
-    """(a) Cost advantage vs. S0 in EUR (left axis) and percent (right axis)."""
+    """(a) Cost advantage vs. S0 in EUR, percent annotated on the bars."""
     advantage = df["cost_advantage_eur"]
 
     x = range(len(df))
