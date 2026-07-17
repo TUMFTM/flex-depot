@@ -79,7 +79,8 @@ python -m flex_dep_opt run-post --config examples/illustrative_example/settings_
 Both figure scripts need the optional plotting extra: `pip install -e .[paper]`
 
 ```bash
-# Bar chart S1-S4: stacked cashflow composition + S0 reference line
+# Two-panel bar chart S1-S4 (190 mm): (a) gross profit vs. static price charging
+# in EUR and %, (b) stacked cashflow composition per market
 python examples/illustrative_example/plot_comparison.py
 
 # 4-day time-series detail (positions, energy state in band, cumulative profit)
