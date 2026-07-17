@@ -11,10 +11,6 @@ requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Marcel Brödel", email = "marcel.broedel@tum.de" }]
 
-[project.urls]
-Repository = "https://github.com/marcelbroedel/flex-depot"
-Issues = "https://github.com/marcelbroedel/flex-depot/issues"
-
 dependencies = [
   "pandas>=2.0",
   "numpy>=1.24",
@@ -28,6 +24,10 @@ dependencies = [
   "pydantic>=2.13.3",
   "pydantic-settings>=2.14.0",
 ]
+
+[project.urls]
+Repository = "https://github.com/marcelbroedel/flex-depot"
+Issues = "https://github.com/marcelbroedel/flex-depot/issues"
 
 [project.optional-dependencies]
 dev = ["ruff>=0.5", "pytest>=8.0"]
