@@ -135,11 +135,23 @@ bash run_example.sh
 ```
 These commands will run the example configuration and generate result files in the results/ directory.
 
+### Illustrative example (paper scenarios)
+Four ready-made scenario configurations of increasing capability (S1: DA only → S4: DA+ID+FCR with
+imperfect price foresight) reproduce the illustrative example of the paper over a one-month window;
+the quick-start example above is its 4-day detail window. See
+[examples/illustrative_example/](examples/illustrative_example/) for the scenario definitions,
+`run_all.sh` / `run_all.bat` (sequential execution + aggregated comparison table in
+`results/illustrative_example/`), and the paper figure scripts (`pip install -e .[paper]` for
+matplotlib).
+
 
 ## How to use
 FLEX-DEPOT uses two terminal commands, defined in ```cli.py```:
 1. Running the simulation by ```python -m flex_dep_opt run-sim --config <settings.toml_file_path>```
 2. Running the postprocessing by ```python -m flex_dep_opt run-post --config <settings.toml_file_path>```
+
+Both commands accept an optional ```--run-dir <directory>``` to write to / read from a fixed run
+directory instead of the default timestamped ```results/<name>__<timestamp>/```.
 
 For sequential running of simulation and postprocessing, a batch file can be created and run, similar to ```run_example.bat```. <br>
 Within the TOML file all parameters for a simulation run can be set: 

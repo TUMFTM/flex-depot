@@ -335,9 +335,21 @@ def compute_kpis(
         total_cf_eur - imb_cost_eur - fcr_cf_eur
     )  # total CF less IMB and FCR -> pure scheduled-market (DA/ID) CF
 
+    # Per-market cashflow breakdown (scheduled markets only; IMB and FCR are
+    # already reported via imb_cost_eur / fcr_revenue_eur).
+    per_market_cf: dict[str, float] = {}
+    for mk in energy_by_mk:
+        if mk == "IMB":
+            continue
+        col = f"{mk} Cashflow [€/step]"
+        per_market_cf[f"{mk.lower()}_cashflow_eur"] = (
+            float(cf_df[col].sum()) if col in cf_df.columns else 0.0
+        )
+
     return {
         "gross_profit_eur": gross_profit_eur,
         "trading_profit_eur": trading_profit_eur,
+        **per_market_cf,
         "fees_eur": float(fees_eur),
         "imb_cost_eur": float(imb_cost_eur),
         "trade_steps": int(trade_steps),

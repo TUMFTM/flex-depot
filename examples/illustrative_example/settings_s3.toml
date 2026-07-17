@@ -1,23 +1,25 @@
-# 4-day detail window of the illustrative example (see examples/illustrative_example/):
-# same parameters as scenario S3 (DA+ID+FCR, perfect foresight), Fri 2026-02-06 to
-# Tue 2026-02-10 (2 weekdays + 2 weekend days) inside the S1-S4 one-month window.
+# =============================================================================
+# Paper scenario S3: day-ahead + intraday + FCR, perfect price foresight
+# Adds FCR capacity bidding (D-1 08:00 gate closure) on top of S2; the full
+# multi-market setup of the paper under perfect price foresight.
+# Only markets, simulation window and simulation.name differ between S1-S4.
+# =============================================================================
+
 [simulation]
-start = "2026-02-06 00:00"
-end = "2026-02-10 00:00"
+start = "2026-02-01 00:00"
+end = "2026-03-01 00:00"
 timestep_hours = 0.25
-name = "illustrative_example"
+name = "illustrative_s3"
 solver = "highs"
 
 [optimization.markets.dayahead]
 enabled = true
 source = "data/example/prices/prices_DA_example.csv"
-# forecast_source = "data/example/prices/prices_DA_forecast_example.csv"  # optional MPC decision prices; omitted = perfect foresight
 fee_eur_per_kwh = 0.00005                     # clearing fee + exchange fee + broker fee + ...
 
 [optimization.markets.intraday]
 enabled = true
 source = "data/example/prices/prices_IDC_example.csv"
-# forecast_source = "data/example/prices/prices_IDC_forecast_example.csv"  # optional MPC decision prices; omitted = perfect foresight
 fee_eur_per_kwh = 0.0001                      # clearing fee + exchange fee + broker fee + ...
 
 [optimization.trading]

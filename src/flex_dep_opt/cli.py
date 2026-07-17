@@ -105,12 +105,22 @@ def main():
         default=None,
         help="Path to a TOML config file (default: bundled settings_example.toml).",
     )
+    p_mpc.add_argument(
+        "--run-dir",
+        default=None,
+        help="Explicit output directory for this run (default: results/<name>__<timestamp>).",
+    )
 
     p_plot_mpc = sub.add_parser("run-post")
     p_plot_mpc.add_argument(
         "--config",
         default=None,
         help="Path to a TOML config file (default: the settings.toml saved in the latest run directory).",
+    )
+    p_plot_mpc.add_argument(
+        "--run-dir",
+        default=None,
+        help="Run directory to postprocess (default: the latest run from results/LATEST.txt).",
     )
 
     p_batch = sub.add_parser(
@@ -132,12 +142,12 @@ def main():
     args = parser.parse_args()
 
     if args.cmd == "run-sim":
-        run_mpc(Settings.load(args.config))
+        run_mpc(Settings.load(args.config), run_dir=Path(args.run_dir) if args.run_dir else None)
         return
 
     if args.cmd == "run-post":
         settings = Settings.load(args.config) if args.config else None
-        postprocess_mpc_results(settings)
+        postprocess_mpc_results(settings, run_dir=Path(args.run_dir) if args.run_dir else None)
         return
 
     if args.cmd == "run-batch":

@@ -1,23 +1,28 @@
-# 4-day detail window of the illustrative example (see examples/illustrative_example/):
-# same parameters as scenario S3 (DA+ID+FCR, perfect foresight), Fri 2026-02-06 to
-# Tue 2026-02-10 (2 weekdays + 2 weekend days) inside the S1-S4 one-month window.
+# =============================================================================
+# Paper scenario S4: day-ahead + intraday + FCR, imperfect price foresight
+# Same markets as S3, but MPC decisions use forecast prices for DA and ID
+# (noise calibrated to rMAE 0.40 vs a weekly-persistence naive forecast);
+# settlement always uses the realized price series.
+# Only markets, simulation window and simulation.name differ between S1-S4.
+# =============================================================================
+
 [simulation]
-start = "2026-02-06 00:00"
-end = "2026-02-10 00:00"
+start = "2026-02-01 00:00"
+end = "2026-03-01 00:00"
 timestep_hours = 0.25
-name = "illustrative_example"
+name = "illustrative_s4"
 solver = "highs"
 
 [optimization.markets.dayahead]
 enabled = true
 source = "data/example/prices/prices_DA_example.csv"
-# forecast_source = "data/example/prices/prices_DA_forecast_example.csv"  # optional MPC decision prices; omitted = perfect foresight
+forecast_source = "data/example/prices/prices_DA_forecast_example.csv"
 fee_eur_per_kwh = 0.00005                     # clearing fee + exchange fee + broker fee + ...
 
 [optimization.markets.intraday]
 enabled = true
 source = "data/example/prices/prices_IDC_example.csv"
-# forecast_source = "data/example/prices/prices_IDC_forecast_example.csv"  # optional MPC decision prices; omitted = perfect foresight
+forecast_source = "data/example/prices/prices_IDC_forecast_example.csv"
 fee_eur_per_kwh = 0.0001                      # clearing fee + exchange fee + broker fee + ...
 
 [optimization.trading]

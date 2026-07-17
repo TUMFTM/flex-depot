@@ -6,8 +6,10 @@ and checks that the resulting KPIs match the golden reference values.  The
 test catches silent regressions in the optimisation logic, gate-closure rules,
 FCR bidding, and the postprocessing chain.
 
-Golden values were produced with HiGHS on 2026-07-14 using the simulation
-window 2026-01-08 to 2026-01-12 (4 days, 384 steps at 15-min resolution).
+Golden values were produced with HiGHS on 2026-07-17 using the simulation
+window 2026-02-06 to 2026-02-10 (4 days, 384 steps at 15-min resolution) —
+the 4-day detail window of the illustrative example (S3 setup, see
+examples/illustrative_example/README.md).
 """
 
 from pathlib import Path
@@ -25,19 +27,19 @@ EXAMPLE_TOML = REPO_ROOT / "src/flex_dep_opt/config/settings_example.toml"
 # Golden KPI values — update this dict after any intentional model change.
 _GOLDEN = {
     # Core economics
-    "gross_profit_eur": 906.104,
-    "trading_profit_eur": 393.023,
-    "fees_eur": -0.907,
-    "fcr_revenue_eur": 513.988,
-    # Savings vs. uncontrolled charging (reviewer R1.4)
-    "total_potential_gross_profit_delta_eur": 1486.608,
+    "gross_profit_eur": 126.011,
+    "trading_profit_eur": -64.454,
+    "fees_eur": -1.235,
+    "fcr_revenue_eur": 191.700,
+    # Savings vs. uncontrolled charging
+    "total_potential_gross_profit_delta_eur": 512.141,
     # Energy balance
-    "net_kwh": -288.871,
-    "sell_kwh": 5442.456,
-    "buy_kwh": 5731.327,
+    "net_kwh": -3061.612,
+    "sell_kwh": 5727.062,
+    "buy_kwh": 8788.674,
     # Integer counts — exact
-    "trade_steps": 310,
-    "fcr_slots_committed": 15,
+    "trade_steps": 220,
+    "fcr_slots_committed": 10,
     "pass2_steps": 0,
 }
 
