@@ -10,6 +10,29 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Marcel Brödel", email = "marcel.broedel@tum.de" }]
+keywords = [
+  "energy flexibility",
+  "electric trucks",
+  "depot charging",
+  "electricity markets",
+  "day-ahead",
+  "intraday",
+  "FCR",
+  "MPC",
+  "MILP",
+  "Pyomo",
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering",
+]
 
 dependencies = [
   "pandas>=2.0",
@@ -26,8 +49,8 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/marcelbroedel/flex-depot"
-Issues = "https://github.com/marcelbroedel/flex-depot/issues"
+Repository = "https://github.com/TUMFTM/flex-depot"
+Issues = "https://github.com/TUMFTM/flex-depot/issues"
 
 [project.optional-dependencies]
 dev = ["ruff>=0.5", "pytest>=8.0"]
@@ -40,6 +63,10 @@ flex-depot = "flex_dep_opt.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+# ship the bundled default config so non-editable installs work
+"flex_dep_opt.config" = ["settings_example.toml"]
 
 [tool.pytest.ini_options]
 markers = ["slow: end-to-end integration tests (deselect with '-m not slow')"]
