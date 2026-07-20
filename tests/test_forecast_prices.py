@@ -14,8 +14,8 @@ import pandas as pd
 import pytest
 
 from flex_dep_opt.config.settings import Settings
-from flex_dep_opt.io.prices_io import build_forecast_prices_from_settings, build_prices_from_settings
-from flex_dep_opt.io.time_utils import LOCAL_TIMEZONE, local_config_timestamp_to_utc
+from flex_dep_opt.io.prices import build_forecast_prices_from_settings, build_prices_from_settings
+from flex_dep_opt.io.time import LOCAL_TIMEZONE, local_config_timestamp_to_utc
 from flex_dep_opt.workflows.mpc_workflow import run_mpc
 
 REPO_ROOT = Path(__file__).parent.parent

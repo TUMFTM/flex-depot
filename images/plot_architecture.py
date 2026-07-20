@@ -215,7 +215,7 @@ ft(cx3,    SUB_NY, "Market Layer",         fs=8, fw="bold")
 module_row(XCFG_L, CFG_SY0, XCFG_R, CFG_SY1,
            ["settings.py", "settings.toml"])
 module_row(XIL,  MID_SY0, XIR,  MID_SY1,
-           ["prices_io.py", "results_io.py", "time_utils.py"])
+           ["prices.py", "results.py", "time.py"])
 module_row(XWL,  MID_SY0, XWR,  MID_SY1,
            ["mpc_workflow.py", "postproc_workflow.py"])
 module_row(XPL,  MID_SY0, XPR,  MID_SY1,

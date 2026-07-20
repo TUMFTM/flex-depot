@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
-from flex_dep_opt.io.time_utils import LOCAL_TIMEZONE
+from flex_dep_opt.io.time import LOCAL_TIMEZONE
 
 
 def _as_path(path: str | Path) -> Path:

@@ -12,7 +12,7 @@ import toml
 import tomllib
 
 from flex_dep_opt.config.settings import Settings
-from flex_dep_opt.io.results_io import make_run_dir
+from flex_dep_opt.io.results import make_run_dir
 from flex_dep_opt.workflows.mpc_workflow import run_mpc
 from flex_dep_opt.workflows.postprocessing_workflow import postprocess_mpc_results
 

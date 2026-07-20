@@ -14,8 +14,8 @@ import pandas as pd
 import pytest
 
 from flex_dep_opt.config.settings import Settings
-from flex_dep_opt.io.prices_io import read_prices_csv
-from flex_dep_opt.io.time_utils import LOCAL_TIMEZONE, local_config_timestamp_to_utc
+from flex_dep_opt.io.prices import read_prices_csv
+from flex_dep_opt.io.time import LOCAL_TIMEZONE, local_config_timestamp_to_utc
 
 REPO_ROOT = Path(__file__).parent.parent
 SCENARIO_DIR = REPO_ROOT / "examples/illustrative_example"
