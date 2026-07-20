@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
   "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="538.582677pt" height="252.95796pt" viewBox="0 0 538.582677 252.95796" xmlns="http://www.w3.org/2000/svg" version="1.1">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="538.582677pt" height="256.308397pt" viewBox="0 0 538.582677 256.308397" xmlns="http://www.w3.org/2000/svg" version="1.1">
  <metadata>
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
     <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
-    <dc:date>2026-07-16T10:09:43.907536</dc:date>
+    <dc:date>2026-07-20T09:00:28.864369</dc:date>
     <dc:format>image/svg+xml</dc:format>
     <dc:creator>
      <cc:Agent>
@@ -21,8 +21,8 @@
  </defs>
  <g id="figure_1">
   <g id="patch_1">
-   <path d="M 0 252.95796 
-L 538.582677 252.95796 
+   <path d="M 0 256.308397 
+L 538.582677 256.308397 
 L 538.582677 0 
 L 0 0 
 z
@@ -465,7 +465,7 @@ z
    <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="148.675622" y="45.237316" transform="rotate(-0 148.675622 45.237316)">DA-Market: 48 h</text>
   </g>
   <g id="text_11">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="148.675622" y="59.476671" transform="rotate(-0 148.675622 59.476671)">IDC-Market: 48 h</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="148.675622" y="59.476671" transform="rotate(-0 148.675622 59.476671)">ID-Market: 48 h</text>
   </g>
   <g id="text_12">
    <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="148.675622" y="73.716027" transform="rotate(-0 148.675622 73.716027)">FCR-Market: 48 h</text>
@@ -573,7 +573,7 @@ z
    <text style="font-size: 5.5px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #777777" x="352.633448" y="155.431058" transform="rotate(-0 352.633448 155.431058)">gate DA: D-1 12:00</text>
   </g>
   <g id="text_47">
-   <text style="font-size: 5.5px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #777777" x="352.633448" y="162.974697" transform="rotate(-0 352.633448 162.974697)">gate ID: t-0 min</text>
+   <text style="font-size: 5.5px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #777777" x="352.633448" y="162.974697" transform="rotate(-0 352.633448 162.974697)">gate ID: t-5 min</text>
   </g>
   <g id="text_48">
    <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="352.633448" y="172.547343" transform="rotate(-0 352.633448 172.547343)">FCR Capacity Bids</text>
@@ -603,7 +603,7 @@ z
    <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: start; fill: #1a1a1a" x="25.965883" y="244.162924" transform="rotate(-0 25.965883 244.162924)">Market Modeling</text>
   </g>
   <g id="text_57">
-   <text style="font-size: 6px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: end; fill: #4c4c4c" x="536.907459" y="251.282742" transform="rotate(-0 536.907459 251.282742)">† authors' prior work</text>
+   <text style="font-size: 6px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: end; fill: #4c4c4c" x="536.907459" y="254.633179" transform="rotate(-0 536.907459 254.633179)">† authors' prior work</text>
   </g>
  </g>
 </svg>

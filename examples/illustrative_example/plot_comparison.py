@@ -87,7 +87,7 @@ def _panel_advantage(ax, df: pd.DataFrame) -> None:
     ax.set_xticklabels(
         [f"{sc}\n{mk}" for sc, mk in zip(df["scenario"], df["markets"])], fontsize=SMALL_FONT_PT
     )
-    ax.set_ylabel("Gross profit vs. static price charging\nfor one-month period (€)")
+    ax.set_ylabel("Cost reduction vs. static price charging\nfor one-month period (€)")
     ax.margins(y=0.18)
     ax.grid(**GRID_KW)
     ax.set_axisbelow(True)

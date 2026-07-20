@@ -55,7 +55,7 @@ mpl.rcParams.update({
 
 # ── Canvas: original drawing space 643 x 302 px, scaled to 190 mm width ──────
 MM = 1.0 / 25.4
-PX_W, PX_H = 643.0, 302.0
+PX_W, PX_H = 643.0, 306.0
 FIG_W = 190 * MM
 FIG_H = FIG_W * PX_H / PX_W          # ≈ 89 mm, same aspect as the original
 fig = plt.figure(figsize=(FIG_W, FIG_H))
@@ -163,7 +163,7 @@ ft(79.0, 53.0, "2026†",   fst="italic")
 # is only known for the current step -> 0 min horizon)
 ft(177.5,  35.0, "Flexibility: 48 h")
 ft(177.5,  52.0, "DA-Market: 48 h")
-ft(177.5,  69.0, "IDC-Market: 48 h")
+ft(177.5,  69.0, "ID-Market: 48 h")
 ft(177.5,  86.0, "FCR-Market: 48 h")
 ft(177.5, 103.0, "Frequency: 0 min")
 
@@ -273,7 +273,7 @@ ft(31.0, 272.5, "Physical Modeling", ha="left")
 ft(31.0, 289.5, "Market Modeling",   ha="left")
 
 # ── Footnote (style as in paper overview figure) ──────────────────────────────
-ft(641.0, 300.0, "† authors' prior work", fs=6, c="#4C4C4C",
+ft(641.0, 304.0, "† authors' prior work", fs=6, c="#4C4C4C",
    ha="right", va="baseline")
 
 # ── Save ──────────────────────────────────────────────────────────────────────
