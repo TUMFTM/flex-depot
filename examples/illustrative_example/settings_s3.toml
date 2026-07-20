@@ -77,7 +77,7 @@ cost_eur_per_kwh_throughput = 0.02
 [optimization.depot]
 eta_grid2depot = 0.98
 eta_depot2grid = 0.98
-grid_connection_limit = 10000
+grid_connection_limit = 4200
 
 [postprocessing.reference_driving_energy_costs]
 enabled = true
