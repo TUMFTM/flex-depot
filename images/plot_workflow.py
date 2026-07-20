@@ -55,7 +55,7 @@ mpl.rcParams.update({
 
 # ── Canvas: original drawing space 643 x 302 px, scaled to 190 mm width ──────
 MM = 1.0 / 25.4
-PX_W, PX_H = 643.0, 306.0
+PX_W, PX_H = 643.0, 320.0
 FIG_W = 190 * MM
 FIG_H = FIG_W * PX_H / PX_W          # ≈ 89 mm, same aspect as the original
 fig = plt.figure(figsize=(FIG_W, FIG_H))
@@ -161,19 +161,19 @@ ft(79.0, 53.0, "2026†",   fst="italic")
 
 # Foresight Horizons (values from settings_example.toml; grid frequency
 # is only known for the current step -> 0 min horizon)
-ft(177.5,  35.0, "Flexibility: 48 h")
-ft(177.5,  52.0, "DA-Market: 48 h")
-ft(177.5,  69.0, "ID-Market: 48 h")
-ft(177.5,  86.0, "FCR-Market: 48 h")
-ft(177.5, 103.0, "Frequency: 0 min")
+ft(177.5,  35.0, "Flexibility: 48 h*")
+ft(177.5,  52.0, "DA-Market: 48 h*")
+ft(177.5,  69.0, "ID-Market: 48 h*")
+ft(177.5,  86.0, "FCR-Market: 48 h*")
+ft(177.5, 103.0, "Frequency: 0 min*")
 
 # Model
 ft(347.5,  88.0, "Mixed Integer")
 ft(347.5, 101.0, "Linear")
 ft(347.5, 114.0, "Programming")
 ft(347.5, 127.0, "(MILP)")
-ft(347.5, 152.0, "Virtual arbitrage")
-ft(347.5, 165.0, "(on/off)")
+ft(347.5, 152.0, "Virt. arb.: off*")
+ft(347.5, 165.0, "Cycle reg.: on*")
 
 # Real-World
 ft(491.0, 39.0, "Behavior:")
@@ -256,10 +256,10 @@ ft(240.0, 191.0, "Committed Positions & FCR Capacity")
 ft(421.0,  38.0, "VB Power")
 ft(577.0,  38.0, "Virtual Battery State")
 ft(421.0, 166.0, "DA / ID Positions")
-ft(421.0, 184.0, "gate DA: D-1 12:00", fs=5.5, c=GRAY)
-ft(421.0, 193.0, "gate ID: t-5 min", fs=5.5, c=GRAY)
+ft(421.0, 184.0, "gate DA: D-1 12:00*", fs=5.5, c=GRAY)
+ft(421.0, 193.0, "gate ID: t-5 min*", fs=5.5, c=GRAY)
 ft(421.0, 204.0, "FCR Capacity Bids")
-ft(421.0, 223.0, "gate FCR: D-1 08:00", fs=5.5, c=GRAY)
+ft(421.0, 223.0, "gate FCR: D-1 08:00*", fs=5.5, c=GRAY)
 ft(575.0, 180.0, "Committed Positions")
 ft(575.0, 193.0, "& FCR Capacity")
 ft(414.0, 249.0, "Imbalance Prices")
@@ -273,7 +273,9 @@ ft(31.0, 272.5, "Physical Modeling", ha="left")
 ft(31.0, 289.5, "Market Modeling",   ha="left")
 
 # ── Footnote (style as in paper overview figure) ──────────────────────────────
-ft(641.0, 304.0, "† authors' prior work", fs=6, c="#4C4C4C",
+ft(641.0, 308.0, "* values as in the illustrative example; freely configurable", fs=6, c="#4C4C4C",
+   ha="right", va="baseline")
+ft(641.0, 316.0, "† authors' prior work", fs=6, c="#4C4C4C",
    ha="right", va="baseline")
 
 # ── Save ──────────────────────────────────────────────────────────────────────
