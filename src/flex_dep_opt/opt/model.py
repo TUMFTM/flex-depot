@@ -33,6 +33,8 @@ def flexibility_commercialization(
     fcr_energy_reserve_kwh_per_kw: float = 0.0,
     fcr_reserve_penalty_eur_per_kwh: float = 0.0,
     fcr_balance_penalty_eur_per_kwh: float = 0.0,
+    fcr_rebap_prices_pos: pd.Series | None = None,
+    fcr_rebap_prices_neg: pd.Series | None = None,
 ) -> pyo.ConcreteModel:
     """
     Flex-band based multi-market commercialization model (Pyomo).
@@ -160,6 +162,39 @@ def flexibility_commercialization(
                 if abs_vals is not None:
                     hidden_droop_by_t[t] = max(float(abs_vals[loc]) - abs(droop_by_t[t]), 0.0)
 
+    # Per-step reBAP settlement price for FCR activation energy (Option A).
+    # Sign/price mapping (import-positive convention, consistent with PASS-2 imbalance):
+    #   droop_by_t[t] > 0  → upward FCR   → p_droop < 0 (export) → BKV Überdeckung
+    #                                         → receive IMB_NEG price (same as PASS-2 p_imb_neg)
+    #   droop_by_t[t] < 0  → downward FCR → p_droop > 0 (import) → BKV Unterdeckung
+    #                                         → pay IMB_POS price (same as PASS-2 p_imb_pos)
+    # The objective term is  -fcr_act_price[t] * p_droop[t] * dt, mirroring
+    # obj_energy_cashflow = sum(-price[mk,t] * p_market[mk,t] * dt).
+    fcr_act_price_by_t = np.zeros(N, dtype=float)
+    if use_fcr and (fcr_rebap_prices_pos is not None or fcr_rebap_prices_neg is not None):
+        rebap_pos_arr = np.zeros(N, dtype=float)
+        rebap_neg_arr = np.zeros(N, dtype=float)
+        if fcr_rebap_prices_pos is not None:
+            locs_p = fcr_rebap_prices_pos.index.get_indexer(time_index, method="nearest")
+            pos_vals = fcr_rebap_prices_pos.to_numpy(dtype=float)
+            for t in range(N):
+                if locs_p[t] >= 0:
+                    rebap_pos_arr[t] = float(pos_vals[locs_p[t]])
+        if fcr_rebap_prices_neg is not None:
+            locs_n = fcr_rebap_prices_neg.index.get_indexer(time_index, method="nearest")
+            neg_vals = fcr_rebap_prices_neg.to_numpy(dtype=float)
+            for t in range(N):
+                if locs_n[t] >= 0:
+                    rebap_neg_arr[t] = float(neg_vals[locs_n[t]])
+        for t in range(N):
+            if t not in t_to_fcr_slot:
+                continue
+            d = droop_by_t[t]
+            if d > 0.0:   # upward FCR (export, Überdeckung) → earn IMB_NEG price
+                fcr_act_price_by_t[t] = rebap_neg_arr[t]
+            elif d < 0.0:  # downward FCR (import, Unterdeckung) → pay IMB_POS price
+                fcr_act_price_by_t[t] = rebap_pos_arr[t]
+
     # ============================================================
     # 3) Pyomo model (Sets / Params)
     # ============================================================
@@ -208,6 +243,7 @@ def flexibility_commercialization(
         m.fcr_slot_hours = pyo.Param(m.S_FCR, initialize=lambda mdl, j: fcr_slot_hours_vals[j])
         m.fcr_droop_signal = pyo.Param(m.T, initialize=lambda mdl, t: float(droop_by_t[t]))
         m.fcr_hidden_droop = pyo.Param(m.T, initialize=lambda mdl, t: float(hidden_droop_by_t[t]))
+        m.fcr_act_price = pyo.Param(m.T, initialize=lambda mdl, t: float(fcr_act_price_by_t[t]))
 
         m.x_fcr_committed = pyo.Param(m.S_FCR, initialize=0.0, mutable=True)
         m.fcr_gate_open = pyo.Param(m.S_FCR, initialize=1, mutable=True, within=pyo.Binary)
@@ -517,6 +553,19 @@ def flexibility_commercialization(
         expr=pyo.quicksum(m.fcr_slot_revenue[j] for j in m.S_FCR) if use_fcr else 0.0
     )
 
+    # FCR activation cashflow: per-step reBAP settlement of p_droop energy.
+    # Convention matches obj_energy_cashflow: -price * power * dt.
+    #   p_droop < 0 (upward FCR, export): -eff_price * p_droop * dt > 0 → revenue
+    #   p_droop > 0 (downward FCR, import): -eff_price * p_droop * dt < 0 → cost
+    # eff_price is precomputed per step: IMB_NEG for upward, IMB_POS for downward.
+    # Since p_droop[t] = -fcr_droop_signal[t] * x_fcr[j], the product is linear in x_fcr.
+    act_cash: pyo.Expression | float = 0.0
+    if use_fcr:
+        act_steps = [t for t in m.T if t in t_to_fcr_slot and droop_by_t[t] != 0.0]
+        if act_steps:
+            act_cash = pyo.quicksum(-m.fcr_act_price[t] * m.p_droop[t] * m.dt for t in act_steps)
+    m.obj_fcr_activation_cashflow = pyo.Expression(expr=act_cash)
+
     e_slack_pen = 0.0
     if allow_imbalance:
         # Heavy penalty — slack is a last resort to keep PASS2 feasible.
@@ -544,6 +593,7 @@ def flexibility_commercialization(
     m.obj = pyo.Objective(
         expr=m.obj_energy_cashflow
         + m.obj_fcr_revenue
+        + m.obj_fcr_activation_cashflow
         + m.obj_imb_cashflow
         - m.obj_fee_cost
         - m.obj_cycling_cost

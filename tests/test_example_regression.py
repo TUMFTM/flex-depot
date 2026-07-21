@@ -6,7 +6,7 @@ and checks that the resulting KPIs match the golden reference values.  The
 test catches silent regressions in the optimisation logic, gate-closure rules,
 FCR bidding, and the postprocessing chain.
 
-Golden values were produced with HiGHS on 2026-07-17 using the simulation
+Golden values were produced with HiGHS on 2026-07-21 using the simulation
 window 2026-02-06 to 2026-02-10 (4 days, 384 steps at 15-min resolution) —
 the 4-day detail window of the illustrative example (S3 setup, see
 examples/illustrative_example/README.md), with the realistic 5-min intraday
@@ -16,6 +16,11 @@ can no longer be netted on the intraday market, so residuals settle via
 reBAP — consistent with German practice, where FCR activation energy has no
 ex-post balancing-group correction (unlike aFRR/mFRR) and remains in the
 provider's balancing group (see the modelling note in the example README).
+
+Option A (FCR activation cashflow) was added 2026-07-21:
+  - gross_profit_eur increased by fcr_activation_cf_eur = +51.368 EUR
+  - total_potential_gross_profit_delta_eur increased by the same amount
+  - trading_profit_eur, dispatch volumes, and all integer counts unchanged
 """
 
 from pathlib import Path
@@ -33,13 +38,14 @@ EXAMPLE_TOML = REPO_ROOT / "src/flex_dep_opt/config/settings_example.toml"
 # Golden KPI values — update this dict after any intentional model change.
 _GOLDEN = {
     # Core economics
-    "gross_profit_eur": 121.282,
+    "gross_profit_eur": 172.650,
     "trading_profit_eur": -55.035,
     "fees_eur": -1.221,
     "fcr_revenue_eur": 191.700,
     "imb_cost_eur": -14.162,
+    "fcr_activation_cf_eur": 51.368,
     # Savings vs. uncontrolled charging
-    "total_potential_gross_profit_delta_eur": 507.412,
+    "total_potential_gross_profit_delta_eur": 558.780,
     # Energy balance
     "net_kwh": -2985.521,
     "sell_kwh": 5693.942,
@@ -74,6 +80,7 @@ def test_example_kpis(tmp_path, monkeypatch):
         "fees_eur",
         "fcr_revenue_eur",
         "imb_cost_eur",
+        "fcr_activation_cf_eur",
         "total_potential_gross_profit_delta_eur",
         "net_kwh",
         "sell_kwh",

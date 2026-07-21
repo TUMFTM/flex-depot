@@ -183,6 +183,7 @@ def solve_model(
 OBJECTIVE_TERM_NAMES = (
     "obj_energy_cashflow",
     "obj_fcr_revenue",
+    "obj_fcr_activation_cashflow",
     "obj_imb_cashflow",
     "obj_fee_cost",
     "obj_cycling_cost",

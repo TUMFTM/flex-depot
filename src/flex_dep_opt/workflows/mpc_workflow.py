@@ -48,6 +48,7 @@ _FCR_BREAKEVEN_NAN = {
     "margin_pct": float("nan"),
     "opp_cost_eur": float("nan"),
     "d_energy_eur": float("nan"),
+    "d_fcr_activation_eur": float("nan"),
     "d_fees_eur": float("nan"),
     "d_cycling_eur": float("nan"),
     "d_imbalance_eur": float("nan"),
@@ -109,8 +110,10 @@ def _fcr_breakeven_metrics(
         "margin_eur_per_mw": margin,
         "margin_pct": margin / fcr_price if abs(fcr_price) > 1e-9 else float("nan"),
         "opp_cost_eur": opp_cost,
-        # Signed objective-term deltas (B - A): how each component changes when the bid is dropped. opp_cost = d_energy + d_imbalance - d_fees - d_cycling - d_penalties.
+        # Signed objective-term deltas (B - A): how each component changes when the bid is
+        # dropped. opp_cost = d_energy + d_fcr_activation + d_imbalance - d_fees - d_cycling - d_penalties.
         "d_energy_eur": d("obj_energy_cashflow"),
+        "d_fcr_activation_eur": d("obj_fcr_activation_cashflow"),
         "d_fees_eur": d("obj_fee_cost"),
         "d_cycling_eur": d("obj_cycling_cost"),
         "d_imbalance_eur": d("obj_imb_cashflow"),
@@ -279,6 +282,8 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
     forecast_prices_by_market.pop("IMB_POS", None)
     forecast_prices_by_market.pop("IMB_NEG", None)
 
+    fcr_enabled = opt_cfg.trading.fcr.enabled
+
     # slice fcr prices to simulation window
     fcr_prices_full = fcr_prices_full.loc[(fcr_prices_full.index >= start) & (fcr_prices_full.index <= end)]
 
@@ -389,6 +394,16 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                 imb_neg_full.loc[window_idx] if (imb_enabled and imb_neg_full is not None) else None
             )
 
+            # reBAP prices for FCR activation cashflow (Option A).
+            # Available in PASS-1 when FCR is active, independently of allow_imbalance,
+            # so the optimizer prices p_droop energy at the correct settlement price.
+            fcr_rebap_pos = (
+                imb_pos_full.loc[window_idx] if (fcr_enabled and imb_pos_full is not None) else None
+            )
+            fcr_rebap_neg = (
+                imb_neg_full.loc[window_idx] if (fcr_enabled and imb_neg_full is not None) else None
+            )
+
             # fcr gates
             window_start = window_idx[0]
             window_end_ts = window_idx[-1] + pd.Timedelta(
@@ -483,6 +498,8 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                     fcr_energy_reserve_kwh_per_kw=fcr_energy_reserve_kwh_per_kw,
                     fcr_reserve_penalty_eur_per_kwh=fcr_reserve_penalty,
                     fcr_balance_penalty_eur_per_kwh=fcr_balance_penalty,
+                    fcr_rebap_prices_pos=fcr_rebap_pos,
+                    fcr_rebap_prices_neg=fcr_rebap_neg,
                 )
 
                 if hasattr(_m, "S_FCR"):
@@ -558,13 +575,13 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
 
             except RuntimeError as e1:
                 if not imb_enabled:
-                    tqdm.write("ERROR - PASS1 infeasible and imbalance disabled → abort")
+                    tqdm.write("ERROR - PASS1 infeasible and imbalance disabled -- abort")
                     logger.error(f"PASS1 infeasible at {current_time} and imbalance disabled. Details: {e1}")
                     solved = False
                 else:
-                    tqdm.write("PASS1 infeasible → Imbalance activated (PASS2)")
+                    tqdm.write("PASS1 infeasible -- Imbalance activated (PASS2)")
                     logger.info(
-                        f"PASS1 infeasible at {current_time} → trying PASS2 (imbalance). Details: {e1}"
+                        f"PASS1 infeasible at {current_time} -- trying PASS2 (imbalance). Details: {e1}"
                     )
 
                     model2 = _build_model(
@@ -586,12 +603,12 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                         used_rebap = True
                         model = model2
                     except RuntimeError as e2:
-                        tqdm.write("ERROR - PASS2 also infeasible → aborting")
+                        tqdm.write("ERROR - PASS2 also infeasible -- aborting")
                         logger.error(f"PASS2 also infeasible at {current_time}. Details: {e2}")
                         solved = False
 
             if not solved:
-                logger.error(f"Both passes infeasible at current_time={current_time} → aborting MPC loop.")
+                logger.error(f"Both passes infeasible at current_time={current_time} -- aborting MPC loop.")
                 break
 
             # --------------------------------------------------------
@@ -864,6 +881,6 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
             tz=LOCAL_TIMEZONE,
         )
 
-        print("MPC finished → Postprocessing starts")
+        print("MPC finished -- Postprocessing starts")
 
     return run_dir

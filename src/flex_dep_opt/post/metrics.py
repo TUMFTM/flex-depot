@@ -98,6 +98,32 @@ def compute_cashflows_per_step(
 
             cf_df["IMB Cashflow [€/step]"] = -(pos_price * p_pos + neg_price * p_neg) * dt
 
+    # -------------------------------------------------------------------------
+    # FCR activation cashflow: reBAP settlement of FCR droop energy.
+    # Sign/price mapping (import-positive, consistent with PASS-2 imbalance):
+    #   p_droop < 0 (upward FCR, export, BKV Überdeckung)  → earn IMB_NEG price
+    #   p_droop > 0 (downward FCR, import, BKV Unterdeckung) → pay  IMB_POS price
+    # cashflow = -eff_price * p_droop * dt  (matches -price * p_market * dt convention)
+    # -------------------------------------------------------------------------
+    if (
+        "p_droop_kw" in dispatch.columns
+        and "IMB_POS" in prices_by_market
+        and "IMB_NEG" in prices_by_market
+    ):
+        p_droop = dispatch["p_droop_kw"].astype(float)
+        pos_price = prices_by_market["IMB_POS"]
+        neg_price = prices_by_market["IMB_NEG"]
+        idx = dispatch.index.intersection(pos_price.index).intersection(neg_price.index)
+        if len(idx) > 0 and p_droop.reindex(idx).abs().sum() > 0:
+            p_d = p_droop.reindex(idx)
+            pp = pos_price.reindex(idx)
+            pn = neg_price.reindex(idx)
+            # effective price: IMB_NEG where upward FCR (p_d < 0), IMB_POS elsewhere
+            eff_price = pn.where(p_d < 0, pp)
+            eff_price = eff_price.where(p_d != 0, 0.0)
+            cf_act = (-eff_price * p_d) * dt
+            cf_df["FCR Activation Cashflow [€/step]"] = cf_act.reindex(dispatch.index, fill_value=0.0)
+
     if cf_df.empty:
         raise ValueError("No cashflows could be computed (check market columns and prices_by_market).")
 
@@ -328,12 +354,16 @@ def compute_kpis(
     if "FCR Cashflow [€/step]" in cf_df.columns:
         fcr_cf_eur = float(cf_df["FCR Cashflow [€/step]"].sum())
 
+    fcr_activation_cf_eur = 0.0
+    if "FCR Activation Cashflow [€/step]" in cf_df.columns:
+        fcr_activation_cf_eur = float(cf_df["FCR Activation Cashflow [€/step]"].sum())
+
     total_cf_eur = float(cf_df["Total Cashflow [€/step]"].sum())
 
     gross_profit_eur = total_cf_eur + fees_eur  # total CF (DA/ID + IMB + FCR) plus fees (negative)
     trading_profit_eur = (
-        total_cf_eur - imb_cost_eur - fcr_cf_eur
-    )  # total CF less IMB and FCR -> pure scheduled-market (DA/ID) CF
+        total_cf_eur - imb_cost_eur - fcr_cf_eur - fcr_activation_cf_eur
+    )  # total CF less IMB, FCR capacity, and FCR activation → pure scheduled-market (DA/ID) CF
 
     # Per-market cashflow breakdown (scheduled markets only; IMB and FCR are
     # already reported via imb_cost_eur / fcr_revenue_eur).
@@ -352,6 +382,7 @@ def compute_kpis(
         **per_market_cf,
         "fees_eur": float(fees_eur),
         "imb_cost_eur": float(imb_cost_eur),
+        "fcr_activation_cf_eur": float(fcr_activation_cf_eur),
         "trade_steps": int(trade_steps),
         "net_kwh": float(net_kwh),
         "sell_kwh": float(sell_kwh),
