@@ -77,6 +77,7 @@ def _scenario_row(scenario: str, run_dir: Path, runtime_s: float) -> dict:
         "da_cashflow_eur": float(kpis.get("da_cashflow_eur", 0.0)),
         "id_cashflow_eur": float(kpis.get("id_cashflow_eur", 0.0)),
         "fcr_revenue_eur": float(kpis.get("fcr_revenue_eur", 0.0)),
+        "fcr_activation_cf_eur": float(kpis.get("fcr_activation_cf_eur", 0.0)),
         "fees_eur": float(kpis["fees_eur"]),
         "imb_cost_eur": float(kpis["imb_cost_eur"]),
         "pass2_steps": int(kpis["pass2_steps"]),

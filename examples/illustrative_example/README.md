@@ -40,19 +40,29 @@ one per 15-min step for ID. MPC decisions use the forecast series; settlement
 
 ## Modelling note: FCR activation energy and reBAP
 
-With the realistic 5-min intraday gate closure
-(`trading.intraday.offset_minutes_before_delivery = 5`), the FCR activation
-of the running quarter-hour can no longer be netted on the intraday market.
-Most activation energy is absorbed physically within the flexibility band and
-re-balanced on ID in later quarter-hours (SoC management); a small residual
-settles at the imbalance price (reBAP), typically when the energy state sits
-at the FCR energy-reserve boundary. This mirrors German practice: FCR has no
-ex-post balancing-group correction (unlike aFRR/mFRR), so activation energy
-remains in the provider's balancing group and settles at reBAP — which is
-roughly cost-neutral on average because reBAP is correlated with the
-frequency deviation the provider is helping against. Not modelled (and thus
-conservative): deadband utilization and permitted over-fulfilment (up to
-120 %) for SoC steering during delivery, and pooling across several depots.
+FCR activation changes the fleet's grid power flow relative to its scheduled
+DA/ID position. This deviation — `p_droop = -droop_signal × x_fcr` in the
+model (import-positive convention) — creates a balancing-group (BKV)
+imbalance that settles at the reBAP price every quarter-hour:
+
+- **Upward FCR** (f < 50 Hz, export): BKV Überdeckung → earns `IMB_NEG` price
+- **Downward FCR** (f > 50 Hz, import): BKV Unterdeckung → pays `IMB_POS` price
+
+The optimizer prices this in PASS-1 via `obj_fcr_activation_cashflow`
+(using the same reBAP series as PASS-2 imbalance settlement), so the
+dispatch correctly accounts for the settlement cost/revenue on every step
+with active FCR. The aggregate is reported as `fcr_activation_cf_eur` in
+`kpis.csv` and shown as the "FCR activation" component in panel (b) of the
+comparison figure.
+
+Over a full frequency cycle, upward and downward activations roughly balance
+in energy (FCR is a symmetric product). The net reBAP cashflow is therefore
+small relative to the FCR capacity revenue; its sign depends on the actual
+frequency profile of the simulation window. Not modelled (and thus
+conservative): pre-scheduling of expected FCR activation energy on the ID
+market (which would reduce reBAP exposure), deadband utilization and
+permitted over-fulfilment (up to 120 %) for SoC steering during delivery,
+and pooling across several depots.
 
 ## How to run
 
@@ -112,6 +122,11 @@ Produced with HiGHS on 2026-07-16 (runtimes on a standard desktop machine);
 regenerate with `aggregate_results.py`, which prints this table ready to paste.
 Small deviations across HiGHS versions/platforms are possible (near-degenerate
 optima); the qualitative ordering S1 < S2 < S4 < S3 should be robust.
+
+> **Note:** The table below predates the FCR activation cashflow (Option A,
+> 2026-07-21). After re-running, S3/S4 `total_energy_cost_eur` will decrease
+> (more profit) and a `fcr_activation_cf_eur` column will appear. Replace
+> this table with the output of `aggregate_results.py` after the next full run.
 
 | scenario | markets   | price_foresight | total_energy_cost_eur | ref_cost_s0_eur | cost_advantage_eur | cost_advantage_pct | da_cashflow_eur | id_cashflow_eur | fcr_revenue_eur | fees_eur | imb_cost_eur | pass2_steps | pass2_fraction_pct | da_forecast_mae_eur_per_kwh | id_forecast_mae_eur_per_kwh | solver | runtime_s |
 |----------|-----------|-----------------|-----------------------|-----------------|--------------------|--------------------|-----------------|-----------------|-----------------|----------|--------------|-------------|--------------------|-----------------------------|-----------------------------|--------|-----------|

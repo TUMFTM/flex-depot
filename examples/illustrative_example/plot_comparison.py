@@ -107,7 +107,7 @@ def _panel_composition(ax, df: pd.DataFrame) -> None:
     components = {
         "DA": df["da_cashflow_eur"],
         "ID": df["id_cashflow_eur"],
-        "FCR": df["fcr_revenue_eur"],
+        "FCR": df["fcr_revenue_eur"] + df.get("fcr_activation_cf_eur", pd.Series(0.0, index=df.index)),
         "Fees & imbalance": df["fees_eur"] + df["imb_cost_eur"],
     }
     net = -df["total_energy_cost_eur"]  # gross profit (negative = net cost)

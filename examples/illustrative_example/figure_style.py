@@ -16,9 +16,10 @@ MM_TO_INCH = 1.0 / 25.4
 
 # TUM palette
 MARKET_COLORS = {
-    "DA": "#0065BD",  # TUMBlue
-    "ID": "#E37222",  # Orange
-    "FCR": "#A2AD00",  # Green
+    "DA": "#0065BD",       # TUMBlue
+    "ID": "#E37222",       # Orange
+    "FCR": "#A2AD00",      # Olive green — FCR capacity revenue
+    "FCR activation": "#69BE28",  # Lime green — reBAP settlement of FCR droop energy
     "Fees & imbalance": "#999999",  # Gray
 }
 # Neutral gray tones per market setup (scenario-level encodings, light to dark
