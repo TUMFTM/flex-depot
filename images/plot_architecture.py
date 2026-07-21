@@ -11,10 +11,10 @@ Layout: horizontal execution flow (Option B), monochrome, with database icons.
             |                 |                 |
      [ Optimization ]      [ Domain ]        [ Market ]
 
-Elsevier double-column: 190 x 78 mm, Times serif, 7 pt, fonttype 42.
+Elsevier double-column: 190 x 84 mm, Times serif, 7 pt, fonttype 42.
 
-Y layout (78 mm, all outer boxes 18 mm):
-  4 | Config 18 | 8 | Mid-row 18 | 8 | Sub-row 18 | 4  (mm)
+Y layout (84 mm):
+  4 | Config 18 | 8 | Mid-row 24 | 8 | Sub-row 18 | 4  (mm)
 
 Run:  python images/plot_architecture.py
 """
@@ -43,7 +43,7 @@ mpl.rcParams.update({
 _MONO = FontProperties(family="monospace", size=5.5)
 
 MM = 1.0 / 25.4
-FIG_W, FIG_H = 190 * MM, 78 * MM
+FIG_W, FIG_H = 190 * MM, 84 * MM
 fig = plt.figure(figsize=(FIG_W, FIG_H))
 
 BLACK = "#1A1A1A"
@@ -51,14 +51,14 @@ DARK  = "#444444"
 GRAY  = "#777777"
 
 # ── Y layout (figure fractions, 0=bottom, 1=top) ─────────────────────────────
-# 4 | DB 15 | 2 | Config 18 | 3 | Mid-row 18 | 8 | Sub-row 18 | 4  (mm, total=90)
-_H = 78.0
+# 4 | Sub-row 18 | 8 | Mid-row 24 | 8 | Config 18 | 4  (mm, total=84)
+_H = 84.0
 YSB = 4 / _H
 YST = (4 + 18) / _H
 YMB = (4 + 18 + 8) / _H
-YMT = (4 + 18 + 8 + 18) / _H
-YCB = (4 + 18 + 8 + 18 + 8) / _H
-YCT = (4 + 18 + 8 + 18 + 8 + 18) / _H
+YMT = (4 + 18 + 8 + 24) / _H
+YCB = (4 + 18 + 8 + 24 + 8) / _H
+YCT = (4 + 18 + 8 + 24 + 8 + 18) / _H
 
 # ── X layout: three equal columns, same for mid-row AND sub-row ───────────────
 XL  = 0.022; XR = 0.978
@@ -185,13 +185,22 @@ def module_row(x0, y0, x1, y1, mods, *, gap=0.008, margin=0.010):
         x += w + gap
 
 
-# ── Sub-box placement (physical dimensions preserved from 75 mm original) ─────
-_bh  = 0.075   # sub-box height  (6.75 mm at 90 mm ≡ same as original)
-_off = 0.036   # offset from outer-box bottom to sub-box bottom  (3.24 mm)
+# ── Sub-box placement ─────────────────────────────────────────────────────────
+_bh  = 0.075   # sub-box height for Config / Sub-row (≈ 6.6 mm at 88 mm)
+_off = 0.036   # offset from outer-box bottom to sub-box bottom
 
 CFG_NY  = YCT - 0.050;   CFG_SY0 = YCB + _off;   CFG_SY1 = CFG_SY0 + _bh
-MID_NY  = YMT - 0.050;   MID_SY0 = YMB + _off;   MID_SY1 = MID_SY0 + _bh
 SUB_NY  = YST - 0.050;   SUB_SY0 = YSB + _off;   SUB_SY1 = SUB_SY0 + _bh
+
+# Mid-row: two module rows stacked (bottom = R2, top = R1)
+_bh_row  = 5.5 / _H   # height of each module row (≈ 5.5 mm)
+_gap_row = 1.5 / _H   # gap between the two rows
+
+MID_NY     = YMT - 0.050
+MID_SY0_R2 = YMB + _off
+MID_SY1_R2 = MID_SY0_R2 + _bh_row
+MID_SY0_R1 = MID_SY1_R2 + _gap_row
+MID_SY1_R1 = MID_SY0_R1 + _bh_row
 
 # ── Outer layer boxes ─────────────────────────────────────────────────────────
 rbox(XCFG_L, YCB, XCFG_R, YCT) # Configuration
@@ -214,12 +223,12 @@ ft(cx3,    SUB_NY, "Market Layer",         fs=8, fw="bold")
 # ── Dashed module-file sub-boxes ──────────────────────────────────────────────
 module_row(XCFG_L, CFG_SY0, XCFG_R, CFG_SY1,
            ["settings.py", "settings.toml"])
-module_row(XIL,  MID_SY0, XIR,  MID_SY1,
-           ["prices.py", "results.py", "time.py"])
-module_row(XWL,  MID_SY0, XWR,  MID_SY1,
-           ["mpc_workflow.py", "postproc_workflow.py"])
-module_row(XPL,  MID_SY0, XPR,  MID_SY1,
-           ["metrics.py", "plots.py"])
+module_row(XIL,  MID_SY0_R1, XIR,  MID_SY1_R1, ["prices.py", "results.py"])
+module_row(XIL,  MID_SY0_R2, XIR,  MID_SY1_R2, ["time.py", "flexibility.py"])
+module_row(XWL,  MID_SY0_R1, XWR,  MID_SY1_R1, ["mpc_workflow.py"])
+module_row(XWL,  MID_SY0_R2, XWR,  MID_SY1_R2, ["postprocessing_workflow.py"])
+module_row(XPL,  MID_SY0_R1, XPR,  MID_SY1_R1, ["metrics.py", "plots.py"])
+module_row(XPL,  MID_SY0_R2, XPR,  MID_SY1_R2, ["reference_energy_costs.py"])
 module_row(XS1L, SUB_SY0, XS1R, SUB_SY1,
            ["model.py", "solve.py"])
 module_row(XS2L, SUB_SY0, XS2R, SUB_SY1,
