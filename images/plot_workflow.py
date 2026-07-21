@@ -148,23 +148,23 @@ rbox(458.5, 167.2, 524.5, 269.0, fc=MARK)    # Market Execution (market)
 
 # ── Box titles (above the boxes) ──────────────────────────────────────────────
 ft(79.0,  16.5, "Aggregation", fs=8, fw="bold", va="bottom")
-ft(177.5, 16.5, "Foresight Horizons", fs=8, fw="bold", va="bottom")
+ft(177.5, 16.5, "Foresight horizons", fs=8, fw="bold", va="bottom")
 ft(347.5, 16.5, "Model",       fs=8, fw="bold", va="bottom")
 ft(491.0, 17.5, "Depot",  fs=8, fw="bold", va="bottom")
 ft(491.5, 148.0, "Market",     fs=8, fw="bold")
-ft(491.5, 161.0, "Execution",  fs=8, fw="bold")
+ft(491.5, 161.0, "execution",  fs=8, fw="bold")
 
 # ── Box body text ─────────────────────────────────────────────────────────────
 # Aggregation
-ft(79.0, 40.0, "Park et al.,", fst="italic")
-ft(79.0, 53.0, "2026†",   fst="italic")
+ft(79.0, 40.0, "Park et al.", fst="italic")
+ft(79.0, 53.0, "[26]†",   fst="italic")
 
 # Foresight Horizons (values from settings_example.toml; grid frequency
 # is only known for the current step -> 0 min horizon)
 ft(177.5,  35.0, "Flexibility: 48 h*")
-ft(177.5,  52.0, "DA-Market: 48 h*")
-ft(177.5,  69.0, "ID-Market: 48 h*")
-ft(177.5,  86.0, "FCR-Market: 48 h*")
+ft(177.5,  52.0, "DA-market: 48 h*")
+ft(177.5,  69.0, "ID-market: 48 h*")
+ft(177.5,  86.0, "FCR-market: 48 h*")
 ft(177.5, 103.0, "Frequency: 0 min*")
 
 # Model
@@ -177,16 +177,16 @@ ft(347.5, 165.0, "Cycle reg.: on*")
 
 # Real-World
 ft(491.0, 39.0, "Behavior:")
-ft(491.0, 52.0, "Ideal", fst="italic")
+ft(491.0, 52.0, "ideal", fst="italic")
 
 # Market Execution
 ft(491.5, 179.0, "Trade")
-ft(491.5, 192.0, "Acceptance:")
-ft(491.5, 205.0, "Ideal", fst="italic")
-ft(491.5, 224.0, "settlement:", fs=5.5, c=GRAY)
+ft(491.5, 192.0, "acceptance:")
+ft(491.5, 205.0, "ideal", fst="italic")
+ft(491.5, 224.0, "Settlement:", fs=5.5, c=GRAY)
 ft(491.5, 233.0, "realized prices", fs=5.5, c=GRAY)
 ft(491.5, 250.0, "Imbalance")
-ft(491.5, 263.0, "Accounting")
+ft(491.5, 263.0, "accounting")
 
 # ── Feedback-loop lines (verticals + bottom returns, drawn below arrows) ──────
 # Outer loop: Real-World "Virtual Battery State" back into Model
@@ -227,6 +227,12 @@ farrow(384.5, 213.0, 458.5, 213.0)  # Model       -> Market Execution (FCR bids)
 farrow(0.0, 146.2, 310.5, 146.2)    # Virtual Battery State      -> Model
 farrow(0.0, 198.8, 310.5, 198.8)    # Committed Market Positions -> Model
 
+# reBAP prices also enter the Model (PASS-1: FCR activation cashflow pricing;
+# PASS-2: imbalance slack pricing). Tap from the Imbalance Prices horizontal
+# up into the bottom edge of the Model box.
+dot(347.5, 257.0)
+farrow(347.5, 257.0, 347.5, 220.1, sA=3)
+
 # Outputs (right edge)
 farrow(524.5,  45.4, 643.0,  45.4)  # Real-World -> Virtual Battery State
 farrow(524.5, 201.5, 643.0, 201.5)  # Market Execution -> Committed Positions
@@ -240,37 +246,37 @@ dot(156.5, 198.8)
 
 # ── Arrow labels ──────────────────────────────────────────────────────────────
 ft(22.5,  27.0, "Energy")
-ft(22.5,  39.0, "Data")
+ft(22.5,  39.0, "data")
 ft(22.5,  61.0, "Market")
-ft(22.5,  73.0, "Data")
+ft(22.5,  73.0, "data")
 ft(22.5,  95.0, "Grid")
-ft(22.5, 107.0, "Frequency")
-ft(265.0, 38.0, "Power Bounds")
-ft(265.0, 55.0, "Energy Bounds")
-ft(265.0, 72.0, "Market Prices")
-ft(265.0, 86.0, "decision:", fs=5.5, c=GRAY)
-ft(265.0, 94.5, "forecast or realized", fs=5.5, c=GRAY)
-ft(265.0, 106.0, "Droop Signal")
-ft(262.0, 140.0, "Virtual Battery State")
-ft(240.0, 191.0, "Committed Positions & FCR Capacity")
-ft(421.0,  38.0, "VB Power")
-ft(577.0,  38.0, "Virtual Battery State")
-ft(421.0, 166.0, "DA / ID Positions")
-ft(421.0, 184.0, "gate DA: D-1 12:00*", fs=5.5, c=GRAY)
-ft(421.0, 193.0, "gate ID: t-5 min*", fs=5.5, c=GRAY)
-ft(421.0, 204.0, "FCR Capacity Bids")
-ft(421.0, 223.0, "gate FCR: D-1 08:00*", fs=5.5, c=GRAY)
-ft(575.0, 180.0, "Committed Positions")
-ft(575.0, 193.0, "& FCR Capacity")
-ft(414.0, 249.0, "Imbalance Prices")
+ft(22.5, 107.0, "frequency")
+ft(265.0, 38.0, "Power bounds")
+ft(265.0, 55.0, "Energy bounds")
+ft(265.0, 72.0, "Market prices")
+ft(265.0, 86.0, "Decision:", fs=5.5, c=GRAY)
+ft(265.0, 94.5, "Forecast or realized", fs=5.5, c=GRAY)
+ft(265.0, 106.0, "Droop signal")
+ft(262.0, 140.0, "Virtual battery state")
+ft(240.0, 191.0, "Committed positions & FCR capacity")
+ft(421.0,  38.0, "VB power")
+ft(577.0,  38.0, "Virtual battery state")
+ft(421.0, 166.0, "DA / ID positions")
+ft(421.0, 184.0, "Gate DA: D-1 12:00*", fs=5.5, c=GRAY)
+ft(421.0, 193.0, "Gate ID: t-5 min*", fs=5.5, c=GRAY)
+ft(421.0, 204.0, "FCR capacity bids")
+ft(421.0, 223.0, "Gate FCR: D-1 08:00*", fs=5.5, c=GRAY)
+ft(575.0, 180.0, "Committed positions")
+ft(575.0, 193.0, "& FCR capacity")
+ft(414.0, 249.0, "Imbalance prices")
 ft(560.0, 238.0, "Imbalance")
-ft(560.0, 251.0, "Positions")
+ft(560.0, 251.0, "positions")
 
 # ── Legend ────────────────────────────────────────────────────────────────────
 rbox(6.5, 265.0, 25.5, 280.0)
 rbox(6.5, 282.0, 25.5, 296.5, fc=MARK)
-ft(31.0, 272.5, "Physical Modeling", ha="left")
-ft(31.0, 289.5, "Market Modeling",   ha="left")
+ft(31.0, 272.5, "Physical modeling", ha="left")
+ft(31.0, 289.5, "Market modeling",   ha="left")
 
 # ── Footnote (style as in paper overview figure) ──────────────────────────────
 ft(641.0, 308.0, "* values as in the illustrative example; freely configurable", fs=6, c="#4C4C4C",
