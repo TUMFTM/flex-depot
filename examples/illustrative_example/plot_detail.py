@@ -35,8 +35,7 @@ import numpy as np
 import pandas as pd
 import tomllib
 
-from flex_dep_opt.io.prices import read_prices_csv
-from flex_dep_opt.io.prices import get_fcr_prices
+from flex_dep_opt.io.prices import get_fcr_prices, read_prices_csv
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
