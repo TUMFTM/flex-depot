@@ -118,24 +118,25 @@ python examples/illustrative_example/plot_detail.py
 
 ## Expected results
 
-Produced with HiGHS on 2026-07-16 (runtimes on a standard desktop machine);
+Produced with HiGHS on 2026-07-22 (runtimes on a standard desktop machine: 13th Gen Intel(R) Core(TM) i7 1.90 GHz, 32 GB RAM);
 regenerate with `aggregate_results.py`, which prints this table ready to paste.
 Small deviations across HiGHS versions/platforms are possible (near-degenerate
 optima); the qualitative ordering S1 < S2 < S4 < S3 should be robust.
 
-> **Note:** The table below predates the FCR activation cashflow (Option A,
-> 2026-07-21). After re-running, S3/S4 `total_energy_cost_eur` will decrease
-> (more profit) and a `fcr_activation_cf_eur` column will appear. Replace
-> this table with the output of `aggregate_results.py` after the next full run.
+| scenario | markets   | price_foresight | total_energy_cost_eur | ref_cost_s0_eur | cost_advantage_eur | cost_advantage_pct | da_cashflow_eur | id_cashflow_eur | fcr_revenue_eur | fcr_activation_cf_eur | fees_eur | imb_cost_eur | pass2_steps | pass2_fraction_pct | da_forecast_mae_eur_per_kwh | id_forecast_mae_eur_per_kwh | solver | runtime_s |
+|----------|-----------|-----------------|-----------------------|-----------------|--------------------|--------------------|-----------------|-----------------|-----------------|------------------------|----------|--------------|-------------|--------------------|-----------------------------|-----------------------------|--------|-----------|
+| S1       | DA        | perfect         | 1793.75               | 3338.73         | 1544.98            | 46.27              | -1742.23        | 0.00            | 0.00            | 0.00                   | -3.18    | -48.33       | 39          | 1.45               |                             |                             | highs  | 585       |
+| S2       | DA+ID     | perfect         | 663.01                | 3338.73         | 2675.72            | 80.14              | 336.15          | -991.87         | 0.00            | 0.00                   | -7.30    | 0.00         | 0           | 0.00               |                             |                             | highs  | 789       |
+| S3       | DA+ID+FCR | perfect         | -674.34               | 3338.73         | 4013.08            | 120.20             | 61.83           | -1119.19        | 1805.70         | -20.32                 | -7.19    | -46.49       | 71          | 2.64               |                             |                             | highs  | 2025      |
+| S4       | DA+ID+FCR | forecast        | -312.10               | 3338.73         | 3650.83            | 109.35             | 1320.62         | -1958.17        | 995.67          | -1.73                  | -34.82   | -9.46        | 21          | 0.78               | 0.0146                      | 0.0148                      | highs  | 2420      |
 
-| scenario | markets   | price_foresight | total_energy_cost_eur | ref_cost_s0_eur | cost_advantage_eur | cost_advantage_pct | da_cashflow_eur | id_cashflow_eur | fcr_revenue_eur | fees_eur | imb_cost_eur | pass2_steps | pass2_fraction_pct | da_forecast_mae_eur_per_kwh | id_forecast_mae_eur_per_kwh | solver | runtime_s |
-|----------|-----------|-----------------|-----------------------|-----------------|--------------------|--------------------|-----------------|-----------------|-----------------|----------|--------------|-------------|--------------------|-----------------------------|-----------------------------|--------|-----------|
-| S1       | DA        | perfect         | 1793.75               | 3338.73         | 1544.98            | 46.27              | -1742.23        | 0.00            | 0.00            | -3.18    | -48.33       | 39          | 1.45               |                             |                             | highs  | 674.00    |
-| S2       | DA+ID     | perfect         | 663.05                | 3338.73         | 2675.68            | 80.14              | 336.15          | -991.91         | 0.00            | -7.30    | 0.00         | 0           | 0.00               |                             |                             | highs  | 812.00    |
-| S3       | DA+ID+FCR | perfect         | -751.33               | 3338.73         | 4090.06            | 122.50             | 61.83           | -1108.78        | 1805.70         | -7.43    | 0.00         | 0           | 0.00               |                             |                             | highs  | 1773.00   |
-| S4       | DA+ID+FCR | forecast        | -328.07               | 3338.73         | 3666.80            | 109.83             | 1320.62         | -1953.31        | 995.67          | -34.91   | 0.00         | 0           | 0.00               | 0.0146                      | 0.0148                      | highs  | 1635.00   |
-
-Reading aid: a negative total energy cost means the depot earned more on the
-markets over the month than its driving energy cost. The S1 PASS2 steps stem
-from the cold start (no day-ahead commitments for day 1 and no intraday market
-to compensate — S1 is the only scenario without ID).
+Reading aid: a negative `total_energy_cost_eur` means the depot earned more on
+the markets over the month than its driving energy cost. The S1 PASS2 steps
+stem from the cold start (no DA commitments for day 1, no ID market to
+compensate). The S3/S4 PASS2 steps arise from FCR activation periods: droop
+energy creates a net reBAP imbalance that can make the market-balanced PASS1
+constraint infeasible, triggering the PASS2 fallback. The negative
+`fcr_activation_cf_eur` in S3/S4 reflects that the actual frequency profile
+of February 2026 resulted in a net reBAP cost from FCR activation (symmetric
+product, but skewed frequency distribution); the optimizer accounts for this
+cost in PASS1 via `obj_fcr_activation_cashflow`.
