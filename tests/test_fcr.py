@@ -4,7 +4,8 @@ import pyomo.environ as pyo
 import pytest
 
 from flex_dep_opt.domain.depot import Depot
-from flex_dep_opt.market.fcr import FCR_DROOP_COL, droop_signal, fcr_gate_closure_timestamp
+from flex_dep_opt.io.prices import FCR_DROOP_COL
+from flex_dep_opt.market.fcr import droop_signal, fcr_gate_closure_timestamp
 from flex_dep_opt.opt.model import flexibility_commercialization
 from flex_dep_opt.opt.solve import extract_objective_terms, solve_model
 from flex_dep_opt.post.metrics import compute_cashflows_per_step, compute_kpis

@@ -27,12 +27,8 @@ from flex_dep_opt.io.results import (
     write_latest_run_pointer,
 )
 from flex_dep_opt.io.time import LOCAL_TIMEZONE, local_config_timestamp_to_utc, validate_regular_index
-from flex_dep_opt.market.fcr import (
-    FCR_DROOP_COL,
-    fcr_gate_closure_timestamp,
-    get_fcr_frequency_data,
-    get_fcr_prices,
-)
+from flex_dep_opt.io.prices import FCR_DROOP_COL, get_fcr_frequency_data, get_fcr_prices
+from flex_dep_opt.market.fcr import fcr_gate_closure_timestamp
 from flex_dep_opt.market.trading import (
     build_market_activity_mask_for_time,
     gate_closure_timestamp,

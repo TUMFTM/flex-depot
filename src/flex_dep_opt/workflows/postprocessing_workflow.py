@@ -12,7 +12,7 @@ from flex_dep_opt.io.prices import (
 )
 from flex_dep_opt.io.results import read_latest_run_pointer, save_dispatch_to_csv, save_summary_to_csv
 from flex_dep_opt.io.time import LOCAL_TIMEZONE, local_config_timestamp_to_utc, validate_regular_index
-from flex_dep_opt.market.fcr import get_fcr_frequency_data
+from flex_dep_opt.io.prices import get_fcr_frequency_data
 from flex_dep_opt.post.metrics import (
     compute_cashflows_per_step,
     compute_fcr_activation_energy,

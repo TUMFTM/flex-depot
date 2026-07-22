@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
 
-from flex_dep_opt.market.fcr import FCR_DROOP_ABS_COL, FCR_DROOP_COL
+from flex_dep_opt.io.prices import FCR_DROOP_ABS_COL, FCR_DROOP_COL
 
 from ..domain.depot import Depot
 

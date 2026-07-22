@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import pandas as pd
@@ -161,3 +162,82 @@ def build_fees_from_settings(settings: Settings) -> dict[str, float]:
         fees_by_market["ID"] = mk_cfg.intraday.fee_eur_per_kwh
 
     return fees_by_market
+
+
+# =============================================================================
+# FCR I/O: capacity prices (XLSX) and grid-frequency data (CSV)
+# =============================================================================
+FCR_FREQ_DATETIME_COL = "DATETIME"
+FCR_DROOP_COL = "FREQ_DROOP_MEAN"
+FCR_DROOP_ABS_COL = "FREQ_DROOP_ABS_MEAN"
+
+
+def get_fcr_prices(file_path: str) -> pd.Series:
+    df = pd.read_excel(file_path)
+
+    if "DATETIME_UTC" in df.columns:
+        df["datetime"] = pd.to_datetime(df["DATETIME_UTC"], errors="coerce", utc=True)
+        if df["datetime"].isna().any():
+            raise ValueError(f"Unparsable timestamps in 'DATETIME_UTC' in {file_path}")
+        df = df.set_index("datetime")
+    else:
+        df["start_hour"] = df["PRODUCTNAME"].str.split("_").str[1].astype(int)
+        df["datetime"] = pd.to_datetime(df["DATE_FROM"]) + pd.to_timedelta(df["start_hour"], unit="h")
+        df = df.set_index("datetime").tz_localize("Europe/Berlin", ambiguous="infer", nonexistent="shift_forward")
+
+    price_col = "GERMANY_SETTLEMENTCAPACITY_PRICE_[EUR/MW]"
+    prices = (
+        df[price_col]
+        .astype(str)
+        .str.replace(",", ".", regex=False)
+        .pipe(pd.to_numeric, errors="coerce")
+        .rename("fcr_price")
+        .sort_index()
+    )
+
+    if prices.index.has_duplicates:
+        prices = prices.groupby(level=0).first()
+
+    return prices
+
+
+def get_fcr_frequency_data(file_path: str, tz: str = "Europe/Berlin") -> pd.DataFrame:
+    df = pd.read_csv(file_path)
+
+    if FCR_DROOP_COL not in df.columns:
+        raise ValueError(f"FCR frequency CSV missing required column: {FCR_DROOP_COL}")
+
+    if FCR_FREQ_DATETIME_COL not in df.columns:
+        if not isinstance(df.index, pd.DatetimeIndex):
+            raise ValueError(f"FCR frequency CSV missing column: {FCR_FREQ_DATETIME_COL}")
+    else:
+        ts = pd.to_datetime(df[FCR_FREQ_DATETIME_COL], errors="coerce", utc=False)
+        if ts.isna().any():
+            raise ValueError(f"Unparsable timestamps in '{FCR_FREQ_DATETIME_COL}'")
+
+        if ts.dt.tz is None:
+            ts = ts.dt.tz_localize(tz, ambiguous="infer", nonexistent="shift_forward")
+        else:
+            ts = ts.dt.tz_convert(tz)
+
+        df.index = pd.DatetimeIndex(ts)
+        df = df.drop(columns=[FCR_FREQ_DATETIME_COL])
+
+    if not pd.api.types.is_numeric_dtype(df[FCR_DROOP_COL]):
+        df[FCR_DROOP_COL] = df[FCR_DROOP_COL].astype(str).str.replace(",", ".", regex=False)
+
+    df[FCR_DROOP_COL] = pd.to_numeric(df[FCR_DROOP_COL], errors="coerce")
+
+    cols = [FCR_DROOP_COL]
+    if FCR_DROOP_ABS_COL in df.columns:
+        if not pd.api.types.is_numeric_dtype(df[FCR_DROOP_ABS_COL]):
+            df[FCR_DROOP_ABS_COL] = df[FCR_DROOP_ABS_COL].astype(str).str.replace(",", ".", regex=False)
+        df[FCR_DROOP_ABS_COL] = pd.to_numeric(df[FCR_DROOP_ABS_COL], errors="coerce")
+        cols.append(FCR_DROOP_ABS_COL)
+
+    df = df.sort_index()
+    if df.index.has_duplicates:
+        warnings.warn("Duplicate timestamps found; keeping first occurrence.", UserWarning)
+        df = df[~df.index.duplicated(keep="first")]
+
+    return df[cols]

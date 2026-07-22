@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from flex_dep_opt.market.fcr import FCR_DROOP_COL
+from flex_dep_opt.io.prices import FCR_DROOP_COL
 from flex_dep_opt.post.metrics import has_imbalance, infer_market_position_columns
 
 # =============================================================================
