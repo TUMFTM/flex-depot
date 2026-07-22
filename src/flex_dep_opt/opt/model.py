@@ -15,7 +15,7 @@ def flexibility_commercialization(
     fee_eur_per_kwh_by_market: dict[str, float] | None = None,
     *,
     timestep_hours: float | None = None,
-    virtual_arbitrage: bool = True,
+    virtual_arbitrage: bool = False,
     cycling_cost_eur_per_kwh: float = 0.0,
     market_activity_mask: dict[str, pd.Series],
     committed_positions: dict[str, pd.Series],
