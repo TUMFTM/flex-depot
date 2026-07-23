@@ -5,7 +5,7 @@
 start = "2026-02-06 00:00"
 end = "2026-02-10 00:00"
 timestep_hours = 0.25
-name = "illustrative_example"
+name = "illustrative_example_4-day-detail"
 solver = "highs"
 
 [optimization.markets.dayahead]
