@@ -129,7 +129,7 @@ pip install gurobipy==<your_gurobi_version>
 ### 5) Quick start (recommended)
 The repository contains a ready-to-run example script for Windows:
 ```
-./run_example.bat
+.\run_example.bat
 ```
 Or the unix shell script for Linux/macOS:
 ```
