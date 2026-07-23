@@ -577,10 +577,7 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                     logger.error(f"PASS1 infeasible at {current_time} and imbalance disabled. Details: {e1}")
                     solved = False
                 else:
-                    tqdm.write("PASS1 infeasible -- Imbalance activated (PASS2)")
-                    logger.info(
-                        f"PASS1 infeasible at {current_time} -- trying PASS2 (imbalance). Details: {e1}"
-                    )
+                    logger.info(f"PASS1 infeasible at {current_time} -- trying PASS2 (imbalance).")
 
                     model2 = _build_model(
                         allow_imbalance=True,
