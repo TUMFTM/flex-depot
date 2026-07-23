@@ -19,7 +19,7 @@ from flex_dep_opt.io.time import LOCAL_TIMEZONE, local_config_timestamp_to_utc
 from flex_dep_opt.workflows.mpc_workflow import run_mpc
 
 REPO_ROOT = Path(__file__).parent.parent
-EXAMPLE_TOML = REPO_ROOT / "src/flex_dep_opt/config/settings_example.toml"
+EXAMPLE_TOML = REPO_ROOT / "src/flex_dep_opt/config/settings_quickstart.toml"
 
 
 def _write_prices_csv(path: Path, index: pd.DatetimeIndex, values) -> None:

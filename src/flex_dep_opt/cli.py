@@ -103,7 +103,7 @@ def main():
     p_mpc.add_argument(
         "--config",
         default=None,
-        help="Path to a TOML config file (default: bundled settings_example.toml).",
+        help="Path to a TOML config file (default: bundled settings_quickstart.toml).",
     )
     p_mpc.add_argument(
         "--run-dir",

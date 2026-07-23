@@ -127,15 +127,15 @@ pip install gurobipy==<your_gurobi_version>
 ```
 
 ### 5) Quick start (recommended)
-The repository contains a ready-to-run example script for Windows:
+The repository contains a ready-to-run quick-start script for Windows:
 ```
-.\run_example.bat
+.\run_quickstart.bat
 ```
 Or the unix shell script for Linux/macOS:
 ```
-bash run_example.sh
+bash run_quickstart.sh
 ```
-These commands will run the example configuration and generate result files in the results/ directory.
+These commands will run the quick-start configuration and generate result files in the results/ directory.
 
 ### Illustrative example (paper scenarios)
 Four ready-made scenario configurations of increasing capability (S1: DA only → S4: DA+ID+FCR with
@@ -161,11 +161,11 @@ Installing the package provides the console command ```flex-depot``` (equivalent
 
 ```run-sim``` and ```run-post``` accept an optional ```--run-dir <directory>``` to write to / read from a fixed run
 directory instead of the default timestamped ```results/<name>__<timestamp>/```. If ```--config``` is
-omitted, ```run-sim``` uses the bundled ```settings_example.toml``` and ```run-post``` postprocesses the
+omitted, ```run-sim``` uses the bundled ```settings_quickstart.toml``` and ```run-post``` postprocesses the
 latest run (from ```results/LATEST.txt```).
 
 Note: data paths inside the TOML configs are resolved relative to the current working
-directory — run the commands from the repository root (as ```run_example.bat``` / ```run_example.sh``` do).
+directory — run the commands from the repository root (as ```run_quickstart.bat``` / ```run_quickstart.sh``` do).
 
 Within the TOML file all parameters for a simulation run can be set: 
 

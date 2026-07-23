@@ -5,7 +5,7 @@ Time-series detail figure of the illustrative example (4-day window,
 Reads dispatch.csv and the settings.toml snapshot from a run directory
 (default: the 4-day quick-start run in
 results/illustrative_example/detail_4day, i.e. the bundled
-settings_example.toml — scenario S3 setup over Fri 2026-02-06 to Tue
+settings_quickstart.toml — scenario S3 setup over Fri 2026-02-06 to Tue
 2026-02-10) and plots:
 
   (a) DA / ID prices

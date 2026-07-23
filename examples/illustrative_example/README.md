@@ -18,8 +18,8 @@ scenarios by construction).
 Gate-closure logic (`trading.mode = "realistic"`) is always enabled; it is not
 a scenario variable.
 
-The bundled quick-start config (`src/flex_dep_opt/config/settings_example.toml`,
-run via `run_example.sh` / `run_example.bat`) is the **4-day detail window** of
+The bundled quick-start config (`src/flex_dep_opt/config/settings_quickstart.toml`,
+run via `run_quickstart.sh` / `run_quickstart.bat`) is the **4-day detail window** of
 this example: the S3 setup over Fri 2026-02-06 to Tue 2026-02-10 (two weekdays,
 two weekend days). It runs in a few minutes, doubles as the golden-KPI
 regression test (`tests/test_example_regression.py`), and is the run behind the
@@ -74,7 +74,7 @@ examples\illustrative_example\run_all.bat         # Windows cmd
 ```
 
 The runner executes S1 → S4 sequentially via `python -m flex_dep_opt run-sim /
-run-post` (the same entry point as `run_example.sh`), aborts on the first
+run-post` (the same entry point as `run_quickstart.sh`), aborts on the first
 failure, and wall-clock-times each scenario. Expect **~30–45 min per scenario**
 with HiGHS. All outputs land in `results/illustrative_example/`:
 
@@ -111,8 +111,8 @@ python examples/illustrative_example/plot_comparison.py
 
 # 4-day time-series detail (positions, energy state in band, cumulative profit)
 # from the quick-start run:
-python -m flex_dep_opt run-sim  --config src/flex_dep_opt/config/settings_example.toml --run-dir results/illustrative_example/detail_4day
-python -m flex_dep_opt run-post --config src/flex_dep_opt/config/settings_example.toml --run-dir results/illustrative_example/detail_4day
+python -m flex_dep_opt run-sim  --config src/flex_dep_opt/config/settings_quickstart.toml --run-dir results/illustrative_example/detail_4day
+python -m flex_dep_opt run-post --config src/flex_dep_opt/config/settings_quickstart.toml --run-dir results/illustrative_example/detail_4day
 python examples/illustrative_example/plot_detail.py
 ```
 

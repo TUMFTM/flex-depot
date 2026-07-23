@@ -20,7 +20,7 @@ matplotlib script, style analogous to plot_architecture.py.
   Execution carries "settlement: realized prices".
   Feedback loops: Virtual Battery State (outer), Committed Positions &
   FCR Capacity (inner); Imbalance Prices in / Imbalance Positions out.
-  Prediction horizons are the settings_example.toml values.
+  Prediction horizons are the settings_quickstart.toml values.
 
 Marking: white = physical modeling, light gray = market modeling (same
 gray as the flexibility bands in the paper overview figure; colors are
@@ -159,7 +159,7 @@ ft(491.5, 161.0, "execution",  fs=8, fw="bold")
 ft(79.0, 40.0, "Park et al.")
 ft(79.0, 53.0, "[26]†")
 
-# Foresight Horizons (values from settings_example.toml; grid frequency
+# Foresight Horizons (values from settings_quickstart.toml; grid frequency
 # is only known for the current step -> 0 min horizon)
 ft(177.5,  35.0, "Flexibility: 48 h*")
 ft(177.5,  52.0, "DA-market: 48 h*")

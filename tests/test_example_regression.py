@@ -33,7 +33,7 @@ from flex_dep_opt.workflows.mpc_workflow import run_mpc
 from flex_dep_opt.workflows.postprocessing_workflow import postprocess_mpc_results
 
 REPO_ROOT = Path(__file__).parent.parent
-EXAMPLE_TOML = REPO_ROOT / "src/flex_dep_opt/config/settings_example.toml"
+EXAMPLE_TOML = REPO_ROOT / "src/flex_dep_opt/config/settings_quickstart.toml"
 
 # Golden KPI values — update this dict after any intentional model change.
 _GOLDEN = {

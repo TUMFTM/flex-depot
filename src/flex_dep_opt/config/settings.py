@@ -141,7 +141,7 @@ class PostprocessingSettings(BaseModel):
 
 BASE_DIR = Path(__file__).resolve().parent
 
-_DEFAULT_TOML = BASE_DIR / "settings_example.toml"
+_DEFAULT_TOML = BASE_DIR / "settings_quickstart.toml"
 
 
 class Settings(BaseSettings):
