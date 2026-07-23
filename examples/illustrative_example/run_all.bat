@@ -1,0 +1,43 @@
+@echo off
+REM ================================
+REM Flex-Depot illustrative example: run S1 -> S4 sequentially, then aggregate.
+REM Fail fast: abort on the first failing scenario (non-zero exit code).
+REM Expect ~30-45 min per scenario with HiGHS (1-month window).
+REM All outputs land in results\illustrative_example\.
+REM ================================
+
+setlocal enabledelayedexpansion
+
+REM Go to the repository root (data paths in the TOMLs are repo-relative)
+cd /d "%~dp0..\.."
+
+set "OUT=results\illustrative_example"
+if not exist "%OUT%" mkdir "%OUT%"
+set "INDEX=%OUT%\run_index.csv"
+echo scenario,run_dir,runtime_s> "%INDEX%"
+
+for %%S in (s1 s2 s3 s4) do (
+    set "CONFIG=examples\illustrative_example\settings_%%S.toml"
+    set "RUN_DIR=%OUT%\%%S"
+    echo === Starting scenario %%S [!CONFIG!] -- expect ~30-45 min with HiGHS ===
+    for /f %%T in ('python -c "import time; print(int(time.time()))"') do set "T0=%%T"
+
+    python -m flex_dep_opt run-sim --config "!CONFIG!" --run-dir "!RUN_DIR!"
+    if errorlevel 1 (
+        echo ERROR: scenario %%S simulation failed -- aborting. 1>&2
+        exit /b 1
+    )
+    python -m flex_dep_opt run-post --config "!CONFIG!" --run-dir "!RUN_DIR!"
+    if errorlevel 1 (
+        echo ERROR: scenario %%S postprocessing failed -- aborting. 1>&2
+        exit /b 1
+    )
+
+    for /f %%T in ('python -c "import time; print(int(time.time()))"') do set "T1=%%T"
+    set /a RUNTIME=!T1!-!T0!
+    echo %%S,!RUN_DIR!,!RUNTIME!>> "%INDEX%"
+    echo === Scenario %%S finished in !RUNTIME! s ^-^> !RUN_DIR! ===
+)
+
+python examples\illustrative_example\aggregate_results.py "%INDEX%"
+if errorlevel 1 exit /b 1

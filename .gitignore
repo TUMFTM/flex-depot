@@ -196,7 +196,7 @@ cython_debug/
 
 # Cursor
 #  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
-#  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
+#  exclude from AI features like autocomplete and code batches. Recommended for sensitive data
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
@@ -224,3 +224,16 @@ __marimo__/
 /data/prices/epex_prices_DA_Sep25.csv
 /src/flex_dep_opt/config/settings.yaml
 /src/flex_dep_opt/cli_paper.py
+.vscode/
+.idea/
+
+batches/example/results
+
+/images/logo/
+/CLAUDE.md
+/prompt_id_forecast_error.md
+/images/TODO.md
+/images/flex-depot-architecture.pdf
+/images/flex-depot-workflow.pdf
+/images/flex-depot-icon.pdf
+/TODO_publication.md
