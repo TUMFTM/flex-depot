@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/flex-depot-logo2.png" width="600"><br>
+  <img src="images/flex-depot-logo2.png" width="900"><br>
   <a href="https://github.com/TUMFTM/flex-depot/actions/workflows/test.yml">
     <img src="https://github.com/TUMFTM/flex-depot/actions/workflows/test.yml/badge.svg" alt="Tests">
   </a>
