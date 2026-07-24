@@ -1,19 +1,18 @@
 <p align="center">
-  <img src="images/flex-depot-logo.png" width="600">
-</p>
-
-<p align="center">
+  <img src="images/flex-depot-logo2.png" width="600"><br>
   <a href="https://github.com/TUMFTM/flex-depot/actions/workflows/test.yml">
     <img src="https://github.com/TUMFTM/flex-depot/actions/workflows/test.yml/badge.svg" alt="Tests">
   </a>
   <a href="https://www.apache.org/licenses/LICENSE-2.0">
     <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License: Apache 2.0">
   </a>
+  <a href="https://zenodo.org">
+    <img src="https://img.shields.io/badge/DOI-pending-orange.svg" alt="DOI">
+  </a>
 </p>
 
-# FLEX-DEPOT
 
-FLEX-DEPOT is a Python project for optimizing flexibility at a logistics depot incorporating electric trucks. It combines market
+**FLEX-DEPOT** is a Python project for optimizing flexibility at a logistics depot incorporating electric trucks. It combines market
 price series, flexibility power and energy bands, and market trading rules into a single rolling-horizon optimization (MPC). 
 The core of the project is a MILP/LP (depending on settings) [Pyomo](https://pyomo.readthedocs.io/en/stable/) model that decides market
 positions and physical power flow between depot and public grid while respecting aggregated asset power and energy flexibility bounds and gate-closure rules.
