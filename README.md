@@ -60,7 +60,7 @@ Citation metadata is provided in `CITATION.cff`.
 
 ## Repository Architecture
 
-![flex-depot-architecture.svg](images/flex-depot-architecture.svg)
+<img src="images/flex-depot-architecture.svg" width="100%">
 
 
 ## Module Description
@@ -79,7 +79,7 @@ Citation metadata is provided in `CITATION.cff`.
 `Postprocessing Layer` includes result summary generation and a plotting script.
 
 ## Control Workflow
-![flex-depot-workflow.svg](images/flex-depot-workflow.svg)
+<img src="images/flex-depot-workflow.svg" width="100%">
 
 ## Installation
 ### 1) Clone repository
