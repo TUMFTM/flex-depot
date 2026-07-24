@@ -1,14 +1,6 @@
 <p align="center">
   <img src="images/flex-depot-logo2.png" width="600"><br>
-  <a href="https://github.com/TUMFTM/flex-depot/actions/workflows/test.yml">
-    <img src="https://github.com/TUMFTM/flex-depot/actions/workflows/test.yml/badge.svg" alt="Tests">
-  </a>
-  <a href="https://www.apache.org/licenses/LICENSE-2.0">
-    <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0">
-  </a>
-  <a href="https://doi.org/10.5281/zenodo.21529546">
-    <img src="https://zenodo.org/badge/doi/10.5281/zenodo.21529546.svg" alt="DOI">
-  </a>
+  <a href="https://github.com/TUMFTM/flex-depot/actions/workflows/test.yml"><img src="https://github.com/TUMFTM/flex-depot/actions/workflows/test.yml/badge.svg" alt="Tests"></a>&nbsp;<a href="https://www.apache.org/licenses/LICENSE-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0"></a>&nbsp;<a href="https://doi.org/10.5281/zenodo.21529546"><img src="https://zenodo.org/badge/doi/10.5281/zenodo.21529546.svg" alt="DOI"></a>
 </p>
 
 
