@@ -1,6 +1,17 @@
-# FLEX-DEPOT <img src="images/flex-depot-icon.svg" height="36" align="top">
+<p align="center">
+  <img src="images/flex-depot-logo.png" width="600">
+</p>
 
-[![Tests](https://github.com/TUMFTM/flex-depot/actions/workflows/test.yml/badge.svg)](https://github.com/TUMFTM/flex-depot/actions/workflows/test.yml)
+<p align="center">
+  <a href="https://github.com/TUMFTM/flex-depot/actions/workflows/test.yml">
+    <img src="https://github.com/TUMFTM/flex-depot/actions/workflows/test.yml/badge.svg" alt="Tests">
+  </a>
+  <a href="https://www.apache.org/licenses/LICENSE-2.0">
+    <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License: Apache 2.0">
+  </a>
+</p>
+
+# FLEX-DEPOT
 
 FLEX-DEPOT is a Python project for optimizing flexibility at a logistics depot incorporating electric trucks. It combines market
 price series, flexibility power and energy bands, and market trading rules into a single rolling-horizon optimization (MPC). 
