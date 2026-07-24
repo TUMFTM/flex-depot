@@ -60,7 +60,7 @@ Citation metadata is provided in `CITATION.cff`.
 
 ## Repository Architecture
 
-<img src="images/flex-depot-architecture.svg" width="100%">
+<img src="images/flex-depot-architecture.svg" width="90%">
 
 
 ## Module Description
