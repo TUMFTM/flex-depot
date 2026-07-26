@@ -6,7 +6,7 @@
   <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
    <cc:Work>
     <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
-    <dc:date>2026-07-23T10:56:05.435577</dc:date>
+    <dc:date>2026-07-26T10:55:04.683233</dc:date>
     <dc:format>image/svg+xml</dc:format>
     <dc:creator>
      <cc:Agent>
@@ -479,7 +479,7 @@ z
    <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="66.171122" y="35.186006" transform="rotate(-0 66.171122 35.186006)">Park et al.</text>
   </g>
   <g id="text_8">
-   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="66.171122" y="46.074925" transform="rotate(-0 66.171122 46.074925)">[26]†</text>
+   <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="66.171122" y="46.074925" transform="rotate(-0 66.171122 46.074925)">[28]†</text>
   </g>
   <g id="text_9">
    <text style="font-size: 7px; font-family: 'Times New Roman', 'Times', 'STIXGeneral', 'DejaVu Serif', serif; text-anchor: middle; fill: #1a1a1a" x="148.675622" y="30.991398" transform="rotate(-0 148.675622 30.991398)">Flexibility: 48 h*</text>

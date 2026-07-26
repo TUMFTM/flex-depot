@@ -157,7 +157,7 @@ ft(491.5, 161.0, "execution",  fs=8, fw="bold")
 # ── Box body text ─────────────────────────────────────────────────────────────
 # Aggregation
 ft(79.0, 40.0, "Park et al.")
-ft(79.0, 53.0, "[26]†")
+ft(79.0, 53.0, "[28]†")
 
 # Foresight Horizons (values from settings_quickstart.toml; grid frequency
 # is only known for the current step -> 0 min horizon)
