@@ -11,7 +11,6 @@ from flex_dep_opt.domain.depot import Depot
 from flex_dep_opt.opt.model import flexibility_commercialization
 from flex_dep_opt.opt.solve import solve_model
 
-
 _TZ = "Europe/Berlin"
 _ORIGIN = pd.Timestamp("2026-01-01 00:00", tz=_TZ)
 
@@ -169,8 +168,7 @@ def test_solved_dispatch_respects_flex_band(solver_name):
     incentivises.  Tested with step-varying power limits so the constraint is
     binding at different magnitudes across the horizon.
     """
-    n = 6
-    # Six decision steps → n + 1 = 7 state entries (last row needed for E[N]).
+    # Six decision steps → seven state entries (last row needed for E[N]).
     p_lo = [-800.0, -400.0, -600.0, -300.0, -700.0, -800.0, -800.0]
     p_hi = [ 800.0,  400.0,  600.0,  300.0,  700.0,  800.0,  800.0]
 
