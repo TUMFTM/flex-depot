@@ -53,7 +53,7 @@ If you use FLEX-DEPOT in academic work, please cite **both**:
 2. The associated publication
 
 **Software:**
-Brödel, M. (2026). FLEX-DEPOT (Version 2.0.0). GitHub repository.  
+Brödel, M. (2026). FLEX-DEPOT (Version 2.0.1). GitHub repository.  
 https://github.com/TUMFTM/flex-depot
 
 **Publication:**
