@@ -18,6 +18,8 @@ class SimulationSettings(BaseModel):
     solver_threads: int | None = 8
     solver_mip_gap: float | None = None
     solver_time_limit_s: int | None = None
+    # Stream solver output to stdout — useful to diagnose hangs or slow solves.
+    solver_tee: bool = False
 
 
 class MarketDetail(BaseModel):

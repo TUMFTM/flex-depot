@@ -132,7 +132,7 @@ def _panel_composition(ax, df: pd.DataFrame) -> None:
         neg_base = [nb + min(v, 0.0) for v, nb in zip(values, neg_base)]
 
     ax.scatter(x, net, marker="D", s=18, color="black", zorder=5, label="Net cashflow")
-    ax.axhline(ref, color="black", lw=1.4, ls="--", label="S0 (uncontrolled)")
+    ax.axhline(ref, color="black", lw=1.4, ls="--", label="S0 (static price)")
     ax.axhline(0.0, color="black", lw=0.5)
 
     ax.set_xticks(list(x))
@@ -150,7 +150,7 @@ def _panel_composition(ax, df: pd.DataFrame) -> None:
     # patches share one column.
     handles, labels = ax.get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
-    order = ["Net cashflow", "S0 (uncontrolled)", "Fees & imbalance", "DA", "ID", "FCR"]
+    order = ["Net cashflow", "S0 (static price)", "Fees & imbalance", "DA", "ID", "FCR"]
     ax.legend(
         [by_label[lb] for lb in order],
         order,
