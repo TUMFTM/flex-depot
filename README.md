@@ -1,6 +1,6 @@
 <p align="center">
   <img src="images/flex-depot-logo2.png" width="600"><br>
-  <a href="https://github.com/TUMFTM/flex-depot/actions/workflows/test.yml"><img src="https://github.com/TUMFTM/flex-depot/actions/workflows/test.yml/badge.svg" alt="Tests"></a>&nbsp;<a href="https://www.apache.org/licenses/LICENSE-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0"></a>&nbsp;<a href="https://doi.org/10.5281/zenodo.21676941"><img src="https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21529546-blue.svg" alt="DOI"></a>&nbsp;<a href="https://doi.org/10.24433/CO.5623911.v2"><img src="https://img.shields.io/badge/Open%20in-Code%20Ocean-brightgreen.svg" alt="Open in Code Ocean"></a>
+  <a href="https://github.com/TUMFTM/flex-depot/actions/workflows/test.yml"><img src="https://github.com/TUMFTM/flex-depot/actions/workflows/test.yml/badge.svg" alt="Tests"></a>&nbsp;<a href="https://www.apache.org/licenses/LICENSE-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0"></a>&nbsp;<a href="https://doi.org/10.5281/zenodo.21676941"><img src="https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21676941-blue.svg" alt="DOI"></a>&nbsp;<a href="https://doi.org/10.24433/CO.5623911.v2"><img src="https://img.shields.io/badge/Open%20in-Code%20Ocean-brightgreen.svg" alt="Open in Code Ocean"></a>
 </p>
 
 <p align="center">
