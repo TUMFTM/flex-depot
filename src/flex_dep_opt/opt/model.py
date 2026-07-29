@@ -162,7 +162,7 @@ def flexibility_commercialization(
                 if abs_vals is not None:
                     hidden_droop_by_t[t] = max(float(abs_vals[loc]) - abs(droop_by_t[t]), 0.0)
 
-    # Per-step reBAP settlement price for FCR activation energy (Option A).
+    # Per-step reBAP price used to value the balancing-group deviation induced by FCR activation. (Option A).
     # Sign/price mapping (import-positive convention, consistent with PASS-2 imbalance):
     #   droop_by_t[t] > 0  → upward FCR   → p_droop < 0 (export) → BKV Überdeckung
     #                                         → receive IMB_NEG price (same as PASS-2 p_imb_neg)
@@ -553,7 +553,7 @@ def flexibility_commercialization(
         expr=pyo.quicksum(m.fcr_slot_revenue[j] for j in m.S_FCR) if use_fcr else 0.0
     )
 
-    # FCR activation cashflow: per-step reBAP settlement of p_droop energy.
+    # Cashflow from the reBAP-based valuation of the balancing-group deviation induced by FCR activation.
     # Convention matches obj_energy_cashflow: -price * power * dt.
     #   p_droop < 0 (upward FCR, export): -eff_price * p_droop * dt > 0 → revenue
     #   p_droop > 0 (downward FCR, import): -eff_price * p_droop * dt < 0 → cost
