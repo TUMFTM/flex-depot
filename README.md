@@ -44,7 +44,7 @@ The full license text can be found in the LICENSE file in the root directory of 
 Brödel, M., Würth, A.S., Park, W.-H., Rosner, P., Lienkamp, M.: "FLEX-DEPOT: An open-source framework for multi-market flexibility commercialization of a logistics depot incorporating electric trucks." <br>
 Manuscript under review at SoftwareX, Elsevier (2026)
 
-Park, W.-H., Brödel, M., Rosner, P., Kim, Y.-S.: "Scalable EV Flexibility Aggregation with Guaranteed Disaggregation via Projection onto Reachable Sets: Application to Real Truck Fleet Data" <br>
+Park, W.-H., Brödel, M., Rosner, P., Kim, Y.-S.: "Scalable EV Flexibility Aggregation with Guaranteed Disaggregation via Fast Projection onto Reachable Sets: Application to Real Truck Fleet Data" <br>
 Manuscript in revision at eTransportation, Elsevier (2026)
 
 ## Citation
