@@ -65,21 +65,28 @@ def _scenario_row(scenario: str, run_dir: Path, runtime_s: float) -> dict:
         raise ValueError(f"{scenario}: kpis.csv in {run_dir} is missing required KPIs: {missing}")
 
     ref_cost = float(kpis["ref_energy_cost_eur"])
+    ref_gross_profit = float(kpis["ref_gross_profit_eur"])
     advantage = float(kpis["total_potential_gross_profit_delta_eur"])
+    # The advantage is measured against S0's gross profit incl. reference
+    # battery-cycling wear (advantage = |ref_gross_profit| - total_energy_cost),
+    # so the percentage must divide by that SAME cycling-inclusive base to stay
+    # consistent with both the panel-(a) bar heights and the panel-(b) S0 line.
+    ref_base = abs(ref_gross_profit)
 
     return {
         "scenario": scenario.upper(),
         "markets": _markets_label(settings),
         "price_foresight": str(kpis["price_foresight"]),
         "total_energy_cost_eur": -float(kpis["gross_profit_eur"]),
+        # Energy cost only, kept for the S0-consistency check across scenarios.
         "ref_cost_s0_eur": ref_cost,
         # S0 gross profit incl. reference battery-cycling wear; the S0 line in
         # the composition panel uses this so it is cycling-consistent with the
-        # scenario net-cashflow markers. `ref_cost_s0_eur` (energy cost only) is
-        # kept for the cost-advantage percentage.
-        "ref_gross_profit_eur": float(kpis["ref_gross_profit_eur"]),
+        # scenario net-cashflow markers, and the cost-advantage percentage is
+        # normalized to it (see ref_base above).
+        "ref_gross_profit_eur": ref_gross_profit,
         "cost_advantage_eur": advantage,
-        "cost_advantage_pct": 100.0 * advantage / ref_cost if ref_cost else float("nan"),
+        "cost_advantage_pct": 100.0 * advantage / ref_base if ref_base else float("nan"),
         "da_cashflow_eur": float(kpis.get("da_cashflow_eur", 0.0)),
         "id_cashflow_eur": float(kpis.get("id_cashflow_eur", 0.0)),
         "fcr_revenue_eur": float(kpis.get("fcr_revenue_eur", 0.0)),
