@@ -159,7 +159,9 @@ def _panel_composition(ax, df: pd.DataFrame) -> None:
         "Fees & imbalance": df["fees_eur"] + df["imb_cost_eur"],
     }
     net = -df["total_energy_cost_eur"]  # gross profit (negative = net cost)
-    ref = -float(df["ref_cost_s0_eur"].iloc[0])  # S0 gross profit
+    # S0 gross profit incl. reference battery-cycling wear, so the baseline is
+    # cycling-consistent with the net-cashflow markers (both net of degradation).
+    ref = float(df["ref_gross_profit_eur"].iloc[0])
 
     x = range(len(df))
     pos_base = [0.0] * len(df)
