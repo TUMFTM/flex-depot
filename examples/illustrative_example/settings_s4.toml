@@ -2,11 +2,14 @@
 # Paper scenario S4: day-ahead + intraday + FCR, imperfect price foresight
 # Same markets as S3, but MPC decisions use synthetically perturbed DA/ID prices
 # (decision = settlement + sigma * z, z ~ AR(1), rho = 0.944 lag-1 per 15-min),
-# while settlement/KPIs always use the realized price series. sigma is set to the
-# midpoint of the state-of-the-art literature forecast RMSE (DA ~5-20, ID ~3-9
-# EUR/MWh; k ~= 0.20 of each market's null-skill ceiling). The AR(1) shape keeps
-# the error path autocorrelated (realistic) instead of white noise, which avoids
-# spurious high-frequency arbitrage churn.
+# while settlement/KPIs always use the realized price series. sigma is set within
+# the state-of-the-art literature forecast-RMSE band (DA ~5-20, ID ~3-9 EUR/MWh):
+# 12.5 is the upper end of calm-period DA errors, 6.0 the hourly-intraday level.
+# Over the simulated Feb window this equals ~0.4x each market's null-skill ceiling
+# (std(p_DA) for DA, RMS(p_ID - p_DA) for ID); ~0.2x over the full bundled series.
+# rho = 0.944 gives an error-autocorrelation half-life of ~3h (rho^12 ~ 0.5), so the
+# path is persistent (realistic) instead of white noise, avoiding spurious
+# high-frequency arbitrage churn.
 # Only markets, simulation window and simulation.name differ between S1-S4.
 # =============================================================================
 
@@ -25,7 +28,7 @@ fee_eur_per_kwh = 0.00005                     # clearing fee + exchange fee + br
 
 [optimization.markets.dayahead.forecast_error]
 enabled = true
-sigma_eur_per_mwh = 12.5   # SotA DA forecast RMSE (literature 5-20 EUR/MWh); k ~= 0.20 of null-skill std(p_DA)
+sigma_eur_per_mwh = 12.5   # DA forecast RMSE; upper end of calm-period literature (5-20 EUR/MWh); ~0.4x std(p_DA) over the simulated month
 rho = 0.944                # lag-1 autocorrelation per 15-min step
 seed = 1
 
@@ -36,7 +39,7 @@ fee_eur_per_kwh = 0.0001                      # clearing fee + exchange fee + br
 
 [optimization.markets.intraday.forecast_error]
 enabled = true
-sigma_eur_per_mwh = 6.0    # SotA ID forecast RMSE (literature 3-9 EUR/MWh); k ~= 0.20 of null-skill RMS(p_ID - p_DA)
+sigma_eur_per_mwh = 6.0    # ID forecast RMSE; hourly-ID literature level (3-9 EUR/MWh; 15-min higher); ~0.4x RMS(p_ID - p_DA) over the simulated month
 rho = 0.944                # lag-1 autocorrelation per 15-min step
 seed = 2                   # distinct from DA seed so the two markets draw independent AR(1) shapes
 

@@ -30,10 +30,10 @@ run via `run_quickstart.sh` / `run_quickstart.bat`) is the **4-day detail window
 this example: the S3 setup over Fri 2026-02-06 to Tue 2026-02-10 (two weekdays,
 two weekend days). It runs in a few minutes, doubles as the golden-KPI
 regression test (`tests/test_example_regression.py`), and is the run behind the
-paper's time-series detail figure. Note that a standalone 4-day run starts
-"cold" (energy state at band midpoint, no day-ahead commitments for day 1, so
-day 1 trades intraday only) — this warm-up is inherent to a receding-horizon
-start and fades after the first day.
+paper's time-series detail figure. A 48-hour warm-up (`warmup_hours = 48`)
+precedes the shown 4-day window so that its first reported day commits on a full
+receding horizon (DA/FCR gates included) instead of starting "cold"; the warm-up
+is excluded from the results and KPIs.
 
 ## S4 forecast calibration
 
@@ -47,12 +47,16 @@ decision[t] = settlement[t] + sigma * z[t],   z ~ AR(1) with unit variance
 ```
 
 `z` is a stationary AR(1) shape with lag-1 autocorrelation `rho = 0.944` per
-15-min step, so the error path is autocorrelated (realistic) rather than white
-noise — this avoids spurious high-frequency arbitrage churn against phantom
-step-to-step price swings. `sigma` is the forecast RMSE in EUR/MWh, set to the
-midpoint of the state-of-the-art literature band (DA ~5–20 → **12.5**, ID ~3–9 →
-**6.0** EUR/MWh; k ≈ 0.20 of each market's null-skill ceiling — std(p_DA) for DA,
-RMS(p_ID − p_DA) for ID). DA and ID use distinct seeds so they draw independent
+15-min step — an error-autocorrelation half-life of about three hours
+(`rho^12 ≈ 0.5`) — so the error path is persistent (realistic) rather than white
+noise, which avoids spurious high-frequency arbitrage churn against phantom
+step-to-step price swings. `sigma` is the forecast RMSE in EUR/MWh, set within the
+state-of-the-art literature band (DA ~5–20 → **12.5**, ID ~3–9 → **6.0** EUR/MWh):
+12.5 is the upper end of calm-period day-ahead errors and 6.0 the hourly-intraday
+level (true 15-min continuous intraday errors are higher). Over the simulated
+February window this is ≈ 0.4× each market's null-skill ceiling — std(p_DA) for DA,
+RMS(p_ID − p_DA) for ID — and ≈ 0.2× over the full six-month bundled price series.
+DA and ID use distinct seeds so they draw independent
 shapes. `sigma = 0` (or `enabled = false`) reproduces perfect foresight (S3)
 bit-for-bit.
 
