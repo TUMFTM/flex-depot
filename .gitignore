@@ -241,3 +241,6 @@ batches/example/results
 /memory/
 /data/example/flexibility/vb_bounds_example_uni.csv
 /flexdepot_model_blocks.tex
+/images/flex-depot-workflow-2.svg
+/images/flex-depot-workflow-2.pdf
+/images/plot_workflow_2.py
