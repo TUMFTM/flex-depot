@@ -39,6 +39,14 @@ cost on its grid-side charging energy so only incremental V2G/arbitrage wear
 enters the delta. The dispatch is unchanged (the objective already carried this
 term), so all volumes and integer counts stay put; only gross_profit_eur and
 total_potential_gross_profit_delta_eur shifted, and cycling_cost_eur is new.
+
+Reference double-count fix (2026-10-06): the reference energy postprocessing
+used to divide the energy column by charging_efficiency, but the flexband
+aggregation (generate_example_vb_bounds.py) already stores grid-side energy
+(battery demand / charging_efficiency). The second division double-counted the
+losses and inflated the reference cost by factor 1/0.98. The consumer now meters
+the already-grid-side column directly, so total_potential_gross_profit_delta_eur
+dropped from 390.160 to 380.899; dispatch and all other KPIs are unchanged.
 """
 
 from pathlib import Path
@@ -63,8 +71,9 @@ _GOLDEN = {
     "fcr_revenue_eur": 210.020,
     "imb_cost_eur": -14.162,
     "fcr_activation_cf_eur": 46.156,
-    # Savings vs. uncontrolled charging
-    "total_potential_gross_profit_delta_eur": 390.160,
+    # Savings vs. uncontrolled charging (S0 reference metered grid-side; charging
+    # losses already baked into the flexband column, no extra eta division)
+    "total_potential_gross_profit_delta_eur": 380.899,
     # Energy balance
     "net_kwh": -2771.777,
     "sell_kwh": 5699.440,

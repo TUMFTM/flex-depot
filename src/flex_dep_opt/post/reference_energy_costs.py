@@ -19,13 +19,18 @@ def compute_reference_driving_energy_costs(
     """
     Compute static-price reference costs for driving energy.
 
-    The reference energy column holds the battery-side driving-energy demand in
-    kWh per timestep (it is not multiplied by timestep duration). Conventional
-    depot charging incurs the same charging losses as the optimized dispatch, so
-    the grid meter sees ``driving_energy / charging_efficiency``; the reference
-    cost is charged on this grid-side energy. ``charging_efficiency`` is a fixed
-    benchmark (decoupled from the optimization efficiency) so the reference
-    stays a common yardstick across scenarios, including the efficiency sweep.
+    The reference energy column holds the *grid-side* driving-energy demand in
+    kWh per timestep (it is not multiplied by timestep duration). The charging
+    losses are already baked in upstream by the flexband aggregation, which
+    stores ``required_battery_energy / charging_efficiency``. The reference cost
+    is therefore charged on this grid-side energy directly — no further
+    efficiency correction is applied here, as that would double-count the
+    charging losses. In the efficiency sweep the embedded efficiency is the
+    run's own charging efficiency, so the reference tracks the swept value
+    rather than a fixed benchmark.
+
+    ``charging_efficiency`` is retained for provenance / backward compatibility
+    only; it no longer enters the grid-side energy or cost calculation.
     """
     price = float(static_price_eur_per_kwh)
     if price < 0.0:
@@ -70,7 +75,10 @@ def compute_reference_driving_energy_costs(
     if ref.empty:
         raise ValueError(f"No reference energy data found in {path} for simulation window {start} to {end}.")
 
-    ref["Ref_grid_energy_kWh"] = ref[energy_column] / eta
+    # The column is already grid-side (the flexband aggregation stored
+    # battery demand / charging_efficiency), so meter it directly. Dividing by
+    # eta again here would double-count the charging losses.
+    ref["Ref_grid_energy_kWh"] = ref[energy_column]
     ref["Reference Energy Cost [EUR/step]"] = ref["Ref_grid_energy_kWh"] * price
     ref["Cumulative Reference Energy Cost [EUR]"] = ref["Reference Energy Cost [EUR/step]"].cumsum()
 
