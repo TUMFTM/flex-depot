@@ -146,7 +146,7 @@ python examples/illustrative_example/plot_detail.py
 
 ## Expected results
 
-Produced with HiGHS on 2026-09-26 (runtimes on a standard desktop machine: 13th Gen Intel(R) Core(TM) i7 1.90 GHz, 32 GB RAM);
+Produced with HiGHS on 2026-10-07 (runtimes on a standard desktop machine: 13th Gen Intel(R) Core(TM) i7 1.90 GHz, 32 GB RAM);
 regenerate with `aggregate_results.py`, which prints this table ready to paste.
 Small deviations across HiGHS versions/platforms are possible (near-degenerate
 optima); the qualitative ordering S1 < S2 < S4 < S3 should be robust. The last
@@ -156,17 +156,17 @@ bidirectionality.
 
 | scenario | markets   | price_foresight | total_energy_cost_eur | ref_cost_s0_eur | ref_gross_profit_eur | cost_advantage_eur | cost_advantage_pct | da_cashflow_eur | id_cashflow_eur | fcr_revenue_eur | fcr_activation_cf_eur | fees_eur | imb_cost_eur | pass2_steps | pass2_fraction_pct | da_forecast_mae_eur_per_kwh | id_forecast_mae_eur_per_kwh | solver | runtime_s | cost_advantage_uni_eur | cost_advantage_uni_pct |
 |----------|-----------|-----------------|-----------------------|-----------------|----------------------|--------------------|--------------------|-----------------|-----------------|-----------------|-----------------------|----------|--------------|-------------|--------------------|-----------------------------|-----------------------------|--------|-----------|------------------------|------------------------|
-| S1       | DA        | perfect         | 3100.79               | 3406.87         | -4003.52             | 902.73             | 22.55              | -1792.89        | 0.00            | 0.00            | 0.00                  | -3.26    | 0.00         | 0           | 0.00               |                             |                             | highs  | 665.00    | 432.41                 | 10.80                  |
-| S2       | DA+ID     | perfect         | 2608.90               | 3406.87         | -4003.52             | 1394.62            | 34.83              | 332.07          | -965.97         | 0.00            | 0.00                  | -7.37    | 0.00         | 0           | 0.00               |                             |                             | highs  | 990.00    | 595.01                 | 14.86                  |
-| S3       | DA+ID+FCR | perfect         | 1169.31               | 3406.87         | -4003.52             | 2834.21            | 70.79              | 53.89           | -1106.14        | 1958.88         | -28.00                | -7.22    | -46.66       | 73          | 2.71               |                             |                             | highs  | 2274.00   | 595.01                 | 14.86                  |
-| S4       | DA+ID+FCR | forecast        | 1671.12               | 3406.87         | -4003.52             | 2332.40            | 58.26              | 465.88          | -1395.53        | 1913.42         | -14.78                | -9.37    | -27.23       | 56          | 2.08               | 0.0100                      | 0.0047                      | highs  | 2393.00   | 544.33                 | 13.60                  |
+| S1       | DA        | perfect         | 3100.79               | 3338.73         | -3923.45             | 822.66             | 20.97              | -1792.89        | 0.00            | 0.00            | 0.00                  | -3.26    | 0.00         | 0           | 0.00               |                             |                             | highs  | 625.00    | 352.33                 | 8.98                   |
+| S2       | DA+ID     | perfect         | 2608.90               | 3338.73         | -3923.45             | 1314.55            | 33.50              | 332.07          | -965.97         | 0.00            | 0.00                  | -7.37    | 0.00         | 0           | 0.00               |                             |                             | highs  | 964.00    | 514.94                 | 13.12                  |
+| S3       | DA+ID+FCR | perfect         | 1169.31               | 3338.73         | -3923.45             | 2754.14            | 70.20              | 53.89           | -1106.14        | 1958.88         | -28.00                | -7.22    | -46.66       | 73          | 2.71               |                             |                             | highs  | 2208.00   | 514.94                 | 13.12                  |
+| S4       | DA+ID+FCR | forecast        | 1671.12               | 3338.73         | -3923.45             | 2252.33            | 57.41              | 465.88          | -1395.53        | 1913.42         | -14.78                | -9.37    | -27.23       | 56          | 2.08               | 0.0100                      | 0.0047                      | highs  | 2479.00   | 464.25                 | 11.83                  |
 
 Reading aid: `total_energy_cost_eur` is the depot's net operating cost after
 market earnings and the battery-cycling (aging) cost; it stays well below the
-S0 reference (3406.87 EUR) in every scenario, so the cost advantage is positive
+S0 reference (3338.73 EUR) in every scenario, so the cost advantage is positive
 throughout. The table carries two S0 anchors: `ref_cost_s0_eur` (driving-energy
-cost only, 3406.87 EUR, the cross-scenario consistency check) and
-`ref_gross_profit_eur` (-4003.52 EUR, the S0 gross profit including the reference
+cost only, 3338.73 EUR, the cross-scenario consistency check) and
+`ref_gross_profit_eur` (-3923.45 EUR, the S0 gross profit including the reference
 battery-cycling wear). `cost_advantage_pct` (and `cost_advantage_uni_pct`) is
 normalized to |`ref_gross_profit_eur`|, the same cycling-inclusive base as the
 comparison figure's panel-(a) bar heights and panel-(b) S0 line. The imperfect-foresight scenario S4 lands below S3 (the same setup
