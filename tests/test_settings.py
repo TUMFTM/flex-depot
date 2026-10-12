@@ -4,7 +4,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from flex_dep_opt.cli import _load_merged
 from flex_dep_opt.config.settings import Settings
@@ -19,7 +19,7 @@ def _example_dict() -> dict:
 
 
 def test_from_dict_matches_load():
-    from_file = Settings.load(EXAMPLE_TOML)
+    from_file = Settings.from_toml(EXAMPLE_TOML)
     from_dict = Settings.from_dict(_example_dict())
 
     assert from_dict.model_dump() == from_file.model_dump()
@@ -44,9 +44,23 @@ def test_batch_override_replaces_only_the_given_keys(tmp_path):
     override.write_text('[simulation]\nname = "run_a"\n')
 
     merged = _load_merged(str(override), str(EXAMPLE_TOML))
-    base = Settings.load(EXAMPLE_TOML)
+    base = Settings.from_toml(EXAMPLE_TOML)
 
     assert merged.simulation.name == "run_a"
     assert merged.simulation.model_dump(exclude={"name"}) == base.simulation.model_dump(exclude={"name"})
     assert merged.optimization == base.optimization
     assert merged.get_source_path() == override
+
+
+def _fields_without_description(model: type[BaseModel], prefix: str = "") -> list[str]:
+    missing = []
+    for name, field in model.model_fields.items():
+        if not field.description:
+            missing.append(prefix + name)
+        if isinstance(field.annotation, type) and issubclass(field.annotation, BaseModel):
+            missing += _fields_without_description(field.annotation, f"{prefix}{name}.")
+    return missing
+
+
+def test_every_setting_has_a_description():
+    assert _fields_without_description(Settings) == []

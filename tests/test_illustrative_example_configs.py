@@ -29,7 +29,7 @@ _EXPECTED_MARKETS = {
 
 @pytest.fixture(scope="module")
 def scenarios() -> dict[str, Settings]:
-    return {sid: Settings.load(SCENARIO_DIR / f"settings_{sid}.toml") for sid in SCENARIO_IDS}
+    return {sid: Settings.from_toml(SCENARIO_DIR / f"settings_{sid}.toml") for sid in SCENARIO_IDS}
 
 
 def test_market_flags_per_scenario(scenarios):

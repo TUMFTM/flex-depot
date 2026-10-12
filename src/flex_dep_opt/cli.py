@@ -42,7 +42,7 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 def _load_merged(config_path: str, default_path: str | None) -> Settings:
     if default_path is None:
-        return Settings.load(config_path)
+        return Settings.from_toml(config_path)
     with open(default_path, "rb") as f:
         base = tomllib.load(f)
     with open(config_path, "rb") as f:
@@ -137,11 +137,11 @@ def main():
     configure_logging()
 
     if args.cmd == "run-sim":
-        run_mpc(Settings.load(args.config), run_dir=Path(args.run_dir) if args.run_dir else None)
+        run_mpc(Settings.from_toml(args.config), run_dir=Path(args.run_dir) if args.run_dir else None)
         return
 
     if args.cmd == "run-post":
-        settings = Settings.load(args.config) if args.config else None
+        settings = Settings.from_toml(args.config) if args.config else None
         postprocess_mpc_results(settings, run_dir=Path(args.run_dir) if args.run_dir else None)
         return
 

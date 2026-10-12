@@ -50,7 +50,7 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
             raise FileNotFoundError(
                 f"No settings.toml found in {run_dir}. Pass an explicit config with --config."
             )
-        settings = Settings.load(run_settings_path)
+        settings = Settings.from_toml(run_settings_path)
 
     print(f"Settings file used: {settings.get_source_path()}")
 

@@ -46,7 +46,7 @@ def _minimal_settings(da_source: Path, da_forecast_source: Path | None) -> Simpl
 def test_forecast_falls_back_to_realized(monkeypatch):
     """Without any forecast_source, decision prices equal realized prices for every market."""
     monkeypatch.chdir(REPO_ROOT)
-    settings = Settings.load(EXAMPLE_TOML)
+    settings = Settings.from_toml(EXAMPLE_TOML)
 
     realized = build_prices_from_settings(settings)
     decision = build_forecast_prices_from_settings(settings)
@@ -77,7 +77,7 @@ def test_forecast_overrides_decision_prices(tmp_path):
 def test_forecast_coverage_validation(tmp_path, monkeypatch):
     """A forecast CSV missing part of the simulation window fails fast with ValueError."""
     monkeypatch.chdir(REPO_ROOT)
-    settings = Settings.load(EXAMPLE_TOML)
+    settings = Settings.from_toml(EXAMPLE_TOML)
 
     realized = build_prices_from_settings(settings)["DA"]
     start = local_config_timestamp_to_utc(settings.simulation.start, local_tz=LOCAL_TIMEZONE)

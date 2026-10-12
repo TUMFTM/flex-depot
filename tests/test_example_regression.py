@@ -90,7 +90,7 @@ def test_example_kpis(tmp_path, monkeypatch):
     """Full MPC + postprocessing run produces the expected KPIs."""
     monkeypatch.chdir(REPO_ROOT)
 
-    settings = Settings.load(EXAMPLE_TOML)
+    settings = Settings.from_toml(EXAMPLE_TOML)
     run_dir = run_mpc(settings, run_dir=tmp_path)
     postprocess_mpc_results(settings, run_dir=run_dir)
 
