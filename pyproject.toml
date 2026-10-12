@@ -65,6 +65,7 @@ where = ["src"]
 [tool.setuptools.package-data]
 # ship the bundled default config so non-editable installs work
 "flex_dep_opt.config" = ["settings_quickstart.toml"]
+"flex_dep_opt" = ["py.typed"]
 
 [tool.pytest.ini_options]
 markers = ["slow: end-to-end integration tests (deselect with '-m not slow')"]
