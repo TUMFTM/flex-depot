@@ -13,13 +13,7 @@ from flex_dep_opt.domain.depot import Depot
 from flex_dep_opt.io.flexibility import align_and_validate_flexibility_bounds
 from flex_dep_opt.io.inputs import load_inputs, simulation_window
 from flex_dep_opt.io.prices import FCR_DROOP_COL, build_fees_from_settings
-from flex_dep_opt.io.results import (
-    make_run_dir,
-    save_dispatch_to_csv,
-    save_run_info_txt,
-    save_table_to_csv,
-    write_latest_run_pointer,
-)
+from flex_dep_opt.io.results import SimulationResult, make_run_dir, write_latest_run_pointer
 from flex_dep_opt.io.time import LOCAL_TIMEZONE
 from flex_dep_opt.market.fcr import fcr_gate_closure_timestamp
 from flex_dep_opt.market.trading import (
@@ -765,42 +759,23 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
             run_dir = Path(run_dir)
             run_dir.mkdir(parents=True, exist_ok=True)
 
-        # --- Snapshot the resolved settings as TOML for this run ---
-        settings.save_to_toml(run_dir / "settings.toml")
-
-        # --- Output filenames inside run_dir ---
-        out_dispatch = run_dir / "dispatch.csv"
-        out_commit = run_dir / "commit.csv"
-        out_fcr_commit = run_dir / "fcr_commit.csv"
-
-        # --- Write dispatch ---
-        if rows:
-            result = pd.DataFrame(rows)
-            result.index.name = "time"
-            save_dispatch_to_csv(result, out_dispatch, include_time_column=True, output_tz=LOCAL_TIMEZONE)
-
-        # --- Write commit ---
+        dispatch = pd.DataFrame(rows)
+        dispatch.index.name = "time"
+        commits = pd.DataFrame(commit_rows)
         if commit_rows:
-            commit_df = pd.DataFrame(commit_rows)
-            commit_df = commit_df.sort_values(["delivery_time", "current_time"])
-            save_table_to_csv(commit_df, out_commit, output_tz=LOCAL_TIMEZONE)
-
-        # fcr commits log
+            commits = commits.sort_values(["delivery_time", "current_time"])
+        fcr_commits = pd.DataFrame(fcr_commit_rows)
         if fcr_commit_rows:
-            fcr_commit_df = pd.DataFrame(fcr_commit_rows).sort_values("slot_start")
-            save_table_to_csv(fcr_commit_df, out_fcr_commit, output_tz=LOCAL_TIMEZONE)
+            fcr_commits = fcr_commits.sort_values("slot_start")
 
-        run_finished_at = datetime.now(ZoneInfo(LOCAL_TIMEZONE))
-
-        save_run_info_txt(
-            run_dir=run_dir,
-            simulation_name=name,
-            config_path=settings.get_source_path(),
-            solver_name=sim_cfg.solver,
-            start_time=run_started_at,
-            end_time=run_finished_at,
-            tz=LOCAL_TIMEZONE,
-        )
+        SimulationResult(
+            settings=settings,
+            dispatch=dispatch,
+            commits=commits,
+            fcr_commits=fcr_commits,
+            started_at=run_started_at,
+            finished_at=datetime.now(ZoneInfo(LOCAL_TIMEZONE)),
+        ).save(run_dir)
 
         print("MPC finished -- Postprocessing starts")
 

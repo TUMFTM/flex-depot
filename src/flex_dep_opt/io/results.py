@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from flex_dep_opt.config.settings import Settings
 from flex_dep_opt.io.time import LOCAL_TIMEZONE
 
 
@@ -190,3 +192,39 @@ def save_run_info_txt(
     out_path = run_dir / "run_info.txt"
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return str(out_path.resolve())
+
+
+@dataclass
+class SimulationResult:
+    settings: Settings
+    dispatch: pd.DataFrame
+    commits: pd.DataFrame
+    fcr_commits: pd.DataFrame
+    started_at: datetime
+    finished_at: datetime
+
+    def save(self, run_dir: str | Path) -> Path:
+        run_dir = Path(run_dir)
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        self.settings.save_to_toml(run_dir / "settings.toml")
+
+        if not self.dispatch.empty:
+            save_dispatch_to_csv(
+                self.dispatch, run_dir / "dispatch.csv", include_time_column=True, output_tz=LOCAL_TIMEZONE
+            )
+        if not self.commits.empty:
+            save_table_to_csv(self.commits, run_dir / "commit.csv", output_tz=LOCAL_TIMEZONE)
+        if not self.fcr_commits.empty:
+            save_table_to_csv(self.fcr_commits, run_dir / "fcr_commit.csv", output_tz=LOCAL_TIMEZONE)
+
+        save_run_info_txt(
+            run_dir=run_dir,
+            simulation_name=self.settings.simulation.name.strip(),
+            config_path=self.settings.get_source_path(),
+            solver_name=self.settings.simulation.solver,
+            start_time=self.started_at,
+            end_time=self.finished_at,
+            tz=LOCAL_TIMEZONE,
+        )
+        return run_dir
