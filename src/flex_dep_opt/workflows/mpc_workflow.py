@@ -11,7 +11,7 @@ from tqdm.auto import tqdm
 from flex_dep_opt.config.settings import Settings
 from flex_dep_opt.domain.depot import Depot
 from flex_dep_opt.io.flexibility import align_and_validate_flexibility_bounds
-from flex_dep_opt.io.inputs import load_inputs, simulation_window
+from flex_dep_opt.io.inputs import SimulationInputs, load_inputs, simulation_window
 from flex_dep_opt.io.prices import FCR_DROOP_COL, build_fees_from_settings
 from flex_dep_opt.io.results import SimulationResult, make_run_dir, write_latest_run_pointer
 from flex_dep_opt.io.time import LOCAL_TIMEZONE
@@ -104,7 +104,7 @@ def _fcr_breakeven_metrics(
     }
 
 
-def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
+def simulate(settings: Settings, inputs: SimulationInputs) -> SimulationResult:
     """
     Rolling-horizon Model Predictive Control (MPC).
 
@@ -138,9 +138,8 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
     terminal_weight = float(mpc_cfg.terminal_weight_eur_per_kwh)
 
     # ============================================================
-    # 2) Load input time series
+    # 2) Input time series
     # ============================================================
-    inputs = load_inputs(settings)
     flexibility_bounds_full = inputs.flexibility_bounds
     fcr_prices_full = inputs.fcr_prices
     fcr_frequency_data_full = inputs.fcr_frequency
@@ -260,6 +259,24 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
     rows = []
     commit_rows = []
     fcr_commit_rows = []
+
+    def _result() -> SimulationResult:
+        dispatch = pd.DataFrame(rows)
+        dispatch.index.name = "time"
+        commits = pd.DataFrame(commit_rows)
+        if commit_rows:
+            commits = commits.sort_values(["delivery_time", "current_time"])
+        fcr_commits = pd.DataFrame(fcr_commit_rows)
+        if fcr_commit_rows:
+            fcr_commits = fcr_commits.sort_values("slot_start")
+        return SimulationResult(
+            settings=settings,
+            dispatch=dispatch,
+            commits=commits,
+            fcr_commits=fcr_commits,
+            started_at=run_started_at,
+            finished_at=datetime.now(ZoneInfo(LOCAL_TIMEZONE)),
+        )
 
     # ============================================================
     # 9) Rolling-horizon MPC loop
@@ -739,44 +756,34 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
 
         pbar.close()
 
-    # ============================================================
-    # 10) Export results
-    # ============================================================
-    finally:
-        # --- Read simulation "name" from settings ---
-        name = sim_cfg.name.strip()
-        if not name:
-            raise ValueError(
-                "simulation.name must be set in the settings file (e.g. 'illustrative_example')."
-            )
+    except BaseException as exc:
+        exc.partial_result = _result()
+        raise
 
-        # --- Create per-run output directory (name + timestamp), unless caller
-        #     supplied an explicit run_dir (e.g. batch mode names it per config) ---
-        if run_dir is None:
-            run_dir = make_run_dir("results", name, tz=LOCAL_TIMEZONE)
-            write_latest_run_pointer(run_dir, results_root="results")
-        else:
-            run_dir = Path(run_dir)
-            run_dir.mkdir(parents=True, exist_ok=True)
+    return _result()
 
-        dispatch = pd.DataFrame(rows)
-        dispatch.index.name = "time"
-        commits = pd.DataFrame(commit_rows)
-        if commit_rows:
-            commits = commits.sort_values(["delivery_time", "current_time"])
-        fcr_commits = pd.DataFrame(fcr_commit_rows)
-        if fcr_commit_rows:
-            fcr_commits = fcr_commits.sort_values("slot_start")
 
-        SimulationResult(
-            settings=settings,
-            dispatch=dispatch,
-            commits=commits,
-            fcr_commits=fcr_commits,
-            started_at=run_started_at,
-            finished_at=datetime.now(ZoneInfo(LOCAL_TIMEZONE)),
-        ).save(run_dir)
+def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
+    inputs = load_inputs(settings)
+    try:
+        result = simulate(settings, inputs)
+    except BaseException as exc:
+        partial = getattr(exc, "partial_result", None)
+        if partial is not None:
+            _save_run(partial, run_dir)
+        raise
+    return _save_run(result, run_dir)
 
-        print("MPC finished -- Postprocessing starts")
 
-    return run_dir
+def _save_run(result: SimulationResult, run_dir: Path | None) -> Path:
+    name = result.settings.simulation.name.strip()
+    if not name:
+        raise ValueError("simulation.name must be set in the settings file (e.g. 'illustrative_example').")
+
+    if run_dir is None:
+        run_dir = make_run_dir("results", name, tz=LOCAL_TIMEZONE)
+        write_latest_run_pointer(run_dir, results_root="results")
+
+    result.save(run_dir)
+    print("MPC finished -- Postprocessing starts")
+    return Path(run_dir)
