@@ -5,7 +5,7 @@ the development environment, run linting and tests, and submit changes.
 
 ## Setting up
 
-Python 3.10 or newer is required. Clone the repository and install the package
+Python 3.11 or newer is required. Clone the repository and install the package
 in editable mode with the development extras:
 
 ```bash
@@ -43,7 +43,7 @@ ruff check . --fix
 ```
 
 The CI workflow (`.github/workflows/test.yml`) runs lint and unit tests on
-every push and pull request on Python 3.10 and 3.12.
+every push and pull request on Python 3.11 and 3.12.
 
 ## Submitting changes
 

@@ -29,11 +29,11 @@ Usage:
 from __future__ import annotations
 
 import sys
+import tomllib
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import tomllib
 
 from flex_dep_opt.io.prices import get_fcr_prices, read_prices_csv
 

@@ -14,10 +14,10 @@ Usage:
 from __future__ import annotations
 
 import sys
+import tomllib
 from pathlib import Path
 
 import pandas as pd
-import tomllib
 
 DEFAULT_INDEX = Path("results/illustrative_example/run_index.csv")
 
