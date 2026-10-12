@@ -10,18 +10,9 @@ from tqdm.auto import tqdm
 
 from flex_dep_opt.config.settings import Settings
 from flex_dep_opt.domain.depot import Depot
-from flex_dep_opt.io.flexibility import (
-    align_and_validate_flexibility_bounds,
-    read_flexibility_bounds_csv,
-)
-from flex_dep_opt.io.prices import (
-    FCR_DROOP_COL,
-    build_fees_from_settings,
-    build_forecast_prices_from_settings,
-    build_prices_from_settings,
-    get_fcr_frequency_data,
-    get_fcr_prices,
-)
+from flex_dep_opt.io.flexibility import align_and_validate_flexibility_bounds
+from flex_dep_opt.io.inputs import load_inputs, simulation_window
+from flex_dep_opt.io.prices import FCR_DROOP_COL, build_fees_from_settings
 from flex_dep_opt.io.results import (
     make_run_dir,
     save_dispatch_to_csv,
@@ -29,9 +20,8 @@ from flex_dep_opt.io.results import (
     save_table_to_csv,
     write_latest_run_pointer,
 )
-from flex_dep_opt.io.time import LOCAL_TIMEZONE, local_config_timestamp_to_utc, validate_regular_index
+from flex_dep_opt.io.time import LOCAL_TIMEZONE
 from flex_dep_opt.market.fcr import fcr_gate_closure_timestamp
-from flex_dep_opt.market.forecast_error import draw_ar1_shape, perturb_prices
 from flex_dep_opt.market.trading import (
     build_market_activity_mask_for_time,
     gate_closure_timestamp,
@@ -154,19 +144,18 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
     terminal_weight = float(mpc_cfg.terminal_weight_eur_per_kwh)
 
     # ============================================================
-    # 2) Load flexibility bounds (flex bands)
+    # 2) Load input time series
     # ============================================================
-    flexibility_bounds_full = read_flexibility_bounds_csv(flex_cfg.bounds_file)
-
-    fcr_prices_full = (
-        get_fcr_prices(opt_cfg.trading.fcr.prices_source)
-        if opt_cfg.trading.fcr.enabled
-        else pd.Series(dtype=float, index=pd.DatetimeIndex([], tz="Europe/Berlin"))
-    )
-    fcr_freq_source = opt_cfg.trading.fcr.frequency_source
-    fcr_frequency_data_full: pd.DataFrame | None = None
-    if opt_cfg.trading.fcr.enabled and fcr_freq_source:
-        fcr_frequency_data_full = get_fcr_frequency_data(fcr_freq_source)
+    inputs = load_inputs(settings)
+    flexibility_bounds_full = inputs.flexibility_bounds
+    fcr_prices_full = inputs.fcr_prices
+    fcr_frequency_data_full = inputs.fcr_frequency
+    prices_by_market = inputs.prices
+    forecast_prices_by_market = inputs.forecast_prices
+    imb_pos_full = inputs.imbalance_prices_pos
+    imb_neg_full = inputs.imbalance_prices_neg
+    full_index = inputs.index
+    full_state_index = inputs.state_index
 
     fcr_product_hours = float(opt_cfg.trading.fcr.product_hours)
     fcr_bid_block_kw = float(opt_cfg.trading.fcr.bid_block_mw) * 1000.0
@@ -196,25 +185,13 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
     da_horizon_steps = int(da_horizon_hours / step_hours)
 
     # ============================================================
-    # 4) Load prices, fees and simulation time index
+    # 4) Fees, simulation window and FCR slot limits
     # ============================================================
-    prices_by_market = build_prices_from_settings(settings)
-    # DECISION prices for the MPC window (forecast where configured, else realized).
-    # Settlement/postprocessing always uses the realized `prices_by_market`.
-    forecast_prices_by_market = build_forecast_prices_from_settings(settings)
     fees_by_market = build_fees_from_settings(settings)
 
-    # `report_start` bounds the RESULTS window (what postprocessing/KPIs see).
-    # `start` is the internal simulation start: a warm-up lead-in of `warmup_hours`
-    # is prepended so positions whose gate closes before the reporting start
-    # (notably the first delivery day's DA auction, closing on D-1) are committed
-    # on a full forward horizon during warm-up rather than pinned to zero. Warm-up
-    # steps drive the state forward but are excluded from all recorded outputs.
-    report_start = local_config_timestamp_to_utc(sim_cfg.start, local_tz=LOCAL_TIMEZONE)
-    end = local_config_timestamp_to_utc(sim_cfg.end, local_tz=LOCAL_TIMEZONE)
+    start, report_start, _ = simulation_window(settings)
 
     warmup_hours = float(getattr(sim_cfg, "warmup_hours", 0.0) or 0.0)
-    start = report_start - pd.Timedelta(hours=warmup_hours)
 
     if warmup_hours > 0.0 and opt_cfg.markets.dayahead.enabled and opt_cfg.trading.mode == "realistic":
         first_da_gate = gate_closure_timestamp("DA", report_start, opt_cfg)
@@ -226,92 +203,7 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
                 f"persist; increase warmup_hours beyond the DA gate lead."
             )
 
-    for mk in prices_by_market:
-        prices_by_market[mk] = prices_by_market[mk].loc[start:end]
-        validate_regular_index(
-            prices_by_market[mk].index,
-            timestep_hours=step_hours,
-            name=f"{mk} price index",
-        )
-        forecast_prices_by_market[mk] = forecast_prices_by_market[mk].loc[start:end]
-        validate_regular_index(
-            forecast_prices_by_market[mk].index,
-            timestep_hours=step_hours,
-            name=f"{mk} forecast price index",
-        )
-
-    # Every configured forecast must cover the exact realized decision index so
-    # window slicing can never silently produce NaNs.
-    mk_cfg = opt_cfg.markets
-    for mk, detail in (("DA", mk_cfg.dayahead), ("ID", mk_cfg.intraday)):
-        if not (detail.enabled and detail.forecast_source):
-            continue
-        realized_idx = prices_by_market[mk].index
-        forecast_idx = forecast_prices_by_market[mk].index
-        if not forecast_idx.equals(realized_idx):
-            raise ValueError(
-                f"{mk} forecast prices ({detail.forecast_source}) do not cover the full "
-                f"simulation window incl. horizon lookahead: expected {len(realized_idx)} steps "
-                f"[{realized_idx[0]} .. {realized_idx[-1]}], got {len(forecast_idx)} steps "
-                f"[{forecast_idx[0] if len(forecast_idx) else 'empty'} .. "
-                f"{forecast_idx[-1] if len(forecast_idx) else 'empty'}]."
-            )
-
-    # --- Optional per-market forecast error: perturb only the DECISION price
-    #     series the solver optimizes on (forecast_prices_by_market), by
-    #     settlement + sigma * z with z ~ AR(1). The settlement series
-    #     prices_by_market[mk] stays untouched, so cashflows/KPIs are still
-    #     valued at the real CSV prices. sigma = 0 (or enabled = False)
-    #     reproduces the unperturbed decision series bit-for-bit.
-    #     NOTE: if both DA and ID errors are enabled at once, give them distinct
-    #     seeds — an identical seed draws the same AR(1) shape for both markets.
-    fe_by_market = {
-        "DA": opt_cfg.markets.dayahead.forecast_error,
-        "ID": opt_cfg.markets.intraday.forecast_error,
-    }
-    for mk, fe_cfg in fe_by_market.items():
-        if fe_cfg.enabled and mk in forecast_prices_by_market:
-            z_fe = draw_ar1_shape(forecast_prices_by_market[mk].index, rho=fe_cfg.rho, seed=fe_cfg.seed)
-            forecast_prices_by_market[mk] = perturb_prices(
-                forecast_prices_by_market[mk], z_fe, fe_cfg.sigma_eur_per_mwh
-            )
-            logger.info(
-                f"{mk} forecast error active: sigma={fe_cfg.sigma_eur_per_mwh} EUR/MWh, "
-                f"rho={fe_cfg.rho}, seed={fe_cfg.seed}"
-            )
-
-    full_index = prices_by_market[next(iter(prices_by_market))].index
-    validate_regular_index(full_index, timestep_hours=step_hours, name="simulation decision index")
-
-    if warmup_hours > 0.0 and full_index[0] >= report_start:
-        raise ValueError(
-            f"warmup_hours={warmup_hours} requested but no input data before the reporting start "
-            f"{report_start.tz_convert(LOCAL_TIMEZONE)} — extend the input series back by at least "
-            f"the warm-up length, or reduce warmup_hours."
-        )
-
-    # Full state index (N+1): add terminal state timestamp
-    dt = pd.Timedelta(hours=step_hours)
-    full_state_index = full_index.append(pd.DatetimeIndex([full_index[-1] + dt]))
-
-    if flexibility_bounds_full is not None:
-        flexibility_bounds_full = align_and_validate_flexibility_bounds(
-            bounds=flexibility_bounds_full,
-            time_index=full_state_index,
-            expected_len=len(full_state_index),
-        )
-
-    imb_pos_full = prices_by_market.pop("IMB_POS", None)
-    imb_neg_full = prices_by_market.pop("IMB_NEG", None)
-    # No forecast semantics for imbalance (reBAP is ex-post; PASS2 is a
-    # feasibility fallback, not a trading decision) — always realized.
-    forecast_prices_by_market.pop("IMB_POS", None)
-    forecast_prices_by_market.pop("IMB_NEG", None)
-
     fcr_enabled = opt_cfg.trading.fcr.enabled
-
-    # slice fcr prices to simulation window
-    fcr_prices_full = fcr_prices_full.loc[(fcr_prices_full.index >= start) & (fcr_prices_full.index <= end)]
 
     all_fcr_slot_starts = list(fcr_prices_full.index)
 
