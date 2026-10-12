@@ -7,7 +7,11 @@ import toml
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 
-class SimulationSettings(BaseModel):
+class _StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class SimulationSettings(_StrictModel):
     start: datetime = Field(description="Simulation start time (inclusive), format `YYYY-MM-DD HH:MM`.")
     end: datetime = Field(description="Simulation end time (inclusive), format `YYYY-MM-DD HH:MM`.")
     timestep_hours: float = Field(
@@ -47,7 +51,7 @@ class SimulationSettings(BaseModel):
     )
 
 
-class ForecastErrorSettings(BaseModel):
+class ForecastErrorSettings(_StrictModel):
     # Per-market decision- vs. settlement-price split: the MPC optimizes on a
     # synthetically perturbed price series (settlement + sigma * z, z ~ AR(1)
     # with unit variance), while cashflows are settled on the real CSV prices.
@@ -69,7 +73,7 @@ class ForecastErrorSettings(BaseModel):
     seed: int = Field(default=1, description="Random seed of the forecast-error series.")
 
 
-class MarketDetail(BaseModel):
+class MarketDetail(_StrictModel):
     enabled: bool = Field(default=False, description="Enable participation in this market.")
     source: str = Field(description="CSV file with the realized price time series, used for settlement.")
     forecast_source: str | None = Field(
@@ -86,12 +90,12 @@ class MarketDetail(BaseModel):
     )
 
 
-class Markets(BaseModel):
+class Markets(_StrictModel):
     dayahead: MarketDetail = Field(description="Day-ahead market.")
     intraday: MarketDetail = Field(description="Intraday market.")
 
 
-class TradingDayahead(BaseModel):
+class TradingDayahead(_StrictModel):
     gate_closure_hour: str = Field(
         default="12:00", description="Day-ahead gate closure time, format `HH:MM`."
     )
@@ -100,13 +104,13 @@ class TradingDayahead(BaseModel):
     )
 
 
-class TradingIntraday(BaseModel):
+class TradingIntraday(_StrictModel):
     offset_minutes_before_delivery: int = Field(
         default=30, description="Intraday gate closure as minutes before delivery."
     )
 
 
-class FCRSettings(BaseModel):
+class FCRSettings(_StrictModel):
     enabled: bool = Field(default=False, description="Enable FCR reserve market participation.")
     prices_source: str = Field(description="Excel file (.xlsx) with FCR capacity prices, one price per slot.")
     frequency_source: str | None = Field(
@@ -151,7 +155,7 @@ class FCRSettings(BaseModel):
     )
 
 
-class TradingSettings(BaseModel):
+class TradingSettings(_StrictModel):
     mode: Literal["none", "realistic"] = Field(
         default="none",
         description=(
@@ -175,7 +179,7 @@ class TradingSettings(BaseModel):
         return self
 
 
-class ImbalanceSettings(BaseModel):
+class ImbalanceSettings(_StrictModel):
     enabled: bool = Field(default=False, description="Enable imbalance settlement as a fallback.")
     source_pos: str = Field(description="CSV file with positive imbalance prices.")
     source_neg: str = Field(description="CSV file with negative imbalance prices.")
@@ -184,7 +188,7 @@ class ImbalanceSettings(BaseModel):
     )
 
 
-class MpcSettings(BaseModel):
+class MpcSettings(_StrictModel):
     da_horizon_hours: int = Field(description="MPC prediction horizon for day-ahead optimization in hours.")
     id_horizon_hours: int = Field(description="MPC prediction horizon for intraday optimization in hours.")
     fcr_price_horizon_hours: int = Field(
@@ -201,19 +205,19 @@ class MpcSettings(BaseModel):
     )
 
 
-class CycleRegularization(BaseModel):
+class CycleRegularization(_StrictModel):
     enabled: bool = Field(description="Enable cycling regularization.")
     cost_eur_per_kwh_throughput: float = Field(
         description="Cost per charged/discharged energy throughput in €/kWh."
     )
 
 
-class FlexibilitySettings(BaseModel):
+class FlexibilitySettings(_StrictModel):
     bounds_file: str = Field(description="CSV file with the aggregated power and energy flexibility bands.")
     cycle_regularization: CycleRegularization = Field(description="Penalty on energy throughput.")
 
 
-class DepotSettings(BaseModel):
+class DepotSettings(_StrictModel):
     eta_grid2depot: Annotated[
         float, Field(gt=0.0, le=1.0, description="Efficiency of the grid-to-depot power flow.")
     ]
@@ -223,7 +227,7 @@ class DepotSettings(BaseModel):
     grid_connection_limit: Annotated[float, Field(gt=0, description="Symmetric grid connection limit in kW.")]
 
 
-class OptimizationSettings(BaseModel):
+class OptimizationSettings(_StrictModel):
     markets: Markets = Field(description="Energy markets and their price sources.")
     trading: TradingSettings = Field(description="Gate closure rules and the FCR reserve market.")
     imbalance: ImbalanceSettings = Field(description="Imbalance settlement.")
@@ -233,7 +237,7 @@ class OptimizationSettings(BaseModel):
     depot: DepotSettings = Field(description="Depot efficiencies and grid connection.")
 
 
-class ReferenceDrivingEnergyCostsSettings(BaseModel):
+class ReferenceDrivingEnergyCostsSettings(_StrictModel):
     enabled: bool = Field(default=False, description="Compute the uncontrolled-charging reference cost KPI.")
     static_price_eur_per_kwh: float | None = Field(
         default=None,
@@ -259,7 +263,7 @@ class ReferenceDrivingEnergyCostsSettings(BaseModel):
     ] = 0.98
 
 
-class PostprocessingSettings(BaseModel):
+class PostprocessingSettings(_StrictModel):
     # commit.csv / fcr_commit.csv are the dominant disk cost per run. They must
     # still be written by the simulation since postprocessing reads them back
     # from the run directory.
@@ -281,7 +285,7 @@ BASE_DIR = Path(__file__).resolve().parent
 _DEFAULT_TOML = BASE_DIR / "settings_quickstart.toml"
 
 
-class Settings(BaseModel):
+class Settings(_StrictModel):
     simulation: SimulationSettings = Field(description="Time window, run name and solver.")
     optimization: OptimizationSettings = Field(description="Markets, trading rules, MPC and depot model.")
     postprocessing: PostprocessingSettings = Field(
@@ -289,8 +293,6 @@ class Settings(BaseModel):
     )
 
     _source_path: Path | None = PrivateAttr(default=None)
-
-    model_config = ConfigDict(extra="forbid")
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], source_path: str | Path | None = None) -> "Settings":

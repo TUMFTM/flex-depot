@@ -64,3 +64,11 @@ def _fields_without_description(model: type[BaseModel], prefix: str = "") -> lis
 
 def test_every_setting_has_a_description():
     assert _fields_without_description(Settings) == []
+
+
+def test_unknown_key_inside_a_section_is_rejected():
+    data = _example_dict()
+    data["optimization"]["markets"]["dayahead"]["fee_eur_per_kw"] = 0.1
+
+    with pytest.raises(ValidationError, match="fee_eur_per_kw"):
+        Settings.from_dict(data)
