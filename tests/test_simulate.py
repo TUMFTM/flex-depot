@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from flex_dep_opt.config.settings import Settings
+from flex_dep_opt.errors import SimulationError
 from flex_dep_opt.io.inputs import load_inputs
 from flex_dep_opt.workflows import mpc_workflow
 from flex_dep_opt.workflows.mpc_workflow import run_mpc, simulate
@@ -35,19 +36,35 @@ def test_simulate_returns_one_dispatch_row_per_step(settings):
     assert result.settings is settings
 
 
-def test_run_mpc_saves_the_steps_simulated_before_an_error(settings, tmp_path, monkeypatch):
+def _make_third_step_infeasible(monkeypatch):
     calls = {"n": 0}
-    extract_dispatch = mpc_workflow.extract_dispatch
+    solve_model = mpc_workflow.solve_model
 
     def fail_on_third_step(*args, **kwargs):
         calls["n"] += 1
         if calls["n"] == 3:
-            raise KeyError("boom")
-        return extract_dispatch(*args, **kwargs)
+            raise RuntimeError("no feasible solution")
+        return solve_model(*args, **kwargs)
 
-    monkeypatch.setattr(mpc_workflow, "extract_dispatch", fail_on_third_step)
+    monkeypatch.setattr(mpc_workflow, "solve_model", fail_on_third_step)
 
-    with pytest.raises(KeyError, match="boom"):
+
+def test_infeasible_step_raises_with_the_partial_result(settings, monkeypatch):
+    settings.optimization.imbalance.enabled = False
+    inputs = load_inputs(settings)
+    _make_third_step_infeasible(monkeypatch)
+
+    with pytest.raises(SimulationError, match="No feasible solution at 2026-02-06 00:30") as excinfo:
+        simulate(settings, inputs)
+
+    assert excinfo.value.partial_result.dispatch.index.equals(inputs.index[:2])
+
+
+def test_run_mpc_saves_the_partial_result_before_raising(settings, tmp_path, monkeypatch):
+    settings.optimization.imbalance.enabled = False
+    _make_third_step_infeasible(monkeypatch)
+
+    with pytest.raises(SimulationError):
         run_mpc(settings, run_dir=tmp_path)
 
     assert len(pd.read_csv(tmp_path / "dispatch.csv")) == 2

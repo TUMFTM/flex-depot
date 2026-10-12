@@ -10,6 +10,7 @@ from tqdm.auto import tqdm
 
 from flex_dep_opt.config.settings import Settings
 from flex_dep_opt.domain.depot import Depot
+from flex_dep_opt.errors import SimulationError
 from flex_dep_opt.io.flexibility import align_and_validate_flexibility_bounds
 from flex_dep_opt.io.inputs import SimulationInputs, load_inputs, simulation_window
 from flex_dep_opt.io.prices import FCR_DROOP_COL, build_fees_from_settings
@@ -281,9 +282,8 @@ def simulate(settings: Settings, inputs: SimulationInputs) -> SimulationResult:
     # ============================================================
     # 9) Rolling-horizon MPC loop
     # ============================================================
+    pbar = tqdm(total=len(full_index), desc="MPC", unit="step", dynamic_ncols=True)
     try:
-        pbar = tqdm(total=len(full_index), desc="MPC", unit="step", dynamic_ncols=True)
-
         for i in range(len(full_index)):
             current_time = full_index[i]
             next_time = current_time + pd.Timedelta(hours=step_hours)
@@ -534,8 +534,11 @@ def simulate(settings: Settings, inputs: SimulationInputs) -> SimulationResult:
                         solved = False
 
             if not solved:
-                logger.error(f"Both passes infeasible at current_time={current_time} -- aborting MPC loop.")
-                break
+                raise SimulationError(
+                    f"No feasible solution at {current_time.tz_convert(LOCAL_TIMEZONE)}; "
+                    f"{len(rows)} reported steps were completed before.",
+                    partial_result=_result(),
+                )
 
             # --------------------------------------------------------
             # 9.6) Extract first-step dispatch
@@ -753,12 +756,8 @@ def simulate(settings: Settings, inputs: SimulationInputs) -> SimulationResult:
             # --------------------------------------------------------
             E_state = float(first_row["E_next_kWh"])
             pbar.update(1)
-
+    finally:
         pbar.close()
-
-    except BaseException as exc:
-        exc.partial_result = _result()
-        raise
 
     return _result()
 
@@ -767,12 +766,12 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
     inputs = load_inputs(settings)
     try:
         result = simulate(settings, inputs)
-    except BaseException as exc:
-        partial = getattr(exc, "partial_result", None)
-        if partial is not None:
-            _save_run(partial, run_dir)
+    except SimulationError as exc:
+        logger.error(f"Partial results saved -> {_save_run(exc.partial_result, run_dir).as_posix()}")
         raise
-    return _save_run(result, run_dir)
+    run_dir = _save_run(result, run_dir)
+    print("MPC finished -- Postprocessing starts")
+    return run_dir
 
 
 def _save_run(result: SimulationResult, run_dir: Path | None) -> Path:
@@ -784,6 +783,4 @@ def _save_run(result: SimulationResult, run_dir: Path | None) -> Path:
         run_dir = make_run_dir("results", name, tz=LOCAL_TIMEZONE)
         write_latest_run_pointer(run_dir, results_root="results")
 
-    result.save(run_dir)
-    print("MPC finished -- Postprocessing starts")
-    return Path(run_dir)
+    return result.save(run_dir)

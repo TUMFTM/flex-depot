@@ -11,6 +11,7 @@ import pandas as pd
 
 from flex_dep_opt._logging import configure_logging
 from flex_dep_opt.config.settings import Settings
+from flex_dep_opt.errors import SimulationError
 from flex_dep_opt.io.results import make_run_dir
 from flex_dep_opt.workflows.mpc_workflow import run_mpc
 from flex_dep_opt.workflows.postprocessing_workflow import postprocess_mpc_results
@@ -137,7 +138,10 @@ def main():
     configure_logging()
 
     if args.cmd == "run-sim":
-        run_mpc(Settings.from_toml(args.config), run_dir=Path(args.run_dir) if args.run_dir else None)
+        try:
+            run_mpc(Settings.from_toml(args.config), run_dir=Path(args.run_dir) if args.run_dir else None)
+        except SimulationError as exc:
+            raise SystemExit(f"ERROR: {exc}") from exc
         return
 
     if args.cmd == "run-post":
