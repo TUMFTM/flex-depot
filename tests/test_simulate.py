@@ -11,6 +11,7 @@ from flex_dep_opt.io.inputs import load_inputs
 from flex_dep_opt.io.results import SimulationResult
 from flex_dep_opt.workflows import mpc_workflow
 from flex_dep_opt.workflows.mpc_workflow import run_mpc, simulate
+from flex_dep_opt.workflows.postprocessing_workflow import evaluate
 
 REPO_ROOT = Path(__file__).parent.parent
 EXAMPLE_TOML = REPO_ROOT / "src/flex_dep_opt/config/settings_quickstart.toml"
@@ -84,3 +85,26 @@ def test_run_mpc_saves_the_partial_result_before_raising(settings, tmp_path, mon
         run_mpc(settings, run_dir=tmp_path)
 
     assert len(pd.read_csv(tmp_path / "dispatch.csv")) == 2
+
+
+def test_evaluate_gives_the_same_numbers_in_memory_and_from_disk(settings, tmp_path):
+    result = simulate(settings, load_inputs(settings))
+
+    in_memory = evaluate(result)
+    from_disk = evaluate(SimulationResult.load(result.save(tmp_path)))
+
+    # the CSV round trip changes the last float digit
+    assert in_memory.kpis == pytest.approx(from_disk.kpis)
+    pd.testing.assert_frame_equal(in_memory.cashflows, from_disk.cashflows, check_freq=False)
+
+
+def test_evaluation_save_writes_the_report_files(settings, tmp_path):
+    evaluation = evaluate(simulate(settings, load_inputs(settings)))
+
+    evaluation.save(tmp_path)
+
+    assert (
+        pd.read_csv(tmp_path / "kpis.csv").iloc[0]["gross_profit_eur"] == evaluation.kpis["gross_profit_eur"]
+    )
+    assert len(pd.read_csv(tmp_path / "cashflow.csv")) == len(evaluation.cashflows)
+    assert (tmp_path / "dispatch.html").exists() and (tmp_path / "cashflow.html").exists()

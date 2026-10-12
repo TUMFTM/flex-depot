@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
+import plotly.graph_objects as go
 
 from flex_dep_opt.config.settings import Settings
 from flex_dep_opt.io.prices import (
@@ -33,31 +36,36 @@ from flex_dep_opt.post.reference_energy_costs import (
 )
 
 
-def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | None = None) -> None:
-    """
-    Postprocessing workflow for MPC results.
+@dataclass
+class Evaluation:
+    kpis: dict[str, Any]
+    cashflows: pd.DataFrame
+    reference_costs: pd.DataFrame | None
+    dispatch_figure: go.Figure
+    cashflow_figure: go.Figure
 
-    Steps
-    -----
-    1) Read dispatch.csv and commit.csv from the latest run directory (LATEST.txt)
-    2) Load prices and fees from settings and slice to [start, end]
-    3) Compute metrics (cashflows, aggregates, KPIs)
-    4) Export optional postprocessing CSVs (cashflows + KPI summary)
-    5) Generate interactive Plotly HTML plots
-    """
-    results_root = Path("results")
-    if run_dir is None:
-        run_dir = read_latest_run_pointer(results_root)
+    def save(self, run_dir: str | Path) -> Path:
+        run_dir = Path(run_dir)
+        save_dispatch_to_csv(
+            self.cashflows, run_dir / "cashflow.csv", include_time_column=True, output_tz=LOCAL_TIMEZONE
+        )
+        if self.reference_costs is not None:
+            save_dispatch_to_csv(
+                self.reference_costs,
+                run_dir / "reference_driving_energy_costs.csv",
+                include_time_column=True,
+                output_tz=LOCAL_TIMEZONE,
+            )
+        save_summary_to_csv(self.kpis, run_dir / "kpis.csv")
+        self.dispatch_figure.write_html(run_dir / "dispatch.html", include_plotlyjs="cdn")
+        self.cashflow_figure.write_html(run_dir / "cashflow.html", include_plotlyjs="cdn")
+        return run_dir
 
-    result = SimulationResult.load(run_dir, settings=settings)
+
+def evaluate(result: SimulationResult) -> Evaluation:
+    """Settle a simulation result on realized prices and compute KPIs, cashflows and figures."""
     settings = result.settings
-
-    print(f"Settings file used: {settings.get_source_path()}")
-
     sim = settings.simulation
-
-    commit_csv = run_dir / "commit.csv"
-    fcr_commit_csv = run_dir / "fcr_commit.csv"
 
     start = local_config_timestamp_to_utc(sim.start, local_tz=LOCAL_TIMEZONE)
     end = local_config_timestamp_to_utc(sim.end, local_tz=LOCAL_TIMEZONE)
@@ -213,15 +221,6 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
             kpis[f"{mk.lower()}_forecast_mae_eur_per_kwh"] = mae
 
     # -------------------------------------------------------------------------
-    # Optional: persist postprocessing results next to dispatch/commit outputs
-    # -------------------------------------------------------------------------
-    cashflow_csv = run_dir / "cashflow.csv"
-    kpi_csv = run_dir / "kpis.csv"
-
-    # cashflows: keep DatetimeIndex in the CSV for later batches
-    save_dispatch_to_csv(cf_df, cashflow_csv, include_time_column=True, output_tz=LOCAL_TIMEZONE)
-
-    # -------------------------------------------------------------------------
     # Optional static-price reference scenario for driving energy
     # -------------------------------------------------------------------------
     reference_df = None
@@ -245,8 +244,6 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
             charging_efficiency=float(ref_cfg.charging_efficiency),
             energy_column=str(ref_cfg.energy_column or DEFAULT_REFERENCE_ENERGY_COLUMN),
         )
-        reference_csv = run_dir / "reference_driving_energy_costs.csv"
-        save_dispatch_to_csv(reference_df, reference_csv, include_time_column=True, output_tz=LOCAL_TIMEZONE)
 
         # Apply the same cycling cost to the reference so only the *incremental*
         # V2G/arbitrage wear enters the delta. The reference charges grid-side
@@ -269,23 +266,6 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
                 ),
             }
         )
-
-        print(
-            "Reference driving energy costs: "
-            f"{reference_summary['ref_energy_cost_eur']:.2f} EUR for "
-            f"{reference_summary['ref_driving_energy_kwh']:.2f} kWh driving energy "
-            f"({reference_summary['ref_grid_energy_kwh']:.2f} kWh grid-side at "
-            f"eta={reference_summary['ref_charging_efficiency']:.3f})"
-        )
-
-    # KPIs: single row, including optional reference scenario fields
-    save_summary_to_csv(kpis, kpi_csv)
-
-    # -------------------------------------------------------------------------
-    # HTML output paths (same base names as config entries)
-    # -------------------------------------------------------------------------
-    dispatch_html = run_dir / "dispatch.html"
-    cashflow_html = run_dir / "cashflow.html"
 
     # -------------------------------------------------------------------------
     # Plot 1: dispatch report
@@ -321,8 +301,6 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
         fcr_frequency_data=fcr_frequency_data_pp,
         fcr_product_hours=fcr_cfg.product_hours,
     )
-    fig_dispatch.write_html(dispatch_html, include_plotlyjs="cdn")
-    # webbrowser.open(dispatch_html.resolve().as_uri())
 
     # -------------------------------------------------------------------------
     # Plot 2: cashflow report (plots consume precomputed metrics)
@@ -338,16 +316,40 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
         reference_summary=reference_summary,
         title="Market Cashflows",
     )
-    fig_cf.write_html(cashflow_html, include_plotlyjs="cdn")
-    # webbrowser.open(cashflow_html.resolve().as_uri())
 
-    # -------------------------------------------------------------------------
-    # Optional cleanup: commit logs are only needed as input to this step and
-    # dominate the run directory size; drop them once KPIs and plots exist.
-    # -------------------------------------------------------------------------
+    return Evaluation(
+        kpis=kpis,
+        cashflows=cf_df,
+        reference_costs=reference_df,
+        dispatch_figure=fig_dispatch,
+        cashflow_figure=fig_cf,
+    )
+
+
+def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | None = None) -> None:
+    if run_dir is None:
+        run_dir = read_latest_run_pointer(Path("results"))
+
+    result = SimulationResult.load(run_dir, settings=settings)
+    settings = result.settings
+    print(f"Settings file used: {settings.get_source_path()}")
+
+    evaluation = evaluate(result)
+    kpis = evaluation.kpis
+    if "ref_energy_cost_eur" in kpis:
+        print(
+            "Reference driving energy costs: "
+            f"{kpis['ref_energy_cost_eur']:.2f} EUR for "
+            f"{kpis['ref_driving_energy_kwh']:.2f} kWh driving energy "
+            f"({kpis['ref_grid_energy_kwh']:.2f} kWh grid-side at "
+            f"eta={kpis['ref_charging_efficiency']:.3f})"
+        )
+    evaluation.save(run_dir)
+
+    # Commit logs are only needed as input to this step and dominate the run directory size.
     if not settings.postprocessing.save_commits:
-        commit_csv.unlink(missing_ok=True)
-        fcr_commit_csv.unlink(missing_ok=True)
+        (run_dir / "commit.csv").unlink(missing_ok=True)
+        (run_dir / "fcr_commit.csv").unlink(missing_ok=True)
         print("Commit CSVs removed (postprocessing.save_commits = false)")
 
     print(f"Result CSV files saved -> {run_dir.as_posix()}")
