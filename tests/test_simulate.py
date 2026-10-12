@@ -8,6 +8,7 @@ import pytest
 from flex_dep_opt.config.settings import Settings
 from flex_dep_opt.errors import SimulationError
 from flex_dep_opt.io.inputs import load_inputs
+from flex_dep_opt.io.results import SimulationResult
 from flex_dep_opt.workflows import mpc_workflow
 from flex_dep_opt.workflows.mpc_workflow import run_mpc, simulate
 
@@ -34,6 +35,21 @@ def test_simulate_returns_one_dispatch_row_per_step(settings):
     assert result.dispatch.index.equals(inputs.index)
     assert not result.commits.empty
     assert result.settings is settings
+
+
+def test_saved_result_loads_back_unchanged(settings, tmp_path):
+    result = simulate(settings, load_inputs(settings))
+
+    loaded = SimulationResult.load(result.save(tmp_path))
+
+    pd.testing.assert_frame_equal(loaded.dispatch, result.dispatch, check_freq=False)
+    # these two columns are not parsed on load and stay local-time strings
+    unparsed = ["next_time", "gate_closure_time"]
+    pd.testing.assert_frame_equal(
+        loaded.commits.drop(columns=unparsed), result.commits.drop(columns=unparsed).reset_index(drop=True)
+    )
+    assert loaded.settings.model_dump() == result.settings.model_dump()
+    assert (loaded.started_at, loaded.finished_at) == (result.started_at, result.finished_at)
 
 
 def _make_third_step_infeasible(monkeypatch):

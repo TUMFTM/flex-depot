@@ -11,7 +11,12 @@ from flex_dep_opt.io.prices import (
     build_prices_from_settings,
     get_fcr_frequency_data,
 )
-from flex_dep_opt.io.results import read_latest_run_pointer, save_dispatch_to_csv, save_summary_to_csv
+from flex_dep_opt.io.results import (
+    SimulationResult,
+    read_latest_run_pointer,
+    save_dispatch_to_csv,
+    save_summary_to_csv,
+)
 from flex_dep_opt.io.time import LOCAL_TIMEZONE, local_config_timestamp_to_utc, validate_regular_index
 from flex_dep_opt.market.forecast_error import draw_ar1_shape, perturb_prices
 from flex_dep_opt.post.metrics import (
@@ -44,73 +49,27 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
     if run_dir is None:
         run_dir = read_latest_run_pointer(results_root)
 
-    if settings is None:
-        run_settings_path = run_dir / "settings.toml"
-        if not run_settings_path.exists():
-            raise FileNotFoundError(
-                f"No settings.toml found in {run_dir}. Pass an explicit config with --config."
-            )
-        settings = Settings.from_toml(run_settings_path)
+    result = SimulationResult.load(run_dir, settings=settings)
+    settings = result.settings
 
     print(f"Settings file used: {settings.get_source_path()}")
 
     sim = settings.simulation
 
-    dispatch_csv = run_dir / "dispatch.csv"
     commit_csv = run_dir / "commit.csv"
+    fcr_commit_csv = run_dir / "fcr_commit.csv"
 
-    if not dispatch_csv.exists():
-        raise FileNotFoundError(f"Dispatch CSV not found: {dispatch_csv.resolve()}")
-    if not commit_csv.exists():
-        raise FileNotFoundError(f"Commit CSV not found: {commit_csv.resolve()}")
-
-    # ------------------------------------------------------------------
-    # Time window
-    # ------------------------------------------------------------------
     start = local_config_timestamp_to_utc(sim.start, local_tz=LOCAL_TIMEZONE)
     end = local_config_timestamp_to_utc(sim.end, local_tz=LOCAL_TIMEZONE)
 
-    # ------------------------------------------------------------------
-    # Load dispatch
-    # ------------------------------------------------------------------
-    df = pd.read_csv(dispatch_csv)
-    if "time" not in df.columns:
-        raise ValueError(f"{dispatch_csv} must contain a 'time' column.")
-    idx = pd.to_datetime(df["time"], utc=True).dt.tz_convert("UTC")
-
-    dispatch = df.drop(columns=["time"])
-    dispatch.index = idx
-    dispatch = dispatch.loc[start:end]
+    dispatch = result.dispatch.loc[start:end]
     validate_regular_index(dispatch.index, timestep_hours=float(sim.timestep_hours), name="dispatch index")
 
-    # ------------------------------------------------------------------
-    # Load commit
-    # ------------------------------------------------------------------
-    cdf = pd.read_csv(commit_csv)
-
-    # robust parsing if saved as strings
-    if "delivery_time" in cdf.columns:
-        cdf["delivery_time"] = pd.to_datetime(cdf["delivery_time"], utc=True).dt.tz_convert("UTC")
-    if "current_time" in cdf.columns:
-        cdf["current_time"] = pd.to_datetime(cdf["current_time"], utc=True).dt.tz_convert("UTC")
-
-    commit_df = cdf
+    commit_df = result.commits
     if "delivery_time" in commit_df.columns:
         commit_df = commit_df[(commit_df["delivery_time"] >= start) & (commit_df["delivery_time"] <= end)]
 
-    fcr_commit_df: pd.DataFrame | None = None
-    fcr_commit_csv = run_dir / "fcr_commit.csv"
-    if fcr_commit_csv.exists():
-        fcr_cdf = pd.read_csv(fcr_commit_csv)
-        if "slot_start" in fcr_cdf.columns:
-            fcr_cdf["slot_start"] = pd.to_datetime(fcr_cdf["slot_start"], utc=True).dt.tz_convert(
-                "Europe/Berlin"
-            )
-        if "committed_at" in fcr_cdf.columns:
-            fcr_cdf["committed_at"] = pd.to_datetime(fcr_cdf["committed_at"], utc=True).dt.tz_convert(
-                "Europe/Berlin"
-            )
-        fcr_commit_df = fcr_cdf
+    fcr_commit_df = result.fcr_commits if not result.fcr_commits.empty else None
 
     # -------------------------------------------------------------------------
     # Prices + fees

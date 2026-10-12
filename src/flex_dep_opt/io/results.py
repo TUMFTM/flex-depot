@@ -228,3 +228,57 @@ class SimulationResult:
             tz=LOCAL_TIMEZONE,
         )
         return run_dir
+
+    @classmethod
+    def load(cls, run_dir: str | Path, settings: Settings | None = None) -> SimulationResult:
+        run_dir = Path(run_dir)
+
+        if settings is None:
+            settings_path = run_dir / "settings.toml"
+            if not settings_path.exists():
+                raise FileNotFoundError(
+                    f"No settings.toml found in {run_dir}. Pass an explicit config with --config."
+                )
+            settings = Settings.from_toml(settings_path)
+
+        dispatch_csv = run_dir / "dispatch.csv"
+        commit_csv = run_dir / "commit.csv"
+        fcr_commit_csv = run_dir / "fcr_commit.csv"
+        if not dispatch_csv.exists():
+            raise FileNotFoundError(f"Dispatch CSV not found: {dispatch_csv.resolve()}")
+        if not commit_csv.exists():
+            raise FileNotFoundError(f"Commit CSV not found: {commit_csv.resolve()}")
+
+        dispatch = pd.read_csv(dispatch_csv)
+        if "time" not in dispatch.columns:
+            raise ValueError(f"{dispatch_csv} must contain a 'time' column.")
+        dispatch = dispatch.set_index(pd.to_datetime(dispatch.pop("time"), utc=True))
+
+        commits = pd.read_csv(commit_csv)
+        for col in ("delivery_time", "current_time"):
+            if col in commits.columns:
+                commits[col] = pd.to_datetime(commits[col], utc=True)
+
+        fcr_commits = pd.DataFrame()
+        if fcr_commit_csv.exists():
+            fcr_commits = pd.read_csv(fcr_commit_csv)
+            for col in ("slot_start", "committed_at"):
+                if col in fcr_commits.columns:
+                    fcr_commits[col] = pd.to_datetime(fcr_commits[col], utc=True).dt.tz_convert(
+                        LOCAL_TIMEZONE
+                    )
+
+        run_info = _read_run_info(run_dir / "run_info.txt")
+        return cls(
+            settings=settings,
+            dispatch=dispatch,
+            commits=commits,
+            fcr_commits=fcr_commits,
+            started_at=datetime.fromisoformat(run_info["started_at"]),
+            finished_at=datetime.fromisoformat(run_info["finished_at"]),
+        )
+
+
+def _read_run_info(path: Path) -> dict[str, str]:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return dict(line.split(": ", 1) for line in lines if ": " in line)
