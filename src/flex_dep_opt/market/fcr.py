@@ -39,5 +39,3 @@ def fcr_gate_closure_timestamp(
     if closes_previous_day:
         day = day - pd.Timedelta(days=1)
     return day.replace(hour=hh, minute=mm, tzinfo=ZoneInfo(timezone))
-
-

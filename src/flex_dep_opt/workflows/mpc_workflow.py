@@ -293,9 +293,7 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
     }
     for mk, fe_cfg in fe_by_market.items():
         if fe_cfg.enabled and mk in forecast_prices_by_market:
-            z_fe = draw_ar1_shape(
-                forecast_prices_by_market[mk].index, rho=fe_cfg.rho, seed=fe_cfg.seed
-            )
+            z_fe = draw_ar1_shape(forecast_prices_by_market[mk].index, rho=fe_cfg.rho, seed=fe_cfg.seed)
             forecast_prices_by_market[mk] = perturb_prices(
                 forecast_prices_by_market[mk], z_fe, fe_cfg.sigma_eur_per_mwh
             )

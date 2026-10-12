@@ -173,7 +173,8 @@ def plot_market_cashflows_plotly(
                 visible="legendonly",
                 hovertemplate="%{y:.2f} €<extra></extra>",
             ),
-            row=2, col=1
+            row=2,
+            col=1,
         )
 
     # Row 3: Sunbursts
@@ -232,35 +233,28 @@ def plot_market_cashflows_plotly(
     if reference_summary is not None:
         reference_gross_profit_eur = -float(reference_summary["ref_energy_cost_eur"])
         total_potential_eur = float(kpis["gross_profit_eur"]) - reference_gross_profit_eur
-        kpi_rows.extend([
-            ("", ""),
-            ("Reference Scenario (Driving only)", ""),
-            ("Gross Profit", f"{reference_gross_profit_eur:.1f} €"),
-            ("Driving Energy", f"{float(reference_summary['ref_driving_energy_kwh']):.1f} kWh"),
-            ("Static Price", f"{float(reference_summary['ref_static_price_eur_per_kwh']):.3f} €/kWh"),
-            ("", ""),
-            ("Total Potential Flex-Depot Optimization", ""),
-            ("Gross Profit Delta", f"{total_potential_eur:.1f} €"),
-        ])
+        kpi_rows.extend(
+            [
+                ("", ""),
+                ("Reference Scenario (Driving only)", ""),
+                ("Gross Profit", f"{reference_gross_profit_eur:.1f} €"),
+                ("Driving Energy", f"{float(reference_summary['ref_driving_energy_kwh']):.1f} kWh"),
+                ("Static Price", f"{float(reference_summary['ref_static_price_eur_per_kwh']):.3f} €/kWh"),
+                ("", ""),
+                ("Total Potential Flex-Depot Optimization", ""),
+                ("Gross Profit Delta", f"{total_potential_eur:.1f} €"),
+            ]
+        )
 
     section_labels = {
         "Flex-Depot Optimization (V2G & Driving)",
         "Reference Scenario (Driving only)",
         "Total Potential Flex-Depot Optimization",
     }
-    section_rows = {
-        i for i, (label, value) in enumerate(kpi_rows)
-        if label in section_labels and value == ""
-    }
+    section_rows = {i for i, (label, value) in enumerate(kpi_rows) if label in section_labels and value == ""}
     fill_colors = [
-        [
-            "rgba(0,0,0,0.06)" if i in section_rows else "rgba(255,255,255,1.0)"
-            for i in range(len(kpi_rows))
-        ],
-        [
-            "rgba(0,0,0,0.06)" if i in section_rows else "rgba(255,255,255,1.0)"
-            for i in range(len(kpi_rows))
-        ],
+        ["rgba(0,0,0,0.06)" if i in section_rows else "rgba(255,255,255,1.0)" for i in range(len(kpi_rows))],
+        ["rgba(0,0,0,0.06)" if i in section_rows else "rgba(255,255,255,1.0)" for i in range(len(kpi_rows))],
     ]
 
     fig.add_trace(

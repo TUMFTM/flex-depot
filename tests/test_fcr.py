@@ -54,6 +54,7 @@ def test_gate_closure_same_day_and_custom_hour():
 # Integration tests: FCR activation cashflow (Option A)
 # =============================================================================
 
+
 def _make_fcr_model(
     droop_vals: list[float],
     rebap_pos_price: float,
@@ -198,8 +199,12 @@ def test_fcr_activation_cashflow_without_rebap_prices(solver_name):
     state_idx = pd.date_range(slot_start, periods=5, freq="h", tz=tz)
     prices = {"DA": pd.Series(0.05, index=idx)}
     bounds = pd.DataFrame(
-        {"Power_lower_kW": -1000.0, "Power_upper_kW": 1000.0,
-         "Capacity_lower_kWh": 0.0, "Capacity_upper_kWh": 10000.0},
+        {
+            "Power_lower_kW": -1000.0,
+            "Power_upper_kW": 1000.0,
+            "Capacity_lower_kWh": 0.0,
+            "Capacity_upper_kWh": 10000.0,
+        },
         index=state_idx,
     )
     freq_df = pd.DataFrame({FCR_DROOP_COL: [0.5, 0.0, -0.3, 0.0]}, index=idx)

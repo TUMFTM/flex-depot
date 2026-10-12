@@ -42,9 +42,7 @@ def _make_solver(solver_name: str):
         try:
             import highspy  # noqa: F401
         except ImportError as e:
-            raise RuntimeError(
-                "HiGHS (highspy) not found. Install it with: pip install highspy"
-            ) from e
+            raise RuntimeError("HiGHS (highspy) not found. Install it with: pip install highspy") from e
         solver = pyo.SolverFactory("appsi_highs")
     elif name == "cbc":
         cbc_exe = _cbc_executable()

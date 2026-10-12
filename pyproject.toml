@@ -82,3 +82,7 @@ ignore = ["E501"]
 [tool.ruff.lint.per-file-ignores]
 # figure-layout scripts use aligned multi-assignment lines
 "images/*" = ["E702"]
+
+[tool.ruff.format]
+# figure-layout scripts keep their hand-aligned columns
+exclude = ["images/*"]

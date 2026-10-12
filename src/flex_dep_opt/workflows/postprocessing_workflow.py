@@ -295,21 +295,21 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
         # ref_grid_energy_kwh. Without this, the unidirectional case would be
         # unfairly penalized for baseline charging wear the reference also incurs.
         ref_cycling_cost_eur = c_deg * float(reference_summary["ref_grid_energy_kwh"])
-        reference_gross_profit_eur = (
-            -float(reference_summary["ref_energy_cost_eur"]) - ref_cycling_cost_eur
+        reference_gross_profit_eur = -float(reference_summary["ref_energy_cost_eur"]) - ref_cycling_cost_eur
+        kpis.update(
+            {
+                "ref_gross_profit_eur": reference_gross_profit_eur,
+                "ref_cycling_cost_eur": ref_cycling_cost_eur,
+                "ref_driving_energy_kwh": float(reference_summary["ref_driving_energy_kwh"]),
+                "ref_grid_energy_kwh": float(reference_summary["ref_grid_energy_kwh"]),
+                "ref_charging_efficiency": float(reference_summary["ref_charging_efficiency"]),
+                "ref_static_price_eur_per_kwh": float(reference_summary["ref_static_price_eur_per_kwh"]),
+                "ref_energy_cost_eur": float(reference_summary["ref_energy_cost_eur"]),
+                "total_potential_gross_profit_delta_eur": (
+                    float(kpis["gross_profit_eur"]) - reference_gross_profit_eur
+                ),
+            }
         )
-        kpis.update({
-            "ref_gross_profit_eur": reference_gross_profit_eur,
-            "ref_cycling_cost_eur": ref_cycling_cost_eur,
-            "ref_driving_energy_kwh": float(reference_summary["ref_driving_energy_kwh"]),
-            "ref_grid_energy_kwh": float(reference_summary["ref_grid_energy_kwh"]),
-            "ref_charging_efficiency": float(reference_summary["ref_charging_efficiency"]),
-            "ref_static_price_eur_per_kwh": float(reference_summary["ref_static_price_eur_per_kwh"]),
-            "ref_energy_cost_eur": float(reference_summary["ref_energy_cost_eur"]),
-            "total_potential_gross_profit_delta_eur": (
-                float(kpis["gross_profit_eur"]) - reference_gross_profit_eur
-            ),
-        })
 
         print(
             "Reference driving energy costs: "
@@ -375,11 +375,7 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
         energy_data=energy_data,
         cash_data=cash_data,
         kpis=kpis,
-        reference_df=(
-            reference_df.tz_convert(LOCAL_TIMEZONE)
-            if reference_df is not None
-            else None
-        ),
+        reference_df=(reference_df.tz_convert(LOCAL_TIMEZONE) if reference_df is not None else None),
         reference_summary=reference_summary,
         title="Market Cashflows",
     )

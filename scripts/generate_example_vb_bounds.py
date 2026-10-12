@@ -106,6 +106,7 @@ ENERGY_BAND_SNAP_TOLERANCE_KWH = 1e-6
 # unidirectional and bidirectional example.
 # --------------------------------------------------------------------------- #
 
+
 @dataclass(frozen=True)
 class PaperConfig:
     max_discharge_power_kw: float  # 0.0 = unidirectional, 350.0 = bidirectional
@@ -152,6 +153,7 @@ CASE_SNAP_COLLAPSED = {"uni": True, "bidi": False}
 # Session construction
 # --------------------------------------------------------------------------- #
 
+
 def _normalize_bool(series: pd.Series) -> pd.Series:
     if pd.api.types.is_bool_dtype(series):
         return series
@@ -166,9 +168,7 @@ def _normalize_bool(series: pd.Series) -> pd.Series:
 
 def _attach_fleet_ids(tracks: pd.DataFrame, fleet: pd.DataFrame) -> pd.DataFrame:
     vehicle_fleet = fleet[[VEHICLE_ID, FLEET_ID]].drop_duplicates()
-    merged = tracks.merge(
-        vehicle_fleet, on=VEHICLE_ID, how="left", validate="many_to_one"
-    )
+    merged = tracks.merge(vehicle_fleet, on=VEHICLE_ID, how="left", validate="many_to_one")
     missing = sorted(merged.loc[merged[FLEET_ID].isna(), VEHICLE_ID].unique().tolist())
     if missing:
         raise ValueError(f"Tracks without fleet assignment for vehicle_id: {missing}")
@@ -189,16 +189,10 @@ def _set_paper_soc_energy_states(tracks: pd.DataFrame, cfg: PaperConfig) -> pd.D
     """Set depot arrival energy from the activity-level SoC reconstruction."""
     paper_soc = pd.read_csv(PAPER_SOC_FILE)
     paper_home = paper_soc[paper_soc["occupation"] == "home base"].copy()
-    paper_home[START_TIME] = pd.to_datetime(
-        paper_home[START_TIME], format="mixed", utc=True
-    )
-    paper_home["paper_arrival_soc"] = pd.to_numeric(
-        paper_home["soc_start"], errors="coerce"
-    )
+    paper_home[START_TIME] = pd.to_datetime(paper_home[START_TIME], format="mixed", utc=True)
+    paper_home["paper_arrival_soc"] = pd.to_numeric(paper_home["soc_start"], errors="coerce")
     paper_home = paper_home[[VEHICLE_ID, START_TIME, "paper_arrival_soc"]].dropna()
-    paper_home = paper_home.drop_duplicates(
-        subset=[VEHICLE_ID, START_TIME], keep="first"
-    )
+    paper_home = paper_home.drop_duplicates(subset=[VEHICLE_ID, START_TIME], keep="first")
 
     prepared = tracks.merge(
         paper_home,
@@ -216,9 +210,7 @@ def _set_paper_soc_energy_states(tracks: pd.DataFrame, cfg: PaperConfig) -> pd.D
     return prepared
 
 
-def build_depot_sessions(
-    tracks_with_fleets: pd.DataFrame, cfg: PaperConfig
-) -> pd.DataFrame:
+def build_depot_sessions(tracks_with_fleets: pd.DataFrame, cfg: PaperConfig) -> pd.DataFrame:
     """Build depot sessions from home-base arrivals and each vehicle's next trip."""
     tracks = tracks_with_fleets.copy()
     tracks[HOME_BASE] = _normalize_bool(tracks[HOME_BASE])
@@ -235,9 +227,7 @@ def build_depot_sessions(
 
     sessions = tracks[tracks[HOME_BASE] & tracks[DEPARTURE_TIME].notna()].copy()
     sessions[ARRIVAL_TIME] = sessions[STOP_TIME]
-    sessions[DURATION_H] = (
-        sessions[DEPARTURE_TIME] - sessions[ARRIVAL_TIME]
-    ).dt.total_seconds() / 3600.0
+    sessions[DURATION_H] = (sessions[DEPARTURE_TIME] - sessions[ARRIVAL_TIME]).dt.total_seconds() / 3600.0
 
     min_duration_h = cfg.min_parking_duration_minutes / 60.0
     sessions = sessions[sessions[DURATION_H] >= min_duration_h].copy()
@@ -259,13 +249,11 @@ def build_depot_sessions(
     # departure energy strategy = "full_charge"
     target_departure_energy_kwh = cfg.battery_capacity_kwh * cfg.target_departure_soc
     sessions[MIN_DEPARTURE_ENERGY_KWH] = target_departure_energy_kwh
-    sessions[REQUIRED_ENERGY_KWH] = (
-        sessions[MIN_DEPARTURE_ENERGY_KWH] - sessions[ARRIVAL_ENERGY_KWH]
-    ).clip(lower=0.0)
-
-    sessions[MIN_DEPARTURE_ENERGY_KWH] = (
-        sessions[MIN_DEPARTURE_ENERGY_KWH] + cfg.departure_energy_reserve_kwh
+    sessions[REQUIRED_ENERGY_KWH] = (sessions[MIN_DEPARTURE_ENERGY_KWH] - sessions[ARRIVAL_ENERGY_KWH]).clip(
+        lower=0.0
     )
+
+    sessions[MIN_DEPARTURE_ENERGY_KWH] = sessions[MIN_DEPARTURE_ENERGY_KWH] + cfg.departure_energy_reserve_kwh
     sessions[MIN_DEPARTURE_ENERGY_KWH] = np.minimum(
         sessions[MIN_DEPARTURE_ENERGY_KWH], sessions[MAX_ENERGY_KWH]
     )
@@ -288,6 +276,7 @@ def build_depot_sessions(
 # --------------------------------------------------------------------------- #
 # Per-vehicle robust envelopes and fleet aggregation (Park et al., Sec. 2.2)
 # --------------------------------------------------------------------------- #
+
 
 @dataclass(frozen=True)
 class VehicleEnvelopeInputs:
@@ -331,12 +320,8 @@ def build_vehicle_envelope(inputs: VehicleEnvelopeInputs) -> VehicleEnvelope:
     available_discharge_kwh = inputs.arrival_energy_kwh - inputs.min_energy_kwh
     charge_headroom_kwh = inputs.max_energy_kwh - inputs.arrival_energy_kwh
 
-    charge_step_kwh = (
-        inputs.max_charge_power_kw * inputs.charging_efficiency * inputs.timestep_hours
-    )
-    discharge_step_kwh = (
-        inputs.max_discharge_power_kw / inputs.discharging_efficiency * inputs.timestep_hours
-    )
+    charge_step_kwh = inputs.max_charge_power_kw * inputs.charging_efficiency * inputs.timestep_hours
+    discharge_step_kwh = inputs.max_discharge_power_kw / inputs.discharging_efficiency * inputs.timestep_hours
     max_reachable_charge_kwh = min(charge_headroom_kwh, charge_step_kwh * steps)
     required_charge_kwh = min(
         inputs.min_departure_energy_kwh - inputs.arrival_energy_kwh,
@@ -360,8 +345,7 @@ def build_vehicle_envelope(inputs: VehicleEnvelopeInputs) -> VehicleEnvelope:
         )
         lower_backward = max(
             -available_discharge_kwh,
-            required_charge_kwh
-            - inputs.max_charge_power_kw * inputs.charging_efficiency * remaining_h,
+            required_charge_kwh - inputs.max_charge_power_kw * inputs.charging_efficiency * remaining_h,
         )
         raw_lower = max(lower_forward, lower_backward)
 
@@ -433,16 +417,13 @@ def aggregate_envelopes(
 # Time grid helpers
 # --------------------------------------------------------------------------- #
 
-def build_time_grid(
-    start: pd.Timestamp, end: pd.Timestamp, resolution_minutes: int
-) -> pd.DatetimeIndex:
+
+def build_time_grid(start: pd.Timestamp, end: pd.Timestamp, resolution_minutes: int) -> pd.DatetimeIndex:
     start_ts = pd.Timestamp(start).tz_convert("UTC").floor(f"{resolution_minutes}min")
     end_ts = pd.Timestamp(end).tz_convert("UTC").ceil(f"{resolution_minutes}min")
     if end_ts <= start_ts:
         raise ValueError("end must be after start.")
-    return pd.date_range(
-        start=start_ts, end=end_ts, freq=f"{resolution_minutes}min", inclusive="both"
-    )
+    return pd.date_range(start=start_ts, end=end_ts, freq=f"{resolution_minutes}min", inclusive="both")
 
 
 def timestamp_to_index(
@@ -459,6 +440,7 @@ def timestamp_to_index(
 # --------------------------------------------------------------------------- #
 # Flexband construction
 # --------------------------------------------------------------------------- #
+
 
 def build_depot_flexbands(sessions: pd.DataFrame, cfg: PaperConfig) -> pd.DataFrame:
     """Build power and energy flexbands for the fleet (cumulative net energy)."""
@@ -485,12 +467,8 @@ def build_depot_flexbands(sessions: pd.DataFrame, cfg: PaperConfig) -> pd.DataFr
         for row in fleet_sessions.itertuples(index=False):
             arrival_time = getattr(row, ARRIVAL_TIME)
             departure_time = getattr(row, DEPARTURE_TIME)
-            arrival_index = timestamp_to_index(
-                arrival_time, grid_start, resolution, arrival_alignment
-            )
-            departure_index = timestamp_to_index(
-                departure_time, grid_start, resolution, departure_alignment
-            )
+            arrival_index = timestamp_to_index(arrival_time, grid_start, resolution, arrival_alignment)
+            departure_index = timestamp_to_index(departure_time, grid_start, resolution, departure_alignment)
             if departure_index <= arrival_index:
                 continue
 
@@ -568,14 +546,11 @@ def _shift_flexband_start_date(flexbands: pd.DataFrame, cfg: PaperConfig) -> pd.
 # Market-optimizer export format (flex-depot input schema)
 # --------------------------------------------------------------------------- #
 
-def to_market_flexband_format(
-    flexbands: pd.DataFrame, snap_collapsed_bands: bool
-) -> pd.DataFrame:
+
+def to_market_flexband_format(flexbands: pd.DataFrame, snap_collapsed_bands: bool) -> pd.DataFrame:
     """Convert internal flexband columns to the flex-depot input format."""
     market = (
-        flexbands[
-            [TIMESTAMP, P_LOWER_KW, P_UPPER_KW, E_LOWER_KWH, E_UPPER_KWH, REF_DRIVING_ENERGY_KWH]
-        ]
+        flexbands[[TIMESTAMP, P_LOWER_KW, P_UPPER_KW, E_LOWER_KWH, E_UPPER_KWH, REF_DRIVING_ENERGY_KWH]]
         .rename(
             columns={
                 TIMESTAMP: "time",
@@ -595,15 +570,14 @@ def to_market_flexband_format(
         # cannot flip their ordering when the CSV is read back.
         width = market["Capacity_upper_kWh"] - market["Capacity_lower_kWh"]
         collapsed = width.abs() < ENERGY_BAND_SNAP_TOLERANCE_KWH
-        market.loc[collapsed, "Capacity_lower_kWh"] = market.loc[
-            collapsed, "Capacity_upper_kWh"
-        ]
+        market.loc[collapsed, "Capacity_lower_kWh"] = market.loc[collapsed, "Capacity_upper_kWh"]
     return market
 
 
 # --------------------------------------------------------------------------- #
 # Orchestration
 # --------------------------------------------------------------------------- #
+
 
 def generate_case(case: str) -> pd.DataFrame:
     """Generate the market-format VB bands for one case ('uni' or 'bidi')."""
@@ -614,9 +588,7 @@ def generate_case(case: str) -> pd.DataFrame:
     tracks_with_fleets = _apply_fleet3_time_filter(tracks_with_fleets, cfg)
     sessions = build_depot_sessions(tracks_with_fleets, cfg)
     flexbands = build_depot_flexbands(sessions, cfg)
-    return to_market_flexband_format(
-        flexbands, snap_collapsed_bands=CASE_SNAP_COLLAPSED[case]
-    )
+    return to_market_flexband_format(flexbands, snap_collapsed_bands=CASE_SNAP_COLLAPSED[case])
 
 
 def main() -> int:

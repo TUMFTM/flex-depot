@@ -105,11 +105,7 @@ def compute_cashflows_per_step(
     #   p_droop > 0 (downward FCR, import, BKV Unterdeckung) → pay  IMB_POS price
     # cashflow = -eff_price * p_droop * dt  (matches -price * p_market * dt convention)
     # -------------------------------------------------------------------------
-    if (
-        "p_droop_kw" in dispatch.columns
-        and "IMB_POS" in prices_by_market
-        and "IMB_NEG" in prices_by_market
-    ):
+    if "p_droop_kw" in dispatch.columns and "IMB_POS" in prices_by_market and "IMB_NEG" in prices_by_market:
         p_droop = dispatch["p_droop_kw"].astype(float)
         pos_price = prices_by_market["IMB_POS"]
         neg_price = prices_by_market["IMB_NEG"]
@@ -384,9 +380,7 @@ def compute_kpis(
         if mk == "IMB":
             continue
         col = f"{mk} Cashflow [€/step]"
-        per_market_cf[f"{mk.lower()}_cashflow_eur"] = (
-            float(cf_df[col].sum()) if col in cf_df.columns else 0.0
-        )
+        per_market_cf[f"{mk.lower()}_cashflow_eur"] = float(cf_df[col].sum()) if col in cf_df.columns else 0.0
 
     return {
         "gross_profit_eur": gross_profit_eur,

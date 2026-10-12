@@ -227,8 +227,9 @@ def main() -> int:
             w1 = min(w0 + 2 * half, x[-1])
             w0 = w1 - 2 * half
             in_w = (x >= w0) & (x <= w1)
-            y_ext = max(float(stack_pos[in_w].max(initial=0.0)),
-                        float(-stack_neg[in_w].min(initial=0.0)), 40.0)
+            y_ext = max(
+                float(stack_pos[in_w].max(initial=0.0)), float(-stack_neg[in_w].min(initial=0.0)), 40.0
+            )
             score = float(droop_abs[in_w].sum()) / y_ext
             if score > best_score:
                 best_score, t0, t1, y_zoom = score, w0, w1, 1.15 * y_ext

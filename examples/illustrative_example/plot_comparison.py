@@ -223,9 +223,7 @@ def main() -> int:
     apply_paper_style()
     # Energy Informatics full-page format: 170 mm wide, designed at final size
     # (300 dpi) so the two side-by-side panels and 7-8 pt lettering stay legible.
-    fig, (ax_a, ax_b) = plt.subplots(
-        1, 2, figsize=(FULL_WIDTH_MM * MM_TO_INCH, 68 * MM_TO_INCH)
-    )
+    fig, (ax_a, ax_b) = plt.subplots(1, 2, figsize=(FULL_WIDTH_MM * MM_TO_INCH, 68 * MM_TO_INCH))
 
     _panel_advantage(ax_a, df)
     _panel_composition(ax_b, df)

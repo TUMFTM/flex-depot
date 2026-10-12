@@ -68,6 +68,7 @@ def _build_model(
 # 1. Big-M switching: no simultaneous import / export
 # =============================================================================
 
+
 @pytest.mark.parametrize("solver_name", ["highs"])
 def test_milp_no_simultaneous_import_export(solver_name):
     """
@@ -87,7 +88,7 @@ def test_milp_no_simultaneous_import_export(solver_name):
     """
     prices = {
         "DA": [0.05, -0.60, 0.05, 0.05],
-        "ID": [0.05,  0.60, 0.05, 0.05],
+        "ID": [0.05, 0.60, 0.05, 0.05],
     }
     m = _build_model(prices, virtual_arbitrage=False)
     solve_model(m, solver_name=solver_name)
@@ -95,10 +96,10 @@ def test_milp_no_simultaneous_import_export(solver_name):
     T = list(m.T)
     markets = list(m.MARKETS)
 
-    p_ch  = np.array([pyo.value(m.p_ch[t])  for t in T])
+    p_ch = np.array([pyo.value(m.p_ch[t]) for t in T])
     p_dis = np.array([pyo.value(m.p_dis[t]) for t in T])
 
-    assert np.all(p_ch  >= -1e-6), "p_ch must be non-negative at all steps"
+    assert np.all(p_ch >= -1e-6), "p_ch must be non-negative at all steps"
     assert np.all(p_dis >= -1e-6), "p_dis must be non-negative at all steps"
 
     prod_physical = p_ch * p_dis
@@ -106,12 +107,8 @@ def test_milp_no_simultaneous_import_export(solver_name):
         f"Simultaneous physical charge and discharge: max p_ch·p_dis = {prod_physical.max():.3e}"
     )
 
-    total_pos = np.array([
-        sum(pyo.value(m.p_market_pos[mk, t]) for mk in markets) for t in T
-    ])
-    total_neg = np.array([
-        sum(pyo.value(m.p_market_neg[mk, t]) for mk in markets) for t in T
-    ])
+    total_pos = np.array([sum(pyo.value(m.p_market_pos[mk, t]) for mk in markets) for t in T])
+    total_neg = np.array([sum(pyo.value(m.p_market_neg[mk, t]) for mk in markets) for t in T])
 
     prod_market = total_pos * total_neg
     assert np.all(prod_market < 1e-6), (
@@ -124,6 +121,7 @@ def test_milp_no_simultaneous_import_export(solver_name):
 # =============================================================================
 # 2. Energy state transition: η_c / η_d balance equation
 # =============================================================================
+
 
 @pytest.mark.parametrize("solver_name", ["highs"])
 def test_energy_transition_satisfies_efficiency_balance(solver_name):
@@ -142,9 +140,9 @@ def test_energy_transition_satisfies_efficiency_balance(solver_name):
     solve_model(m, solver_name=solver_name)
 
     T = list(m.T)
-    E     = np.array([pyo.value(m.E[t])     for t in T])
+    E = np.array([pyo.value(m.E[t]) for t in T])
     E_nxt = np.array([pyo.value(m.E[t + 1]) for t in T])
-    p_ch  = np.array([pyo.value(m.p_ch[t])  for t in T])
+    p_ch = np.array([pyo.value(m.p_ch[t]) for t in T])
     p_dis = np.array([pyo.value(m.p_dis[t]) for t in T])
 
     expected = E + eta_c * p_ch * dt_h - p_dis / eta_d * dt_h
@@ -160,6 +158,7 @@ def test_energy_transition_satisfies_efficiency_balance(solver_name):
 # 3. Flex-band compliance: power and energy bounds always respected
 # =============================================================================
 
+
 @pytest.mark.parametrize("solver_name", ["highs"])
 def test_solved_dispatch_respects_flex_band(solver_name):
     """
@@ -170,7 +169,7 @@ def test_solved_dispatch_respects_flex_band(solver_name):
     """
     # Six decision steps → seven state entries (last row needed for E[N]).
     p_lo = [-800.0, -400.0, -600.0, -300.0, -700.0, -800.0, -800.0]
-    p_hi = [ 800.0,  400.0,  600.0,  300.0,  700.0,  800.0,  800.0]
+    p_hi = [800.0, 400.0, 600.0, 300.0, 700.0, 800.0, 800.0]
 
     prices = {"DA": [0.05, 0.20, 0.08, 0.35, 0.05, 0.10]}
     m = _build_model(
@@ -186,12 +185,12 @@ def test_solved_dispatch_respects_flex_band(solver_name):
     T = list(m.T)
     S = list(m.S)
 
-    p_net  = np.array([pyo.value(m.p_net[t])    for t in T])
-    p_lo_v = np.array([pyo.value(m.P_lower[t])  for t in T])
-    p_hi_v = np.array([pyo.value(m.P_upper[t])  for t in T])
-    E      = np.array([pyo.value(m.E[s])         for s in S])
-    e_lo_v = np.array([pyo.value(m.E_lower[s])  for s in S])
-    e_hi_v = np.array([pyo.value(m.E_upper[s])  for s in S])
+    p_net = np.array([pyo.value(m.p_net[t]) for t in T])
+    p_lo_v = np.array([pyo.value(m.P_lower[t]) for t in T])
+    p_hi_v = np.array([pyo.value(m.P_upper[t]) for t in T])
+    E = np.array([pyo.value(m.E[s]) for s in S])
+    e_lo_v = np.array([pyo.value(m.E_lower[s]) for s in S])
+    e_hi_v = np.array([pyo.value(m.E_upper[s]) for s in S])
 
     violations_p_lo = np.where(p_net < p_lo_v - 1e-6)[0]
     violations_p_hi = np.where(p_net > p_hi_v + 1e-6)[0]

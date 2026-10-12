@@ -129,9 +129,7 @@ def main() -> int:
     index = pd.read_csv(index_path)
     # Build one row per run, keyed by the raw scenario id (e.g. "s1", "s1_uni").
     rows_by_id = {
-        str(r["scenario"]): _scenario_row(
-            str(r["scenario"]), Path(str(r["run_dir"])), float(r["runtime_s"])
-        )
+        str(r["scenario"]): _scenario_row(str(r["scenario"]), Path(str(r["run_dir"])), float(r["runtime_s"]))
         for _, r in index.iterrows()
     }
 

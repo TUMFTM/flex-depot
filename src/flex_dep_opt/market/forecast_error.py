@@ -54,8 +54,7 @@ def perturb_prices(settlement: pd.Series, z: pd.Series, sigma_eur_per_mwh: float
     missing = settlement.index.difference(z.index)
     if len(missing) > 0:
         raise ValueError(
-            f"error shape z does not cover {len(missing)} settlement timestamps "
-            f"(first: {missing[0]})"
+            f"error shape z does not cover {len(missing)} settlement timestamps (first: {missing[0]})"
         )
 
     decision = settlement + (sigma_eur_per_mwh / 1000.0) * z.reindex(settlement.index)

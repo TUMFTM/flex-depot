@@ -190,7 +190,7 @@ def flexibility_commercialization(
             if t not in t_to_fcr_slot:
                 continue
             d = droop_by_t[t]
-            if d > 0.0:   # upward FCR (export, Überdeckung) → earn IMB_NEG price
+            if d > 0.0:  # upward FCR (export, Überdeckung) → earn IMB_NEG price
                 fcr_act_price_by_t[t] = rebap_neg_arr[t]
             elif d < 0.0:  # downward FCR (import, Unterdeckung) → pay IMB_POS price
                 fcr_act_price_by_t[t] = rebap_pos_arr[t]
