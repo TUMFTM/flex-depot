@@ -1,5 +1,6 @@
 from importlib.metadata import PackageNotFoundError, version
 
+from flex_dep_opt.batch import run_batch
 from flex_dep_opt.config.settings import Settings
 from flex_dep_opt.errors import SimulationError
 from flex_dep_opt.io.inputs import SimulationInputs, load_inputs
@@ -20,5 +21,6 @@ __all__ = [
     "SimulationResult",
     "evaluate",
     "load_inputs",
+    "run_batch",
     "simulate",
 ]

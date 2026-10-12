@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel, ValidationError
 
-from flex_dep_opt.cli import _load_merged
+from flex_dep_opt.batch import _load_merged
 from flex_dep_opt.config.settings import Settings
 
 REPO_ROOT = Path(__file__).parent.parent
