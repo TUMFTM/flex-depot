@@ -1,10 +1,10 @@
+import tomllib
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 import toml
-from pydantic import BaseModel, Field, PrivateAttr, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict, TomlConfigSettingsSource
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
 
 
 class SimulationSettings(BaseModel):
@@ -173,25 +173,20 @@ BASE_DIR = Path(__file__).resolve().parent
 _DEFAULT_TOML = BASE_DIR / "settings_quickstart.toml"
 
 
-class Settings(BaseSettings):
+class Settings(BaseModel):
     simulation: SimulationSettings
     optimization: OptimizationSettings
     postprocessing: PostprocessingSettings = Field(default_factory=PostprocessingSettings)
 
     _source_path: Path | None = PrivateAttr(default=None)
 
-    model_config = SettingsConfigDict(toml_file=_DEFAULT_TOML, env_nested_delimiter="__")
+    model_config = ConfigDict(extra="forbid")
 
     @classmethod
-    def settings_customise_sources(
-        cls,
-        settings_cls,
-        init_settings,
-        env_settings,
-        dotenv_settings,
-        file_secret_settings,
-    ):
-        return (TomlConfigSettingsSource(settings_cls),)
+    def from_dict(cls, data: dict[str, Any], source_path: str | Path | None = None) -> "Settings":
+        instance = cls.model_validate(data)
+        instance._source_path = Path(source_path) if source_path is not None else None
+        return instance
 
     @classmethod
     def load(cls, config_path: str | Path | None = None) -> "Settings":
@@ -199,14 +194,9 @@ class Settings(BaseSettings):
         if config_path is not None and not resolved.is_file():
             raise FileNotFoundError(f"Config file not found: {resolved}")
 
-        cls.model_config["toml_file"] = resolved
-        try:
-            instance = cls()
-        finally:
-            cls.model_config["toml_file"] = _DEFAULT_TOML
-
-        instance._source_path = resolved
-        return instance
+        with open(resolved, "rb") as f:
+            data = tomllib.load(f)
+        return cls.from_dict(data, source_path=resolved)
 
     def save_to_toml(self, path: str | Path | None = None):
         save_path = path or self._source_path

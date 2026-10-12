@@ -2,14 +2,12 @@ import argparse
 import logging
 import multiprocessing as mp
 import os
-import tempfile
 import tomllib
 import traceback
 from functools import partial
 from pathlib import Path
 
 import pandas as pd
-import toml
 
 from flex_dep_opt._logging import configure_logging
 from flex_dep_opt.config.settings import Settings
@@ -49,13 +47,7 @@ def _load_merged(config_path: str, default_path: str | None) -> Settings:
         base = tomllib.load(f)
     with open(config_path, "rb") as f:
         merged = _deep_merge(base, tomllib.load(f))
-    with tempfile.NamedTemporaryFile("w", suffix=".toml", delete=False) as tf:
-        toml.dump(merged, tf)
-        tmp = tf.name
-    try:
-        return Settings.load(tmp)
-    finally:
-        os.unlink(tmp)
+    return Settings.from_dict(merged, source_path=config_path)
 
 
 def _run_one(config_path: str, default_path: str | None = None, results_root: str | None = None) -> dict:
