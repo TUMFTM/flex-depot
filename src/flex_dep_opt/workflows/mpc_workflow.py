@@ -120,27 +120,6 @@ def _fcr_breakeven_metrics(
     }
 
 
-class _TqdmLoggingHandler(logging.Handler):
-    def emit(self, record):
-        try:
-            tqdm.write(self.format(record))
-        except Exception:
-            self.handleError(record)
-
-
-def _configure_logging() -> None:
-    root_logger = logging.getLogger()
-    if not any(isinstance(h, _TqdmLoggingHandler) for h in root_logger.handlers):
-        for h in list(root_logger.handlers):
-            root_logger.removeHandler(h)
-        handler = _TqdmLoggingHandler()
-        handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
-        root_logger.addHandler(handler)
-        root_logger.setLevel(logging.INFO)
-    logging.getLogger("pyomo").setLevel(logging.WARNING)
-    logging.getLogger("pyomo.core").setLevel(logging.ERROR)
-
-
 def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
     """
     Rolling-horizon Model Predictive Control (MPC).
@@ -157,7 +136,6 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
     Gate-closure times are computed in the market layer via `gate_closure_timestamp()`.
     This ensures mask enforcement and commit logging use the exact same rules.
     """
-    _configure_logging()
     run_started_at = datetime.now(ZoneInfo(LOCAL_TIMEZONE))
 
     # ============================================================

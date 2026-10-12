@@ -11,6 +11,7 @@ from pathlib import Path
 import pandas as pd
 import toml
 
+from flex_dep_opt._logging import configure_logging
 from flex_dep_opt.config.settings import Settings
 from flex_dep_opt.io.results import make_run_dir
 from flex_dep_opt.workflows.mpc_workflow import run_mpc
@@ -58,6 +59,7 @@ def _load_merged(config_path: str, default_path: str | None) -> Settings:
 
 
 def _run_one(config_path: str, default_path: str | None = None, results_root: str | None = None) -> dict:
+    configure_logging()  # batch workers are spawned processes and start without handlers
     run_dir: Path | None = Path(results_root) / Path(config_path).stem if results_root else None
     # sim_start/sim_end make the manifest self-contained for annualization,
     # so plots work from the manifest.csv alone (run dirs are often too big
@@ -140,6 +142,7 @@ def main():
     )
 
     args = parser.parse_args()
+    configure_logging()
 
     if args.cmd == "run-sim":
         run_mpc(Settings.load(args.config), run_dir=Path(args.run_dir) if args.run_dir else None)
