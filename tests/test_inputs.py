@@ -65,3 +65,12 @@ def test_fcr_prices_lie_inside_the_window(settings, inputs):
     assert not inputs.fcr_prices.empty
     assert inputs.fcr_prices.index.min() >= start
     assert inputs.fcr_prices.index.max() <= end
+
+
+def test_missing_reference_energy_column_fails_before_the_simulation(monkeypatch):
+    monkeypatch.chdir(REPO_ROOT)
+    settings = Settings.from_toml(EXAMPLE_TOML)
+    settings.postprocessing.reference_driving_energy_costs.energy_column = "no_such_column"
+
+    with pytest.raises(ValueError, match="no_such_column"):
+        load_inputs(settings)

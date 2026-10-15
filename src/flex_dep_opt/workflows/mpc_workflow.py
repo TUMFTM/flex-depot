@@ -105,7 +105,7 @@ def _fcr_breakeven_metrics(
     }
 
 
-def simulate(settings: Settings, inputs: SimulationInputs) -> SimulationResult:
+def simulate(settings: Settings, inputs: SimulationInputs, progress: bool = True) -> SimulationResult:
     """
     Rolling-horizon Model Predictive Control (MPC).
 
@@ -282,7 +282,7 @@ def simulate(settings: Settings, inputs: SimulationInputs) -> SimulationResult:
     # ============================================================
     # 9) Rolling-horizon MPC loop
     # ============================================================
-    pbar = tqdm(total=len(full_index), desc="MPC", unit="step", dynamic_ncols=True)
+    pbar = tqdm(total=len(full_index), desc="MPC", unit="step", dynamic_ncols=True, disable=not progress)
     try:
         for i in range(len(full_index)):
             current_time = full_index[i]
@@ -778,12 +778,8 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
 
 
 def _save_run(result: SimulationResult, run_dir: Path | None) -> Path:
-    name = result.settings.simulation.name.strip()
-    if not name:
-        raise ValueError("simulation.name must be set in the settings file (e.g. 'illustrative_example').")
-
     if run_dir is None:
-        run_dir = make_run_dir("results", name, tz=LOCAL_TIMEZONE)
+        run_dir = make_run_dir("results", result.settings.simulation.name.strip(), tz=LOCAL_TIMEZONE)
         write_latest_run_pointer(run_dir, results_root="results")
 
     return result.save(run_dir)

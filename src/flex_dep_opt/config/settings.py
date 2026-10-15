@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 import toml
-from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
 
 class _StrictModel(BaseModel):
@@ -49,6 +49,13 @@ class SimulationSettings(_StrictModel):
             "0 disables warm-up."
         ),
     )
+
+    @field_validator("name")
+    @classmethod
+    def _name_not_blank(cls, name: str) -> str:
+        if not name.strip():
+            raise ValueError("simulation.name must not be empty (e.g. 'illustrative_example').")
+        return name
 
 
 class ForecastErrorSettings(_StrictModel):
@@ -261,6 +268,15 @@ class ReferenceDrivingEnergyCostsSettings(_StrictModel):
             ),
         ),
     ] = 0.98
+
+    @model_validator(mode="after")
+    def _price_required_when_enabled(self) -> "ReferenceDrivingEnergyCostsSettings":
+        if self.enabled and self.static_price_eur_per_kwh is None:
+            raise ValueError(
+                "postprocessing.reference_driving_energy_costs.static_price_eur_per_kwh "
+                "must be set when the reference calculation is enabled."
+            )
+        return self
 
 
 class PostprocessingSettings(_StrictModel):

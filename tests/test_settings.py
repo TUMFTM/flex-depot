@@ -72,3 +72,19 @@ def test_unknown_key_inside_a_section_is_rejected():
 
     with pytest.raises(ValidationError, match="fee_eur_per_kw"):
         Settings.from_dict(data)
+
+
+def test_blank_simulation_name_is_rejected():
+    data = _example_dict()
+    data["simulation"]["name"] = "  "
+
+    with pytest.raises(ValidationError, match="simulation.name must not be empty"):
+        Settings.from_dict(data)
+
+
+def test_reference_cost_without_price_is_rejected():
+    data = _example_dict()
+    data["postprocessing"]["reference_driving_energy_costs"]["static_price_eur_per_kwh"] = None
+
+    with pytest.raises(ValidationError, match="static_price_eur_per_kwh must be set"):
+        Settings.from_dict(data)

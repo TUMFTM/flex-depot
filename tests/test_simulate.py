@@ -124,3 +124,9 @@ def test_solver_tee_setting_reaches_the_solver(settings, monkeypatch):
     simulate(settings, load_inputs(settings))
 
     assert tee_values and all(tee_values)
+
+
+def test_progress_bar_can_be_switched_off(settings, capsys):
+    simulate(settings, load_inputs(settings), progress=False)
+
+    assert "MPC" not in capsys.readouterr().err

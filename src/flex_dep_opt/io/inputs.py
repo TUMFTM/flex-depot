@@ -18,6 +18,7 @@ from flex_dep_opt.io.prices import (
 )
 from flex_dep_opt.io.time import LOCAL_TIMEZONE, local_config_timestamp_to_utc, validate_regular_index
 from flex_dep_opt.market.forecast_error import draw_ar1_shape, perturb_prices
+from flex_dep_opt.post.reference_energy_costs import DEFAULT_REFERENCE_ENERGY_COLUMN
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,17 @@ def load_inputs(settings: Settings) -> SimulationInputs:
     warmup_hours = float(sim_cfg.warmup_hours)
 
     flexibility_bounds_full = read_flexibility_bounds_csv(opt_cfg.flexibility.bounds_file)
+
+    # evaluate() reads this column from the same file; check it before a long simulation.
+    ref_cfg = settings.postprocessing.reference_driving_energy_costs
+    if ref_cfg.enabled:
+        columns = pd.read_csv(opt_cfg.flexibility.bounds_file, nrows=0).columns
+        energy_column = ref_cfg.energy_column or DEFAULT_REFERENCE_ENERGY_COLUMN
+        if energy_column not in columns:
+            raise ValueError(
+                f"{opt_cfg.flexibility.bounds_file} must contain reference energy column "
+                f"'{energy_column}' when reference_driving_energy_costs.enabled is true."
+            )
 
     fcr_prices_full = (
         get_fcr_prices(opt_cfg.trading.fcr.prices_source)
