@@ -505,7 +505,6 @@ def simulate(settings: Settings, inputs: SimulationInputs, progress: bool = True
 
             except RuntimeError as e1:
                 if not imb_enabled:
-                    tqdm.write("ERROR - PASS1 infeasible and imbalance disabled -- abort")
                     logger.error(f"PASS1 infeasible at {current_time} and imbalance disabled. Details: {e1}")
                     solved = False
                 else:
@@ -531,7 +530,6 @@ def simulate(settings: Settings, inputs: SimulationInputs, progress: bool = True
                         used_rebap = True
                         model = model2
                     except RuntimeError as e2:
-                        tqdm.write("ERROR - PASS2 also infeasible -- aborting")
                         logger.error(f"PASS2 also infeasible at {current_time}. Details: {e2}")
                         solved = False
 
@@ -773,7 +771,7 @@ def run_mpc(settings: Settings, run_dir: Path | None = None) -> Path:
         logger.error(f"Partial results saved -> {_save_run(exc.partial_result, run_dir).as_posix()}")
         raise
     run_dir = _save_run(result, run_dir)
-    print("MPC finished -- Postprocessing starts")
+    logger.info("MPC finished -- Postprocessing starts")
     return run_dir
 
 

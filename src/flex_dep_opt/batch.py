@@ -125,5 +125,5 @@ def run_batch(
     n_ok = sum(1 for r in rows if r.get("status") == "ok")
     n_failed = sum(1 for r in rows if r.get("status") == "failed")
     status_str = f"{n_ok} ok, {n_failed} failed" if n_failed else f"{n_ok} ok"
-    print(f"Batch done: {len(rows)} runs ({status_str}) -> {manifest}")
+    logger.info(f"Batch done: {len(rows)} runs ({status_str}) -> {manifest}")
     return table

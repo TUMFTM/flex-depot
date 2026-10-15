@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,8 @@ from flex_dep_opt.post.reference_energy_costs import (
     DEFAULT_REFERENCE_ENERGY_COLUMN,
     compute_reference_driving_energy_costs,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -332,12 +335,12 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
 
     result = SimulationResult.load(run_dir, settings=settings)
     settings = result.settings
-    print(f"Settings file used: {settings.get_source_path()}")
+    logger.info(f"Settings file used: {settings.get_source_path()}")
 
     evaluation = evaluate(result)
     kpis = evaluation.kpis
     if "ref_energy_cost_eur" in kpis:
-        print(
+        logger.info(
             "Reference driving energy costs: "
             f"{kpis['ref_energy_cost_eur']:.2f} EUR for "
             f"{kpis['ref_driving_energy_kwh']:.2f} kWh driving energy "
@@ -350,8 +353,8 @@ def postprocess_mpc_results(settings: Settings | None = None, run_dir: Path | No
     if not settings.postprocessing.save_commits:
         (run_dir / "commit.csv").unlink(missing_ok=True)
         (run_dir / "fcr_commit.csv").unlink(missing_ok=True)
-        print("Commit CSVs removed (postprocessing.save_commits = false)")
+        logger.info("Commit CSVs removed (postprocessing.save_commits = false)")
 
-    print(f"Result CSV files saved -> {run_dir.as_posix()}")
-    print(f"Result HTML plots saved -> {run_dir.as_posix()}")
-    print("Postprocessing finished")
+    logger.info(f"Result CSV files saved -> {run_dir.as_posix()}")
+    logger.info(f"Result HTML plots saved -> {run_dir.as_posix()}")
+    logger.info("Postprocessing finished")

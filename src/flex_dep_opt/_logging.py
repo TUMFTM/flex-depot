@@ -5,6 +5,12 @@ import logging
 from tqdm.auto import tqdm
 
 
+class _ConsoleFormatter(logging.Formatter):
+    def format(self, record):
+        message = super().format(record)
+        return message if record.levelno == logging.INFO else f"{record.levelname}: {message}"
+
+
 class _TqdmLoggingHandler(logging.Handler):
     def emit(self, record):
         try:
@@ -19,7 +25,7 @@ def configure_logging() -> None:
         for h in list(root_logger.handlers):
             root_logger.removeHandler(h)
         handler = _TqdmLoggingHandler()
-        handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+        handler.setFormatter(_ConsoleFormatter())
         root_logger.addHandler(handler)
         root_logger.setLevel(logging.INFO)
     logging.getLogger("pyomo").setLevel(logging.WARNING)
