@@ -108,3 +108,19 @@ def test_evaluation_save_writes_the_report_files(settings, tmp_path):
     )
     assert len(pd.read_csv(tmp_path / "cashflow.csv")) == len(evaluation.cashflows)
     assert (tmp_path / "dispatch.html").exists() and (tmp_path / "cashflow.html").exists()
+
+
+def test_solver_tee_setting_reaches_the_solver(settings, monkeypatch):
+    settings.simulation.solver_tee = True
+    tee_values = []
+    solve_model = mpc_workflow.solve_model
+
+    def record_tee(*args, **kwargs):
+        tee_values.append(kwargs.get("tee"))
+        return solve_model(*args, **kwargs)
+
+    monkeypatch.setattr(mpc_workflow, "solve_model", record_tee)
+
+    simulate(settings, load_inputs(settings))
+
+    assert tee_values and all(tee_values)

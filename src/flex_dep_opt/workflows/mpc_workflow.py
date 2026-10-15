@@ -498,6 +498,7 @@ def simulate(settings: Settings, inputs: SimulationInputs) -> SimulationResult:
                     threads=sim_cfg.solver_threads,
                     mip_gap=sim_cfg.solver_mip_gap,
                     time_limit_s=sim_cfg.solver_time_limit_s,
+                    tee=sim_cfg.solver_tee,
                 )
                 solved = True
                 used_rebap = False
@@ -524,6 +525,7 @@ def simulate(settings: Settings, inputs: SimulationInputs) -> SimulationResult:
                             threads=sim_cfg.solver_threads,
                             mip_gap=sim_cfg.solver_mip_gap,
                             time_limit_s=sim_cfg.solver_time_limit_s,
+                            tee=sim_cfg.solver_tee,
                         )
                         solved = True
                         used_rebap = True
@@ -662,6 +664,7 @@ def simulate(settings: Settings, inputs: SimulationInputs) -> SimulationResult:
                                 threads=sim_cfg.solver_threads,
                                 mip_gap=sim_cfg.solver_mip_gap,
                                 time_limit_s=sim_cfg.solver_time_limit_s,
+                                tee=sim_cfg.solver_tee,
                             )
                             terms_cf = extract_objective_terms(model)
                             if bid_val > 0:
