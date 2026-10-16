@@ -436,6 +436,8 @@ def plot_mpc_dispatch_plotly(
                 declined_mask = status == "ok_entry_price"
             else:
                 declined_mask = bdf["margin_eur_per_mw"] < 0
+            if "accepted" in bdf.columns:
+                declined_mask = declined_mask | (bdf["accepted"].astype(str) == "False")
 
             xs: list = []
             clearing_ys: list = []
@@ -520,7 +522,7 @@ def plot_mpc_dispatch_plotly(
                 bdf[declined_mask],
                 color=FCR_RED,
                 fill=FCR_RED_LIGHT,
-                name="FCR Entry Price (declined) [€/MW]",
+                name="FCR Entry Price (declined/rejected) [€/MW]",
                 group="fcr_entry_price",
             )
 
