@@ -11,10 +11,7 @@ def droop_signal(
     deadband_hz: float,
     full_activation_hz: float,
 ) -> pd.Series:
-    """
-    FCR droop signal in [-1, +1]. No activation inside the deadband, then a
-    linear ramp from the deadband edge up to full activation
-    """
+    """FCR droop signal in [-1, +1]: zero inside the deadband, then linear up to full activation."""
     span = full_activation_hz - deadband_hz
     if span <= 0:
         raise ValueError("full_activation_hz must be greater than deadband_hz")
@@ -31,11 +28,9 @@ def fcr_gate_closure_timestamp(
     closes_previous_day: bool = True,
     timezone: str = "Europe/Berlin",
 ) -> pd.Timestamp:
-    """
-    Capacity-market gate-closure timestamp for an FCR 4 h slot.
-    """
+    """Gate closure of the FCR capacity auction for the slot starting at `slot_start`."""
     hh, mm = (int(x) for x in hour.split(":"))
-    day = slot_start.normalize()
+    day = slot_start.tz_convert(timezone).normalize()
     if closes_previous_day:
         day = day - pd.Timedelta(days=1)
     return day.replace(hour=hh, minute=mm, tzinfo=ZoneInfo(timezone))
