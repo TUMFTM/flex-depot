@@ -21,7 +21,6 @@ class SimulationSettings(_StrictModel):
     solver: Literal["cbc", "gurobi", "highs"] = Field(
         default="highs", description="Optimization solver backend."
     )
-    # Default 8 matches the previous hard-coded solve_model default.
     solver_threads: int | None = Field(
         default=8,
         description="Solver thread count. Set 1 for batch runs that parallelize across scenarios (`--jobs`).",
@@ -59,10 +58,6 @@ class SimulationSettings(_StrictModel):
 
 
 class ForecastErrorSettings(_StrictModel):
-    # Per-market decision- vs. settlement-price split: the MPC optimizes on a
-    # synthetically perturbed price series (settlement + sigma * z, z ~ AR(1)
-    # with unit variance), while cashflows are settled on the real CSV prices.
-    # Applies to any market (DA or ID) that carries this block.
     enabled: bool = Field(
         default=False,
         description=(
@@ -210,8 +205,6 @@ class TradingSettings(_StrictModel):
 
     @model_validator(mode="after")
     def _fcr_requires_realistic_mode(self) -> "TradingSettings":
-        # FCR always commits at its real D-1 gate closure; mode="none" leaves
-        # DA/ID always-open. Mixing them silently is a footgun, so reject it.
         if self.fcr.enabled and self.mode == "none":
             raise ValueError(
                 "optimization.trading.fcr.enabled=true requires trading.mode='realistic' "
@@ -288,9 +281,6 @@ class ReferenceDrivingEnergyCostsSettings(_StrictModel):
         default="Ref_driving_energy_kWh",
         description="Column in the flexibility CSV with the grid-side reference driving energy in kWh per step.",
     )
-    # The reference energy column is already grid-side (the flexband aggregation
-    # stores battery demand / charging efficiency), so this value is not applied
-    # to the cost again; it is only written to the KPIs for provenance.
     charging_efficiency: Annotated[
         float,
         Field(
@@ -314,9 +304,6 @@ class ReferenceDrivingEnergyCostsSettings(_StrictModel):
 
 
 class PostprocessingSettings(_StrictModel):
-    # commit.csv / fcr_commit.csv are the dominant disk cost per run. They must
-    # still be written by the simulation since postprocessing reads them back
-    # from the run directory.
     save_commits: bool = Field(
         default=True,
         description=(

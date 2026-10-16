@@ -50,9 +50,10 @@ def test_gate_closure_same_day_and_custom_hour():
     assert gc == pd.Timestamp("2025-10-02 06:30", tz="Europe/Berlin")
 
 
-# =============================================================================
-# Integration tests: FCR activation cashflow (Option A)
-# =============================================================================
+def test_gate_closure_uses_the_local_delivery_day_for_utc_slots():
+    # the 00:00 Berlin slot starts on the previous day in UTC
+    slot = pd.Timestamp("2025-10-02 00:00", tz="Europe/Berlin").tz_convert("UTC")
+    assert fcr_gate_closure_timestamp(slot) == pd.Timestamp("2025-10-01 08:00", tz="Europe/Berlin")
 
 
 def _make_fcr_model(

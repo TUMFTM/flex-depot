@@ -64,11 +64,6 @@ def _build_model(
     return m
 
 
-# =============================================================================
-# 1. Big-M switching: no simultaneous import / export
-# =============================================================================
-
-
 @pytest.mark.parametrize("solver_name", ["highs"])
 def test_milp_no_simultaneous_import_export(solver_name):
     """
@@ -118,11 +113,6 @@ def test_milp_no_simultaneous_import_export(solver_name):
     )
 
 
-# =============================================================================
-# 2. Energy state transition: η_c / η_d balance equation
-# =============================================================================
-
-
 @pytest.mark.parametrize("solver_name", ["highs"])
 def test_energy_transition_satisfies_efficiency_balance(solver_name):
     """
@@ -152,11 +142,6 @@ def test_energy_transition_satisfies_efficiency_balance(solver_name):
         atol=1e-6,
         err_msg="E[t+1] = E[t] + η_c·p_ch·dt − p_dis/η_d·dt violated",
     )
-
-
-# =============================================================================
-# 3. Flex-band compliance: power and energy bounds always respected
-# =============================================================================
 
 
 @pytest.mark.parametrize("solver_name", ["highs"])
