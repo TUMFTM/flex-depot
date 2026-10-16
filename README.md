@@ -172,6 +172,26 @@ latest run (from ```results/LATEST.txt```).
 Note: data paths inside the TOML configs are resolved relative to the current working
 directory — run the commands from the repository root (as ```run_quickstart.bat``` / ```run_quickstart.sh``` do).
 
+### Python API
+The same workflow is available from Python, with all results as pandas objects in memory:
+```python
+import flex_dep_opt as fd
+
+settings = fd.Settings.from_toml("src/flex_dep_opt/config/settings_quickstart.toml")
+inputs = fd.load_inputs(settings)            # price series, flexibility bounds, FCR data
+result = fd.simulate(settings, inputs)       # result.dispatch, result.commits, result.fcr_commits
+evaluation = fd.evaluate(result)             # evaluation.kpis, evaluation.cashflows, Plotly figures
+
+result.save("results/my_run")                # same files as run-sim
+evaluation.save("results/my_run")            # same files as run-post
+```
+Settings can be changed in Python before a run (e.g. `settings.simulation.end = ...`).
+`fd.SimulationResult.load(run_dir)` reads a saved run back, and `fd.run_batch(configs_dir)` runs a
+scenario batch like `run-batch` and returns the manifest as a DataFrame. An infeasible MPC step raises
+`fd.SimulationError`, which carries the steps solved so far in `partial_result`. Status messages are
+emitted through `logging` and are silent by default; the example shows how to switch them on.
+A runnable version is [examples/python_api.py](examples/python_api.py).
+
 Within the TOML file all parameters for a simulation run can be set: 
 
 The tables below are generated from the settings model in `src/flex_dep_opt/config/settings.py`.
