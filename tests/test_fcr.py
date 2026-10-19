@@ -295,3 +295,111 @@ if __name__ == "__main__":
     test_gate_closure_d_minus_1_default()
     test_gate_closure_same_day_and_custom_hour()
     print("ok")
+
+
+def _make_directional_fcr_model(
+    droop_vals: list[float],
+    *,
+    da_prices: list[float],
+    p_band_kw: float,
+    committed_da: dict[int, float] | None = None,
+    grid_limit_kw: float = 5000.0,
+) -> pyo.ConcreteModel:
+    """
+    Default (directional MILP) FCR model with one committed 1 MW slot over all
+    steps. `committed_da` pins DA positions {step: kW} as closed-gate commitments.
+    """
+    tz = "Europe/Berlin"
+    slot_start = pd.Timestamp("2026-01-01 00:00", tz=tz)
+    n = len(droop_vals)
+    idx = pd.date_range(slot_start, periods=n, freq="h", tz=tz)
+    state_idx = pd.date_range(slot_start, periods=n + 1, freq="h", tz=tz)
+
+    committed_da = committed_da or {}
+    mask = pd.Series(True, index=idx)
+    committed = pd.Series(0.0, index=idx)
+    for t, val in committed_da.items():
+        mask.iloc[t] = False
+        committed.iloc[t] = val
+
+    bounds = pd.DataFrame(
+        {
+            "Power_lower_kW": -p_band_kw,
+            "Power_upper_kW": p_band_kw,
+            "Capacity_lower_kWh": 0.0,
+            "Capacity_upper_kWh": 10000.0,
+        },
+        index=state_idx,
+    )
+    depot = Depot(eta_grid2depot=1.0, eta_depot2grid=1.0, grid_connection_limit=grid_limit_kw)
+    m = flexibility_commercialization(
+        depot=depot,
+        prices_by_market={"DA": pd.Series(da_prices, index=idx)},
+        timestep_hours=1.0,
+        virtual_arbitrage=False,
+        cycling_cost_eur_per_kwh=0.0,
+        market_activity_mask={"DA": mask},
+        committed_positions={"DA": committed},
+        flexibility_bounds=bounds,
+        fcr_prices=pd.Series([100.0], index=[slot_start]),
+        fcr_frequency_data=pd.DataFrame({FCR_DROOP_COL: droop_vals}, index=idx),
+        fcr_bid_block_kw=1000.0,
+    )
+    m.fcr_gate_open[0].set_value(0)
+    m.x_fcr_committed[0].set_value(1000.0)
+    m.E0.set_value(5000.0)
+    return m
+
+
+@pytest.mark.parametrize("solver_name", ["highs"])
+def test_fcr_activation_may_reverse_committed_spot_direction(solver_name):
+    """
+    A committed 200 kW DA import and an upward activation of 500 kW
+    (droop=+0.5, x_fcr=1 MW) give a physical export of 300 kW. The spot
+    direction binary must not forbid this physical reversal, so the strict
+    first pass stays feasible and the depot actually delivers the activation.
+    """
+    m = _make_directional_fcr_model(
+        [0.5, 0.0, 0.0, 0.0],
+        da_prices=[0.05] * 4,
+        p_band_kw=2000.0,
+        committed_da={0: 200.0},
+    )
+    solve_model(m, solver_name="highs")
+
+    assert pyo.value(m.p_net[0]) == pytest.approx(-300.0, abs=1e-6)
+    assert pyo.value(m.p_dis[0]) == pytest.approx(300.0, abs=1e-6)
+    assert pyo.value(m.p_ch[0]) == pytest.approx(0.0, abs=1e-6)
+
+
+@pytest.mark.parametrize("solver_name", ["highs"])
+def test_fcr_power_headroom_limits_spot_schedule(solver_name):
+    """
+    With a ±1.5 MW band and 1 MW committed FCR, the spot schedule may only use
+    ±0.5 MW on covered steps, however attractive the prices are, so that full
+    activation in either direction stays inside the power band.
+    """
+    m = _make_directional_fcr_model(
+        [0.0, 0.0, 0.0, 0.0],
+        da_prices=[-1.0, 1.0, -1.0, 1.0],
+        p_band_kw=1500.0,
+    )
+    solve_model(m, solver_name="highs")
+
+    spot = [pyo.value(m.p_market["DA", t]) for t in m.T]
+    assert spot == pytest.approx([500.0, -500.0, 500.0, -500.0], abs=1e-6)
+
+
+@pytest.mark.parametrize("solver_name", ["highs"])
+def test_fcr_power_headroom_respects_grid_limit(solver_name):
+    """The headroom is taken from the tighter of power band and grid limit."""
+    m = _make_directional_fcr_model(
+        [0.0, 0.0, 0.0, 0.0],
+        da_prices=[-1.0, 1.0, -1.0, 1.0],
+        p_band_kw=3000.0,
+        grid_limit_kw=1200.0,
+    )
+    solve_model(m, solver_name="highs")
+
+    spot = [pyo.value(m.p_market["DA", t]) for t in m.T]
+    assert spot == pytest.approx([200.0, -200.0, 200.0, -200.0], abs=1e-6)
