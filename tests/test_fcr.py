@@ -5,7 +5,7 @@ import pytest
 
 from flex_dep_opt.domain.depot import Depot
 from flex_dep_opt.io.prices import FCR_DROOP_COL
-from flex_dep_opt.market.fcr import droop_signal, fcr_gate_closure_timestamp
+from flex_dep_opt.market.fcr import droop_signal, fcr_gate_closure_timestamp, symmetric_fcr_capacity
 from flex_dep_opt.opt.model import flexibility_commercialization
 from flex_dep_opt.opt.solve import extract_objective_terms, solve_model
 from flex_dep_opt.post.metrics import compute_cashflows_per_step, compute_kpis
@@ -403,3 +403,61 @@ def test_fcr_power_headroom_respects_grid_limit(solver_name):
 
     spot = [pyo.value(m.p_market["DA", t]) for t in m.T]
     assert spot == pytest.approx([200.0, -200.0, 200.0, -200.0], abs=1e-6)
+
+
+def test_symmetric_fcr_capacity_is_half_the_band_width():
+    """FCR capacity is measured around the schedule, not around zero."""
+    grid = 10_000.0
+    # symmetric bidirectional band: unchanged from the old min(P_up, -P_lo)
+    assert symmetric_fcr_capacity([2000.0], [-2000.0], grid_limit_kw=grid) == pytest.approx(2000.0)
+    # charging-only band: schedule at 1.5 MW can move 1.5 MW both ways
+    assert symmetric_fcr_capacity([3000.0], [0.0], grid_limit_kw=grid) == pytest.approx(1500.0)
+    # the tightest step of the slot decides
+    assert symmetric_fcr_capacity([3000.0, 1000.0], [0.0, 0.0], grid_limit_kw=grid) == pytest.approx(500.0)
+    # power band is clipped to the grid limit first
+    assert symmetric_fcr_capacity([3000.0], [-3000.0], grid_limit_kw=1200.0) == pytest.approx(1200.0)
+    assert symmetric_fcr_capacity([3000.0], [0.0], grid_limit_kw=1200.0) == pytest.approx(600.0)
+    # no band, no capacity
+    assert symmetric_fcr_capacity([0.0], [0.0], grid_limit_kw=grid) == 0.0
+    assert symmetric_fcr_capacity([], [], grid_limit_kw=grid) == 0.0
+
+
+@pytest.mark.parametrize("solver_name", ["highs"])
+def test_charging_only_fleet_can_offer_fcr(solver_name):
+    """
+    A charging-only band (0-3 MW) can hold a 1 MW symmetric FCR block by
+    charging between 1 and 2 MW, without ever discharging.
+    """
+    tz = "Europe/Berlin"
+    slot_start = pd.Timestamp("2026-01-01 00:00", tz=tz)
+    idx = pd.date_range(slot_start, periods=4, freq="h", tz=tz)
+    state_idx = pd.date_range(slot_start, periods=5, freq="h", tz=tz)
+    bounds = pd.DataFrame(
+        {
+            "Power_lower_kW": 0.0,
+            "Power_upper_kW": 3000.0,
+            "Capacity_lower_kWh": 0.0,
+            "Capacity_upper_kWh": 20_000.0,
+        },
+        index=state_idx,
+    )
+    m = flexibility_commercialization(
+        depot=Depot(eta_grid2depot=1.0, eta_depot2grid=1.0, grid_connection_limit=5000.0),
+        prices_by_market={"DA": pd.Series(0.001, index=idx)},
+        timestep_hours=1.0,
+        virtual_arbitrage=False,
+        cycling_cost_eur_per_kwh=0.0,
+        market_activity_mask={"DA": pd.Series(True, index=idx)},
+        committed_positions={"DA": pd.Series(0.0, index=idx)},
+        flexibility_bounds=bounds,
+        fcr_prices=pd.Series([100.0], index=[slot_start]),
+        fcr_frequency_data=pd.DataFrame({FCR_DROOP_COL: [0.0] * 4}, index=idx),
+        fcr_bid_block_kw=1000.0,
+    )
+    m.E0.set_value(5000.0)
+    solve_model(m, solver_name="highs")
+
+    assert pyo.value(m.x_fcr[0]) == pytest.approx(1000.0, abs=1e-6)
+    for t in m.T:
+        assert 1000.0 - 1e-6 <= pyo.value(m.p_market["DA", t]) <= 2000.0 + 1e-6
+        assert pyo.value(m.p_dis[t]) == pytest.approx(0.0, abs=1e-6)

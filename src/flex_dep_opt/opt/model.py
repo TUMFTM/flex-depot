@@ -5,6 +5,7 @@ import pandas as pd
 import pyomo.environ as pyo
 
 from flex_dep_opt.io.prices import FCR_DROOP_ABS_COL, FCR_DROOP_COL
+from flex_dep_opt.market.fcr import symmetric_fcr_capacity
 
 from ..domain.depot import Depot
 
@@ -120,8 +121,9 @@ def flexibility_commercialization(
                 fcr_cap_max_vals[j] = max(float(fcr_cap_max_by_slot[slot_start]), 0.0)
             else:
                 idx = np.asarray(steps)
-                cap = float(np.minimum(P_upper_arr[idx], -P_lower_arr[idx]).min())
-                fcr_cap_max_vals[j] = max(cap, 0.0)
+                fcr_cap_max_vals[j] = symmetric_fcr_capacity(
+                    P_upper_arr[idx], P_lower_arr[idx], grid_limit_kw=float(depot.grid_connection_limit)
+                )
 
             if fcr_slot_hours_by_slot is not None and slot_start in fcr_slot_hours_by_slot:
                 fcr_slot_hours_vals[j] = float(fcr_slot_hours_by_slot[slot_start])

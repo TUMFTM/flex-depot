@@ -3,7 +3,6 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-import numpy as np
 import pandas as pd
 import pyomo.environ as pyo
 from tqdm.auto import tqdm
@@ -16,7 +15,7 @@ from flex_dep_opt.io.inputs import SimulationInputs, load_inputs, simulation_win
 from flex_dep_opt.io.prices import FCR_DROOP_COL, build_fees_from_settings
 from flex_dep_opt.io.results import SimulationResult, make_run_dir, write_latest_run_pointer
 from flex_dep_opt.io.time import LOCAL_TIMEZONE
-from flex_dep_opt.market.fcr import fcr_gate_closure_timestamp
+from flex_dep_opt.market.fcr import fcr_gate_closure_timestamp, symmetric_fcr_capacity
 from flex_dep_opt.market.trading import (
     build_market_activity_mask_for_time,
     gate_closure_timestamp,
@@ -242,8 +241,9 @@ def simulate(settings: Settings, inputs: SimulationInputs, progress: bool = True
             covered_idx = full_index[slot_mask]
             P_up = P_up_full.loc[covered_idx].to_numpy(dtype=float)
             P_lo = P_lo_full.loc[covered_idx].to_numpy(dtype=float)
-            cap = float(np.minimum(P_up, -P_lo).min())
-            fcr_cap_max_by_slot[slot_start] = max(cap, 0.0)
+            fcr_cap_max_by_slot[slot_start] = symmetric_fcr_capacity(
+                P_up, P_lo, grid_limit_kw=float(dep_cfg.grid_connection_limit)
+            )
             fcr_slot_hours_by_slot[slot_start] = n_covered * step_hours
 
     # ============================================================
