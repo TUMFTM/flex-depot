@@ -162,7 +162,7 @@ def flexibility_commercialization(
                 if abs_vals is not None:
                     hidden_droop_by_t[t] = max(float(abs_vals[loc]) - abs(droop_by_t[t]), 0.0)
 
-    # Per-step reBAP price used to value the balancing-group deviation induced by FCR activation. (Option A).
+    # Per-step reBAP price used to value the balancing-group deviation induced by FCR activation.
     # Sign/price mapping (import-positive convention, consistent with PASS-2 imbalance):
     #   droop_by_t[t] > 0  → upward FCR   → p_droop < 0 (export) → BKV Überdeckung
     #                                         → receive IMB_NEG price (same as PASS-2 p_imb_neg)

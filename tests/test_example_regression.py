@@ -1,52 +1,10 @@
 """
-End-to-end regression test for the illustrative example (HiGHS solver).
+End-to-end regression test: the full MPC + postprocessing run of the quick-start example
+(2026-02-06 to 2026-02-10, HiGHS) must reproduce the stored KPIs.
 
-Runs the full MPC + postprocessing pipeline against the bundled example data
-and checks that the resulting KPIs match the golden reference values.  The
-test catches silent regressions in the optimisation logic, gate-closure rules,
-FCR bidding, and the postprocessing chain.
-
-Golden values were produced with HiGHS on 2026-07-21 using the simulation
-window 2026-02-06 to 2026-02-10 (4 days, 384 steps at 15-min resolution) —
-the 4-day detail window of the illustrative example (S3 setup, see
-examples/illustrative_example/README.md), with the realistic 5-min intraday
-gate closure (offset_minutes_before_delivery = 5). The nonzero PASS2 steps
-and imbalance cost are expected: the current quarter-hour's FCR activation
-can no longer be netted on the intraday market, so residuals settle via
-reBAP — consistent with German practice, where FCR activation energy has no
-ex-post balancing-group correction (unlike aFRR/mFRR) and remains in the
-provider's balancing group (see the modelling note in the example README).
-
-Option A (FCR activation cashflow) was added 2026-07-21:
-  - gross_profit_eur increased by fcr_activation_cf_eur = +51.368 EUR
-  - total_potential_gross_profit_delta_eur increased by the same amount
-  - trading_profit_eur, dispatch volumes, and all integer counts unchanged
-
-Warm-up window (simulation.warmup_hours = 48) was added 2026-09-25 and the
-golden values refreshed. The MPC now spins up 48 h before the reporting window
-(2026-02-06 .. 2026-02-10) so the first reporting day's DA and FCR positions
-are committed on a full forward horizon instead of a zero default; warm-up
-steps are excluded from all recorded results and KPIs. This removed the
-start-of-horizon initialization artifact and changed the first-day dispatch,
-hence the updated economics and integer counts. pass2_steps stays 12: those
-residuals are the FCR-activation-not-nettable reBAP settlements described
-above, not initialization effects.
-
-Battery-cycling cost in the KPIs was added 2026-09-26: gross_profit_eur now
-subtracts the degradation-proxy cost (c_deg * grid-side throughput), matching
-the optimization objective, and the reference gross profit subtracts the same
-cost on its grid-side charging energy so only incremental V2G/arbitrage wear
-enters the delta. The dispatch is unchanged (the objective already carried this
-term), so all volumes and integer counts stay put; only gross_profit_eur and
-total_potential_gross_profit_delta_eur shifted, and cycling_cost_eur is new.
-
-Reference double-count fix (2026-10-06): the reference energy postprocessing
-used to divide the energy column by charging_efficiency, but the flexband
-aggregation (generate_example_vb_bounds.py) already stores grid-side energy
-(battery demand / charging_efficiency). The second division double-counted the
-losses and inflated the reference cost by factor 1/0.98. The consumer now meters
-the already-grid-side column directly, so total_potential_gross_profit_delta_eur
-dropped from 390.160 to 380.899; dispatch and all other KPIs are unchanged.
+The nonzero pass-2 steps and imbalance cost are expected: FCR activation in the current
+quarter-hour can no longer be netted on the intraday market and settles via reBAP (see the
+modelling note in examples/illustrative_example/README.md).
 """
 
 from pathlib import Path

@@ -29,8 +29,8 @@ def compute_reference_driving_energy_costs(
     run's own charging efficiency, so the reference tracks the swept value
     rather than a fixed benchmark.
 
-    ``charging_efficiency`` is retained for provenance / backward compatibility
-    only; it no longer enters the grid-side energy or cost calculation.
+    ``charging_efficiency`` is only reported; it does not enter the grid-side
+    energy or cost calculation.
     """
     price = float(static_price_eur_per_kwh)
     if price < 0.0:

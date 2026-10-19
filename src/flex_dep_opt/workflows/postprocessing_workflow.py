@@ -99,8 +99,7 @@ def evaluate(result: SimulationResult) -> Evaluation:
     dt = sim.timestep_hours
 
     # FCR KPIs are sourced from fcr_commit.csv (per-slot EUR, computed at gate
-    # closure). The previous implementation multiplied per-step x_fcr by per-step
-    # FCR price, which double-counted by the number of steps per slot.
+    # closure), not from per-step x_fcr * price, which would count each slot once per step.
     fcr_kpis: dict = {}
     if fcr_commit_df is not None and not fcr_commit_df.empty:
         accepted = (

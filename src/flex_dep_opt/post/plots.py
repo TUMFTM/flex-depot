@@ -333,7 +333,6 @@ def plot_mpc_dispatch_plotly(
 
     # All FCR series come pre-computed from extract_dispatch:
     #   - x_fcr_kw   : per-step bid power (kW, slot value broadcast across steps)
-    #   - fcr_droop  : per-step droop signal in [-1, +1] (signed; + = up-reg)
     #   - p_droop_kw : per-step activation power (kW, import-positive, matches p_net)
     has_fcr = "x_fcr_kw" in dispatch.columns
     x_fcr_dense: pd.Series | None = dispatch["x_fcr_kw"].astype(float) if has_fcr else None

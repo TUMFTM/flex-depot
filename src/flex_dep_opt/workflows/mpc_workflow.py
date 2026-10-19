@@ -341,7 +341,7 @@ def simulate(settings: Settings, inputs: SimulationInputs, progress: bool = True
                 imb_neg_full.loc[window_idx] if (imb_enabled and imb_neg_full is not None) else None
             )
 
-            # reBAP prices for FCR activation cashflow (Option A).
+            # reBAP prices for FCR activation cashflow.
             # Available in PASS-1 when FCR is active, independently of allow_imbalance,
             # so the optimizer prices p_droop energy at the correct settlement price.
             fcr_rebap_pos = (
@@ -607,7 +607,7 @@ def simulate(settings: Settings, inputs: SimulationInputs, progress: bool = True
                         "commit_now": False,
                     }
 
-                    # Mode "none": commit only the immediate first decision (as before)
+                    # Mode "none": commit only the immediate first decision
                     if opt_cfg.trading.mode == "none" and tau == window_idx[0]:
                         committed_positions[mk].loc[tau] = row["p_opt"]
                         row["committed_new"] = row["p_opt"]

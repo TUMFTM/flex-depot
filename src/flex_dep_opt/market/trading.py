@@ -41,7 +41,7 @@ def gate_closure_timestamp(
         in `market_tz`, and the returned timestamp is converted back to the
         timezone of `delivery_time`.
     optimization_cfg:
-        Optimization configuration containing `optimization_cfg["trading"]`.
+        Optimization configuration containing `optimization_cfg.trading`.
 
     Returns
     -------
@@ -126,7 +126,7 @@ def build_market_activity_mask_for_time(
 
         Intraday (ID):
             tradable if current_time <= gate_closure_timestamp("ID", τ, cfg)
-            (inclusive gate closure, matching previous behavior)
+            (inclusive gate closure)
 
     Returns
     -------
@@ -164,7 +164,7 @@ def build_market_activity_mask_for_time(
                 index=delivery_times,
             )
 
-            # Apply market-specific "open" condition (keep historical semantics)
+            # Apply market-specific "open" condition
             if mk == "DA":
                 mask_by_market[mk] = current_cmp < gcs
             elif mk == "ID":
