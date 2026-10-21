@@ -34,17 +34,3 @@ def fcr_gate_closure_timestamp(
     if closes_previous_day:
         day = day - pd.Timedelta(days=1)
     return day.replace(hour=hh, minute=mm, tzinfo=ZoneInfo(timezone))
-
-
-def symmetric_fcr_capacity(
-    power_upper_kw: np.ndarray,
-    power_lower_kw: np.ndarray,
-    *,
-    grid_limit_kw: float,
-) -> float:
-    """Largest symmetric FCR capacity [kW] that fits on every step of a slot."""
-    upper = np.minimum(np.asarray(power_upper_kw, dtype=float), grid_limit_kw)
-    lower = np.maximum(np.asarray(power_lower_kw, dtype=float), -grid_limit_kw)
-    if upper.size == 0:
-        return 0.0
-    return max(float((0.5 * (upper - lower)).min()), 0.0)

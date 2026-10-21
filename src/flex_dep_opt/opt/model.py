@@ -5,7 +5,6 @@ import pandas as pd
 import pyomo.environ as pyo
 
 from flex_dep_opt.io.prices import FCR_DROOP_ABS_COL, FCR_DROOP_COL
-from flex_dep_opt.market.fcr import symmetric_fcr_capacity
 
 from ..domain.depot import Depot
 
@@ -121,9 +120,8 @@ def flexibility_commercialization(
                 fcr_cap_max_vals[j] = max(float(fcr_cap_max_by_slot[slot_start]), 0.0)
             else:
                 idx = np.asarray(steps)
-                fcr_cap_max_vals[j] = symmetric_fcr_capacity(
-                    P_upper_arr[idx], P_lower_arr[idx], grid_limit_kw=float(depot.grid_connection_limit)
-                )
+                cap = float(np.minimum(P_upper_arr[idx], -P_lower_arr[idx]).min())
+                fcr_cap_max_vals[j] = max(cap, 0.0)
 
             if fcr_slot_hours_by_slot is not None and slot_start in fcr_slot_hours_by_slot:
                 fcr_slot_hours_vals[j] = float(fcr_slot_hours_by_slot[slot_start])
@@ -379,34 +377,6 @@ def flexibility_commercialization(
             ),
         )
 
-        m.T_FCR = pyo.Set(initialize=sorted(t_to_fcr_slot.keys()))
-
-        # --------------------------------------------------------
-        # 8a) FCR power headroom — hard
-        # --------------------------------------------------------
-        # A committed slot must be deliverable at full activation in both
-        # directions on top of the scheduled spot position. The 15-min mean
-        # droop is usually small, but the per-second response can reach the
-        # full x_fcr within a step, so the power band (and grid limit) has to
-        # contain schedule +- x_fcr on every covered step.
-        grid_limit_val = float(depot.grid_connection_limit)
-
-        def _spot_sum(mdl, t):
-            return pyo.quicksum(mdl.p_market[mk, t] for mk in mdl.MARKETS)
-
-        m.fcr_power_headroom_up = pyo.Constraint(
-            m.T_FCR,
-            rule=lambda mdl, t: (
-                _spot_sum(mdl, t) + mdl.x_fcr[t_to_fcr_slot[t]] <= min(float(P_upper_arr[t]), grid_limit_val)
-            ),
-        )
-        m.fcr_power_headroom_dn = pyo.Constraint(
-            m.T_FCR,
-            rule=lambda mdl, t: (
-                _spot_sum(mdl, t) - mdl.x_fcr[t_to_fcr_slot[t]] >= max(float(P_lower_arr[t]), -grid_limit_val)
-            ),
-        )
-
         # --------------------------------------------------------
         # 8b) FCR energy reserve — soft SoC headroom for droop
         # --------------------------------------------------------
@@ -422,6 +392,7 @@ def flexibility_commercialization(
         # realized starting SoC (fixed by energy_init) and is skipped.
         if fcr_energy_reserve_kwh_per_kw > 0.0:
             r = float(fcr_energy_reserve_kwh_per_kw)
+            m.T_FCR = pyo.Set(initialize=sorted(t_to_fcr_slot.keys()))
 
             reserve_states = sorted({s for t in t_to_fcr_slot for s in (t, t + 1) if s != 0})
             m.S_FCR_RESERVE = pyo.Set(initialize=reserve_states)
@@ -529,23 +500,11 @@ def flexibility_commercialization(
             m.T, rule=lambda mdl, t: total_import(mdl, t) <= mdl.P_ch_max_t[t] * (1.0 - mdl.u_state[t])
         )
 
-        # Physical charge/discharge exclusivity. Outside FCR slots the physical
-        # direction is the spot direction (u_state). Inside a slot the droop
-        # activation is added on top of the spot schedule and may reverse it
-        # (e.g. 15 kW committed import + 20 kW upward activation = 5 kW export),
-        # so those steps get their own physical direction binary.
-        fcr_steps = set(t_to_fcr_slot) if use_fcr else set()
-        if fcr_steps:
-            m.v_state = pyo.Var(m.T_FCR, within=pyo.Binary)
-
-        def _phys_export(mdl, t):
-            return mdl.v_state[t] if t in fcr_steps else mdl.u_state[t]
-
         m.p_dis_mode_limit = pyo.Constraint(
-            m.T, rule=lambda mdl, t: mdl.p_dis[t] <= mdl.P_dis_max_t[t] * _phys_export(mdl, t)
+            m.T, rule=lambda mdl, t: mdl.p_dis[t] <= mdl.P_dis_max_t[t] * mdl.u_state[t]
         )
         m.p_ch_mode_limit = pyo.Constraint(
-            m.T, rule=lambda mdl, t: mdl.p_ch[t] <= mdl.P_ch_max_t[t] * (1.0 - _phys_export(mdl, t))
+            m.T, rule=lambda mdl, t: mdl.p_ch[t] <= mdl.P_ch_max_t[t] * (1.0 - mdl.u_state[t])
         )
 
     # ============================================================

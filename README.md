@@ -254,12 +254,6 @@ After changing a parameter there, run `python scripts/generate_config_reference.
 | `optimization.trading.fcr.frequency_source` | str, optional | unset | CSV file with the grid frequency time series. |
 | `optimization.trading.fcr.breakeven_analysis` | bool | `true` | Report the FCR capacity price at which bidding breaks even. Costs extra diagnostic solves. |
 | `optimization.trading.fcr.breakeven_include_zero_bid` | bool | `false` | Include the zero-bid alternative in the break-even analysis. |
-| `optimization.trading.fcr.bid_acceptance` | bool | `false` | Offer each planned bid at its break-even price plus `bid_markup_eur_per_mw` and commit it only if the clearing price reaches that price (pay-as-cleared, indivisible bid). Runs the break-even solves even if `breakeven_analysis` is off. Without `forecast_error` or a markup, rejections are rare, because the MPC already knows the clearing price when it plans the bid. |
-| `optimization.trading.fcr.bid_markup_eur_per_mw` | float (≥ 0) | `0.0` | Markup on the break-even bid price in €/MW per product slot. |
-| `optimization.trading.fcr.forecast_error.enabled` | bool | `false` | Let the MPC plan FCR bids on a perturbed capacity price (clearing price plus an AR(1) error, floored at 0) while revenue and bid acceptance use the clearing price. |
-| `optimization.trading.fcr.forecast_error.sigma_eur_per_mw` | float (≥ 0) | `0.0` | Standard deviation of the forecast error in €/MW per product slot. |
-| `optimization.trading.fcr.forecast_error.rho` | float (≥ 0, < 1) | `0.8` | Lag-1 autocorrelation of the forecast error per product slot. |
-| `optimization.trading.fcr.forecast_error.seed` | int | `3` | Random seed of the forecast-error series. |
 | `optimization.trading.fcr.gate_closure_hour` | str | `"08:00"` | FCR gate closure time, format `HH:MM`. |
 | `optimization.trading.fcr.gate_closure_closes_previous_day` | bool | `true` | Whether the FCR gate closes on the day before delivery (D-1). |
 | `optimization.trading.fcr.gate_closure_timezone` | str | `"Europe/Berlin"` | Timezone in which the FCR gate closure is evaluated. |

@@ -112,24 +112,6 @@ class TradingIntraday(_StrictModel):
     )
 
 
-class FCRForecastErrorSettings(_StrictModel):
-    enabled: bool = Field(
-        default=False,
-        description=(
-            "Let the MPC plan FCR bids on a perturbed capacity price (clearing price plus an AR(1) error, "
-            "floored at 0) while revenue and bid acceptance use the clearing price."
-        ),
-    )
-    sigma_eur_per_mw: Annotated[
-        float, Field(ge=0.0, description="Standard deviation of the forecast error in €/MW per product slot.")
-    ] = 0.0
-    rho: Annotated[
-        float,
-        Field(ge=0.0, lt=1.0, description="Lag-1 autocorrelation of the forecast error per product slot."),
-    ] = 0.8
-    seed: int = Field(default=3, description="Random seed of the forecast-error series.")
-
-
 class FCRSettings(_StrictModel):
     enabled: bool = Field(default=False, description="Enable FCR reserve market participation.")
     prices_source: str = Field(description="Excel file (.xlsx) with FCR capacity prices, one price per slot.")
@@ -144,22 +126,6 @@ class FCRSettings(_StrictModel):
     )
     breakeven_include_zero_bid: bool = Field(
         default=False, description="Include the zero-bid alternative in the break-even analysis."
-    )
-    bid_acceptance: bool = Field(
-        default=False,
-        description=(
-            "Offer each planned bid at its break-even price plus `bid_markup_eur_per_mw` and commit it only "
-            "if the clearing price reaches that price (pay-as-cleared, indivisible bid). Runs the break-even "
-            "solves even if `breakeven_analysis` is off. Without `forecast_error` or a markup, rejections "
-            "are rare, because the MPC already knows the clearing price when it plans the bid."
-        ),
-    )
-    bid_markup_eur_per_mw: Annotated[
-        float, Field(ge=0.0, description="Markup on the break-even bid price in €/MW per product slot.")
-    ] = 0.0
-    forecast_error: FCRForecastErrorSettings = Field(
-        default_factory=FCRForecastErrorSettings,
-        description="Synthetic forecast error applied to the FCR capacity prices the MPC plans on.",
     )
     gate_closure_hour: str = Field(default="08:00", description="FCR gate closure time, format `HH:MM`.")
     gate_closure_closes_previous_day: bool = Field(

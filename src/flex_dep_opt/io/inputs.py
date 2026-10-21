@@ -31,8 +31,7 @@ class SimulationInputs:
     `prices` are the realized prices used for settlement; `forecast_prices` are the prices
     the MPC decides on. Both are in €/kWh, keyed by market code ("DA", "ID").
     `index` holds the N decision timestamps, `state_index` the N+1 state timestamps
-    that `flexibility_bounds` is aligned to. `fcr_prices` is in €/MW per product slot and used
-    for settlement; `fcr_forecast_prices` (None: same as `fcr_prices`) is what the MPC plans on.
+    that `flexibility_bounds` is aligned to. `fcr_prices` is in €/MW per product slot.
     """
 
     index: pd.DatetimeIndex
@@ -44,7 +43,6 @@ class SimulationInputs:
     imbalance_prices_neg: pd.Series | None
     fcr_prices: pd.Series
     fcr_frequency: pd.DataFrame | None
-    fcr_forecast_prices: pd.Series | None = None
 
 
 def simulation_window(settings: Settings) -> tuple[pd.Timestamp, pd.Timestamp, pd.Timestamp]:
@@ -168,15 +166,6 @@ def load_inputs(settings: Settings) -> SimulationInputs:
     forecast_prices_by_market.pop("IMB_NEG", None)
 
     fcr_prices_full = fcr_prices_full.loc[(fcr_prices_full.index >= start) & (fcr_prices_full.index <= end)]
-    fcr_forecast_prices = None
-    fcr_fe_cfg = opt_cfg.trading.fcr.forecast_error
-    if fcr_fe_cfg.enabled and not fcr_prices_full.empty:
-        z_fcr = draw_ar1_shape(fcr_prices_full.index, rho=fcr_fe_cfg.rho, seed=fcr_fe_cfg.seed)
-        fcr_forecast_prices = (fcr_prices_full + fcr_fe_cfg.sigma_eur_per_mw * z_fcr).clip(lower=0.0)
-        logger.info(
-            f"FCR forecast error active: sigma={fcr_fe_cfg.sigma_eur_per_mw} EUR/MW, "
-            f"rho={fcr_fe_cfg.rho}, seed={fcr_fe_cfg.seed}"
-        )
 
     return SimulationInputs(
         index=full_index,
@@ -188,5 +177,4 @@ def load_inputs(settings: Settings) -> SimulationInputs:
         imbalance_prices_neg=imb_neg_full,
         fcr_prices=fcr_prices_full,
         fcr_frequency=fcr_frequency_data_full,
-        fcr_forecast_prices=fcr_forecast_prices,
     )

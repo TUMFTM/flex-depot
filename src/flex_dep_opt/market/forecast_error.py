@@ -14,7 +14,9 @@ def draw_ar1_shape(index: pd.DatetimeIndex, rho: float, seed: int) -> pd.Series:
     decision-price series settlement + sigma * z has forecast RMSE exactly sigma.
     rho is the lag-1 autocorrelation per index step (e.g. per 15 min).
 
-    Uses a dedicated np.random.Generator, so global random state is never touched.
+    Uses a dedicated np.random.Generator: the global `random` module state
+    (seeded by the FCR acceptance draw in the MPC workflow) is never touched,
+    which keeps runs with this feature disabled bit-identical.
     """
     if not (0.0 <= rho < 1.0):
         raise ValueError(f"rho must be in [0, 1), got {rho}")
