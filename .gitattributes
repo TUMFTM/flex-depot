@@ -1,0 +1,8 @@
+# Normalize line endings on commit; let Git pick per-file on checkout.
+* text=auto
+
+# Shell scripts always LF — they run on Linux (CI, Code Ocean).
+*.sh text eol=lf
+
+# Windows batch files always CRLF.
+*.bat text eol=crlf
