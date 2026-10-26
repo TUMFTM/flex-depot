@@ -30,8 +30,8 @@ keywords:
   - "day-ahead"
   - "intraday"
   - "energy markets"
-version: "2.0.1"
-date-released: "2026-07-29"
+version: "2.1.0"
+date-released: "2026-10-26"
 
 # Related paper
 preferred-citation:
@@ -48,6 +48,6 @@ preferred-citation:
     - family-names: "Lienkamp"
       given-names: "Markus"
   title: "FLEX-DEPOT: An open-source framework for multi-market flexibility commercialization of a logistics depot incorporating electric trucks"
-  #journal: "TBD"
+  journal: "Energy Informatics"
   year: 2026
-  status: in-preparation
+  status: submitted
