@@ -9,7 +9,7 @@ import pytest
 
 from flex_dep_opt.config.settings import NetTariffSettings, Settings
 from flex_dep_opt.domain.depot import Depot
-from flex_dep_opt.grid_fees import (
+from flex_dep_opt.market.grid_fees import (
     monthly_net_billable,
     reference_grid_fees,
     settle_grid_fees,

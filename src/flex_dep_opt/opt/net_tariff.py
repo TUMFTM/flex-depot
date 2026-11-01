@@ -14,7 +14,7 @@ from __future__ import annotations
 import pandas as pd
 import pyomo.environ as pyo
 
-from ..grid_fees import month_key
+from ..market.grid_fees import month_key
 
 
 def add_grid_fee_terms(

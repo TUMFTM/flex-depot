@@ -9,7 +9,6 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from flex_dep_opt.config.settings import Settings
-from flex_dep_opt.grid_fees import reference_grid_fees, settle_grid_fees
 from flex_dep_opt.io.prices import (
     build_fees_from_settings,
     build_forecast_prices_from_settings,
@@ -24,6 +23,7 @@ from flex_dep_opt.io.results import (
 )
 from flex_dep_opt.io.time import LOCAL_TIMEZONE, local_config_timestamp_to_utc, validate_regular_index
 from flex_dep_opt.market.forecast_error import draw_ar1_shape, perturb_prices
+from flex_dep_opt.market.grid_fees import reference_grid_fees, settle_grid_fees
 from flex_dep_opt.post.metrics import (
     compute_cashflows_per_step,
     compute_fcr_activation_energy,
