@@ -83,6 +83,16 @@ eta_grid2depot = 0.98
 eta_depot2grid = 0.98
 grid_connection_limit = 4200
 
+[optimization.net_tariff]
+enabled = true
+energy_price_eur_per_kwh = 0.0391              # work price (3.91 ct/kWh)
+capacity_price_eur_per_kw_year = 11.95         # annual demand charge per kW
+reference_peak_kw = 1750.0                     # assumed peak of uncontrolled charging after arrival
+initial_annual_peak_kw = 0.0                   # annual peak already reached before the window
+peak_shaving = false                           # flexibility marketing only; no active peak shaving
+mispel_a11_enabled = true                      # monthly A11 net metering model for bidirectional charging
+v2g_grid_fee_exemption_eligible = true         # confirms the legal storage grid-fee privilege
+
 [postprocessing.reference_driving_energy_costs]
 enabled = true
 static_price_eur_per_kwh = 0.1142

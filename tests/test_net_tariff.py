@@ -269,6 +269,22 @@ def test_optimizer_performs_peak_shaving():
     assert peak == pytest.approx(500.0, abs=1.0)  # 4000 kWh / 8 h
 
 
+def test_peak_shaving_disabled_drops_capacity_term():
+    gf = {
+        "grid_fee_enabled": True,
+        "grid_fee_energy_eur_per_kwh": 0.05,
+        "grid_fee_capacity_eur_per_kw_year": 1000.0,
+        "grid_fee_peak_shaving": False,
+    }
+    # Import 500 kW each step. With peak shaving off, the capacity price is not an incentive:
+    # no annual-peak variable and the objective term is energy only.
+    m = _grid_model({"DA": [0.0, 0.0]}, p_lower=500.0, p_upper=500.0, e_upper=1e9, grid_fee=gf)
+    assert not hasattr(m, "p_peak_annual")
+    solve_model(m, solver_name="highs")
+    # Energy only: 0.05 * 500 kW * 1 h * 2 steps = 50; no capacity charge in the objective.
+    assert float(pyo.value(m.obj_grid_fee_cost)) == pytest.approx(0.05 * 500.0 * 2)
+
+
 def test_mispel_builds_monthly_billable_var():
     gf = {
         "grid_fee_enabled": True,
@@ -304,6 +320,7 @@ def _short_net_tariff_settings(monkeypatch, *, initial_peak_kw: float) -> Settin
     nt.capacity_price_eur_per_kw_year = 100.0
     nt.reference_peak_kw = 1500.0
     nt.initial_annual_peak_kw = initial_peak_kw
+    nt.peak_shaving = True
     return s
 
 

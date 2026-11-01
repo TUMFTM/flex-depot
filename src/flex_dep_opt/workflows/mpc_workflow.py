@@ -142,6 +142,18 @@ def simulate(settings: Settings, inputs: SimulationInputs, progress: bool = True
     grid_fee_energy_price = float(nt_cfg.energy_price_eur_per_kwh or 0.0)
     grid_fee_capacity_price = float(nt_cfg.capacity_price_eur_per_kw_year or 0.0)
     grid_fee_mispel = nt_cfg.mispel_applicable
+    grid_fee_peak_shaving = bool(nt_cfg.peak_shaving)
+
+    # Without active peak shaving the depot is limited to the reference connection, so it only
+    # markets flexibility within the same grid connection as the uncontrolled reference.
+    grid_connection_limit = float(dep_cfg.grid_connection_limit)
+    if grid_fee_enabled and not grid_fee_peak_shaving:
+        grid_connection_limit = min(grid_connection_limit, float(nt_cfg.reference_peak_kw))
+        logger.info(
+            "net_tariff.peak_shaving=false: grid connection limited to the reference peak "
+            "(%.1f kW) and the capacity price dropped from the objective.",
+            grid_connection_limit,
+        )
 
     terminal_enabled = bool(mpc_cfg.terminal_condition)
     terminal_weight = float(mpc_cfg.terminal_weight_eur_per_kwh)
@@ -427,9 +439,7 @@ def simulate(settings: Settings, inputs: SimulationInputs, progress: bool = True
             # --------------------------------------------------------
             def _build_model(allow_imbalance: bool, imb_penalty: float) -> object:
                 _m = flexibility_commercialization(
-                    depot=Depot(
-                        dep_cfg.eta_grid2depot, dep_cfg.eta_depot2grid, dep_cfg.grid_connection_limit
-                    ),
+                    depot=Depot(dep_cfg.eta_grid2depot, dep_cfg.eta_depot2grid, grid_connection_limit),
                     prices_by_market=window_prices,
                     fee_eur_per_kwh_by_market=fees_by_market,
                     timestep_hours=step_hours,
@@ -461,6 +471,7 @@ def simulate(settings: Settings, inputs: SimulationInputs, progress: bool = True
                     grid_fee_previous_annual_peak_kw=previous_annual_peak_kw,
                     grid_fee_mispel_applicable=grid_fee_mispel,
                     grid_fee_monthly_realized_net_kwh=monthly_realized_net_kwh,
+                    grid_fee_peak_shaving=grid_fee_peak_shaving,
                 )
 
                 if hasattr(_m, "S_FCR"):

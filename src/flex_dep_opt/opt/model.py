@@ -42,6 +42,7 @@ def flexibility_commercialization(
     grid_fee_previous_annual_peak_kw: float = 0.0,
     grid_fee_mispel_applicable: bool = False,
     grid_fee_monthly_realized_net_kwh: dict | None = None,
+    grid_fee_peak_shaving: bool = True,
 ) -> pyo.ConcreteModel:
     """
     Flex-band based multi-market commercialization model (Pyomo).
@@ -608,6 +609,7 @@ def flexibility_commercialization(
         previous_annual_peak_kw=grid_fee_previous_annual_peak_kw,
         mispel_applicable=grid_fee_mispel_applicable,
         monthly_realized_net_kwh=grid_fee_monthly_realized_net_kwh,
+        peak_shaving=grid_fee_peak_shaving,
     )
 
     m.obj = pyo.Objective(

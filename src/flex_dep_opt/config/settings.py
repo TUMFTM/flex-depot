@@ -265,6 +265,15 @@ class NetTariffSettings(_StrictModel):
             ),
         ),
     ] = 0.0
+    peak_shaving: bool = Field(
+        default=True,
+        description=(
+            "Let the optimizer actively minimize the billed peak via the capacity price. "
+            "When false, the capacity price drops out of the objective and the grid connection is "
+            "limited to `reference_peak_kw`, so the depot only markets flexibility within the "
+            "reference connection (the capacity charge is still billed on the realized peak)."
+        ),
+    )
     mispel_a11_enabled: bool = Field(
         default=False,
         description=(
