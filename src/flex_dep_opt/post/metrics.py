@@ -12,14 +12,24 @@ def infer_market_position_columns(dispatch: pd.DataFrame) -> list[str]:
     """
     Return all dispatch columns that represent per-market positions p_<mk>_kw.
 
-    Excludes physical variables (p_ch/p_dis/p_net) and imbalance variables.
+    Excludes physical/diagnostic variables (p_ch/p_dis/p_net, billable grid import) and
+    imbalance variables.
     """
     return [
         c
         for c in dispatch.columns
         if c.startswith("p_")
         and c.endswith("_kw")
-        and c not in ("p_ch_kw", "p_dis_kw", "p_net_kw", "p_droop_kw", "p_imb_pos_kw", "p_imb_neg_kw")
+        and c
+        not in (
+            "p_ch_kw",
+            "p_dis_kw",
+            "p_net_kw",
+            "p_droop_kw",
+            "p_imb_pos_kw",
+            "p_imb_neg_kw",
+            "p_grid_imp_kw",
+        )
     ]
 
 

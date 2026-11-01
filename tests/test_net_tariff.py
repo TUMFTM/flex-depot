@@ -200,6 +200,15 @@ def test_disabled_grid_fee_is_inert():
     assert float(pyo.value(m.obj_grid_fee_cost)) == 0.0
 
 
+def test_grid_import_column_is_not_a_market_position():
+    # The diagnostic billable-import column must not be mistaken for a market in
+    # cashflow/energy aggregates or the dispatch plot.
+    from flex_dep_opt.post.metrics import infer_market_position_columns
+
+    df = pd.DataFrame(columns=["p_net_kw", "p_ch_kw", "p_dis_kw", "p_da_kw", "p_id_kw", "p_grid_imp_kw"])
+    assert infer_market_position_columns(df) == ["p_da_kw", "p_id_kw"]
+
+
 def test_grid_import_equals_positive_part_of_pnet():
     # Force a fixed import of 500 kW each step via the power band.
     m = _grid_model(
