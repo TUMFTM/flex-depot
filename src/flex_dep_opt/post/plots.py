@@ -268,9 +268,7 @@ def plot_market_cashflows_plotly(
                 ]
             )
         if "profit_after_grid_fees_eur" in kpis:
-            kpi_rows.append(
-                ("Profit after Grid Fees", f"{float(kpis['profit_after_grid_fees_eur']):.1f} €")
-            )
+            kpi_rows.append(("Profit after Grid Fees", f"{float(kpis['profit_after_grid_fees_eur']):.1f} €"))
         if "total_potential_after_grid_fees_eur" in kpis:
             kpi_rows.append(
                 (

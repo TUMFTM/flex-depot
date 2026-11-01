@@ -41,10 +41,14 @@ def monthly_net_billable(
     """
     idx = import_kwh.index
     keys = pd.Index([month_key(ts) for ts in idx], name="month", tupleize_cols=False)
-    grouped = pd.DataFrame(
-        {"grid_import_kwh": import_kwh.to_numpy(), "grid_export_kwh": export_kwh.to_numpy()},
-        index=keys,
-    ).groupby(level=0).sum()
+    grouped = (
+        pd.DataFrame(
+            {"grid_import_kwh": import_kwh.to_numpy(), "grid_export_kwh": export_kwh.to_numpy()},
+            index=keys,
+        )
+        .groupby(level=0)
+        .sum()
+    )
 
     if mispel_applicable:
         billable = (grouped["grid_import_kwh"] - grouped["grid_export_kwh"]).clip(lower=0.0)

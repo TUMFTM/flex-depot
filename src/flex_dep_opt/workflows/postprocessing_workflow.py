@@ -320,9 +320,7 @@ def evaluate(result: SimulationResult) -> Evaluation:
         kpis["grid_fee_savings_capacity_eur"] = (
             ref_fees["ref_grid_fee_capacity_eur"] - uc_summary["grid_fee_capacity_eur"]
         )
-        kpis["grid_fee_savings_eur"] = (
-            ref_fees["ref_grid_fee_total_eur"] - uc_summary["grid_fee_total_eur"]
-        )
+        kpis["grid_fee_savings_eur"] = ref_fees["ref_grid_fee_total_eur"] - uc_summary["grid_fee_total_eur"]
 
         kpis["profit_after_grid_fees_eur"] = (
             float(kpis["gross_profit_eur"]) - uc_summary["grid_fee_total_eur"]

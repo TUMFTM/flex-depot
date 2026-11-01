@@ -313,13 +313,9 @@ def test_mpc_postprocessing_grid_fee_consistency(tmp_path, monkeypatch):
     realized_peak = float(result.dispatch["p_net_kw"].clip(lower=0.0).max())
     assert k["grid_peak_kw"] == pytest.approx(realized_peak, rel=1e-6)
     assert k["ref_grid_fee_capacity_eur"] == pytest.approx(100.0 * 1500.0)
-    assert k["grid_fee_total_eur"] == pytest.approx(
-        k["grid_fee_energy_eur"] + k["grid_fee_capacity_eur"]
-    )
+    assert k["grid_fee_total_eur"] == pytest.approx(k["grid_fee_energy_eur"] + k["grid_fee_capacity_eur"])
     # Grid fees are reported alongside, not inside, the market gross profit.
-    assert k["profit_after_grid_fees_eur"] == pytest.approx(
-        k["gross_profit_eur"] - k["grid_fee_total_eur"]
-    )
+    assert k["profit_after_grid_fees_eur"] == pytest.approx(k["gross_profit_eur"] - k["grid_fee_total_eur"])
     assert k["grid_fee_annual_basis"] == "sub_annual_indicative"
 
 

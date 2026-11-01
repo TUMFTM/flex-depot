@@ -234,7 +234,9 @@ class NetTariffSettings(_StrictModel):
     )
     energy_price_eur_per_kwh: Annotated[
         float | None,
-        Field(ge=0.0, description="Volumetric grid fee on billable grid import in €/kWh. Required when enabled."),
+        Field(
+            ge=0.0, description="Volumetric grid fee on billable grid import in €/kWh. Required when enabled."
+        ),
     ] = None
     capacity_price_eur_per_kw_year: Annotated[
         float | None,
