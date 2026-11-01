@@ -22,24 +22,27 @@ EXAMPLE_TOML = REPO_ROOT / "src/flex_dep_opt/config/settings_quickstart.toml"
 # Golden KPI values — update this dict after any intentional model change.
 _GOLDEN = {
     # Core economics
-    "gross_profit_eur": -72.853,
-    "cycling_cost_eur": 297.260,
-    "trading_profit_eur": -16.532,
-    "fees_eur": -1.075,
+    "gross_profit_eur": -97.176,
+    "cycling_cost_eur": 241.486,
+    "trading_profit_eur": -96.611,
+    "fees_eur": -0.864,
     "fcr_revenue_eur": 210.020,
-    "imb_cost_eur": -14.162,
+    "imb_cost_eur": -14.392,
     "fcr_activation_cf_eur": 46.156,
     # Savings vs. uncontrolled charging (S0 reference metered grid-side; charging
     # losses already baked into the flexband column, no extra eta division)
-    "total_potential_gross_profit_delta_eur": 380.899,
+    "total_potential_gross_profit_delta_eur": 356.576,
     # Energy balance
-    "net_kwh": -2771.777,
-    "sell_kwh": 5699.440,
-    "buy_kwh": 8471.217,
+    "net_kwh": -2717.718,
+    "sell_kwh": 4333.238,
+    "buy_kwh": 7050.957,
+    # Grid usage fees (MiSpeL-A11 monthly netting on billable import; energy charge
+    # reshapes dispatch, so it is guarded alongside the core economics)
+    "grid_fee_energy_eur": 96.932,
     # Integer counts — exact
-    "trade_steps": 174,
+    "trade_steps": 166,
     "fcr_slots_committed": 11,
-    "pass2_steps": 12,
+    "pass2_steps": 13,
 }
 
 
@@ -72,5 +75,6 @@ def test_example_kpis(tmp_path, monkeypatch):
         "net_kwh",
         "sell_kwh",
         "buy_kwh",
+        "grid_fee_energy_eur",
     ):
         assert float(kpis[key]) == pytest.approx(_GOLDEN[key], rel=1e-3), f"KPI mismatch: {key}"
