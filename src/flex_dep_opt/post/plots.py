@@ -246,10 +246,45 @@ def plot_market_cashflows_plotly(
             ]
         )
 
+    if "grid_fee_total_eur" in kpis:
+        basis = kpis.get("grid_fee_annual_basis", "")
+        basis_note = " (indicative annual)" if basis == "sub_annual_indicative" else ""
+        kpi_rows.extend(
+            [
+                ("", ""),
+                ("Grid Fees" + basis_note, ""),
+                ("Use Case Total", f"{float(kpis['grid_fee_total_eur']):.1f} €"),
+                ("      Energy Charge", f"{float(kpis['grid_fee_energy_eur']):.1f} €"),
+                ("      Capacity Charge", f"{float(kpis['grid_fee_capacity_eur']):.1f} €"),
+                ("      Billable Import", f"{float(kpis['grid_fee_eligible_import_kwh']):.1f} kWh"),
+                ("      Peak Import", f"{float(kpis['grid_peak_kw']):.1f} kW"),
+            ]
+        )
+        if "ref_grid_fee_total_eur" in kpis:
+            kpi_rows.extend(
+                [
+                    ("Reference Total", f"{float(kpis['ref_grid_fee_total_eur']):.1f} €"),
+                    ("Savings vs Reference", f"{float(kpis['grid_fee_savings_eur']):.1f} €"),
+                ]
+            )
+        if "profit_after_grid_fees_eur" in kpis:
+            kpi_rows.append(
+                ("Profit after Grid Fees", f"{float(kpis['profit_after_grid_fees_eur']):.1f} €")
+            )
+        if "total_potential_after_grid_fees_eur" in kpis:
+            kpi_rows.append(
+                (
+                    "Total Potential after Grid Fees",
+                    f"{float(kpis['total_potential_after_grid_fees_eur']):.1f} €",
+                )
+            )
+
     section_labels = {
         "Flex-Depot Optimization (V2G & Driving)",
         "Reference Scenario (Driving only)",
         "Total Potential Flex-Depot Optimization",
+        "Grid Fees",
+        "Grid Fees (indicative annual)",
     }
     section_rows = {i for i, (label, value) in enumerate(kpi_rows) if label in section_labels and value == ""}
     fill_colors = [

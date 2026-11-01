@@ -227,6 +227,81 @@ class DepotSettings(_StrictModel):
     grid_connection_limit: Annotated[float, Field(gt=0, description="Symmetric grid connection limit in kW.")]
 
 
+class NetTariffSettings(_StrictModel):
+    enabled: bool = Field(
+        default=False,
+        description="Account for grid usage fees (energy and capacity price) in the optimization and KPIs.",
+    )
+    energy_price_eur_per_kwh: Annotated[
+        float | None,
+        Field(ge=0.0, description="Volumetric grid fee on billable grid import in €/kWh. Required when enabled."),
+    ] = None
+    capacity_price_eur_per_kw_year: Annotated[
+        float | None,
+        Field(
+            ge=0.0,
+            description="Annual demand charge on the yearly peak grid import in €/kW·year. Required when enabled.",
+        ),
+    ] = None
+    reference_peak_kw: Annotated[
+        float | None,
+        Field(
+            ge=0.0,
+            description=(
+                "Assumed annual peak import of the uncontrolled-charging reference in kW. "
+                "Required when enabled; used only for the reference, never as a constraint on the use case."
+            ),
+        ),
+    ] = None
+    initial_annual_peak_kw: Annotated[
+        float,
+        Field(
+            ge=0.0,
+            description=(
+                "Highest grid import already reached this calendar year before the simulation window, in kW. "
+                "Seeds the running annual peak of the optimized connection; not the reference peak."
+            ),
+        ),
+    ] = 0.0
+    mispel_a11_enabled: bool = Field(
+        default=False,
+        description=(
+            "Use the simplified MiSpeL special-case A11 monthly metering/settlement model "
+            "(net billable import per calendar month) for the bidirectional connection."
+        ),
+    )
+    v2g_grid_fee_exemption_eligible: bool = Field(
+        default=False,
+        description=(
+            "Confirm the connection legally qualifies for the storage grid-fee privilege. "
+            "Monthly netting is only applied when this and `mispel_a11_enabled` are both true."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _prices_required_when_enabled(self) -> "NetTariffSettings":
+        if not self.enabled:
+            return self
+        missing = [
+            name
+            for name, value in (
+                ("energy_price_eur_per_kwh", self.energy_price_eur_per_kwh),
+                ("capacity_price_eur_per_kw_year", self.capacity_price_eur_per_kw_year),
+                ("reference_peak_kw", self.reference_peak_kw),
+            )
+            if value is None
+        ]
+        if missing:
+            joined = ", ".join(f"optimization.net_tariff.{name}" for name in missing)
+            raise ValueError(f"{joined} must be set when optimization.net_tariff.enabled is true.")
+        return self
+
+    @property
+    def mispel_applicable(self) -> bool:
+        """Monthly A11 netting is only active when enabled and both MiSpeL flags hold."""
+        return self.enabled and self.mispel_a11_enabled and self.v2g_grid_fee_exemption_eligible
+
+
 class OptimizationSettings(_StrictModel):
     markets: Markets = Field(description="Energy markets and their price sources.")
     trading: TradingSettings = Field(description="Gate closure rules and the FCR reserve market.")
@@ -235,6 +310,10 @@ class OptimizationSettings(_StrictModel):
     mpc: MpcSettings = Field(description="Rolling-horizon settings.")
     flexibility: FlexibilitySettings = Field(description="Depot flexibility bands.")
     depot: DepotSettings = Field(description="Depot efficiencies and grid connection.")
+    net_tariff: NetTariffSettings = Field(
+        default_factory=NetTariffSettings,
+        description="Grid usage fees (energy and capacity price) with optional MiSpeL-A11 netting.",
+    )
 
 
 class ReferenceDrivingEnergyCostsSettings(_StrictModel):

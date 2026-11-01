@@ -7,6 +7,7 @@ import pyomo.environ as pyo
 from flex_dep_opt.io.prices import FCR_DROOP_ABS_COL, FCR_DROOP_COL
 
 from ..domain.depot import Depot
+from .net_tariff import add_grid_fee_terms
 
 
 def flexibility_commercialization(
@@ -35,6 +36,12 @@ def flexibility_commercialization(
     fcr_balance_penalty_eur_per_kwh: float = 0.0,
     fcr_rebap_prices_pos: pd.Series | None = None,
     fcr_rebap_prices_neg: pd.Series | None = None,
+    grid_fee_enabled: bool = False,
+    grid_fee_energy_eur_per_kwh: float = 0.0,
+    grid_fee_capacity_eur_per_kw_year: float = 0.0,
+    grid_fee_previous_annual_peak_kw: float = 0.0,
+    grid_fee_mispel_applicable: bool = False,
+    grid_fee_monthly_realized_net_kwh: dict | None = None,
 ) -> pyo.ConcreteModel:
     """
     Flex-band based multi-market commercialization model (Pyomo).
@@ -590,6 +597,19 @@ def flexibility_commercialization(
         )
     m.obj_balance_penalty = pyo.Expression(expr=bal_pen)
 
+    # Grid usage fees (energy price on billable import + capacity price on the incremental
+    # annual peak). Always attached as m.obj_grid_fee_cost (0 when disabled).
+    add_grid_fee_terms(
+        m,
+        time_index,
+        enabled=grid_fee_enabled,
+        energy_price_eur_per_kwh=grid_fee_energy_eur_per_kwh,
+        capacity_price_eur_per_kw_year=grid_fee_capacity_eur_per_kw_year,
+        previous_annual_peak_kw=grid_fee_previous_annual_peak_kw,
+        mispel_applicable=grid_fee_mispel_applicable,
+        monthly_realized_net_kwh=grid_fee_monthly_realized_net_kwh,
+    )
+
     m.obj = pyo.Objective(
         expr=m.obj_energy_cashflow
         + m.obj_fcr_revenue
@@ -601,7 +621,8 @@ def flexibility_commercialization(
         - m.obj_term_penalty
         - m.obj_e_slack_penalty
         - m.obj_reserve_penalty
-        - m.obj_balance_penalty,
+        - m.obj_balance_penalty
+        - m.obj_grid_fee_cost,
         sense=pyo.maximize,
     )
 

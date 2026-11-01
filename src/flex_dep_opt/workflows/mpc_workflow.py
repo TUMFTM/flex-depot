@@ -37,6 +37,7 @@ _FCR_BREAKEVEN_NAN = {
     "d_cycling_eur": float("nan"),
     "d_imbalance_eur": float("nan"),
     "d_penalties_eur": float("nan"),
+    "d_grid_fee_eur": float("nan"),
 }
 
 _PENALTY_TERM_NAMES = (
@@ -94,14 +95,15 @@ def _fcr_breakeven_metrics(
         "margin_eur_per_mw": margin,
         "margin_pct": margin / fcr_price if abs(fcr_price) > 1e-9 else float("nan"),
         "opp_cost_eur": opp_cost,
-        # Signed objective-term deltas (B - A): how each component changes when the bid is
-        # dropped. opp_cost = d_energy + d_fcr_activation + d_imbalance - d_fees - d_cycling - d_penalties.
+        # Signed objective-term deltas (B - A): how each component changes when the bid is dropped.
+        # opp_cost = d_energy + d_fcr_activation + d_imbalance - d_fees - d_cycling - d_penalties - d_grid_fee.
         "d_energy_eur": d("obj_energy_cashflow"),
         "d_fcr_activation_eur": d("obj_fcr_activation_cashflow"),
         "d_fees_eur": d("obj_fee_cost"),
         "d_cycling_eur": d("obj_cycling_cost"),
         "d_imbalance_eur": d("obj_imb_cashflow"),
         "d_penalties_eur": sum(d(n) for n in _PENALTY_TERM_NAMES),
+        "d_grid_fee_eur": d("obj_grid_fee_cost"),
     }
 
 
@@ -134,6 +136,12 @@ def simulate(settings: Settings, inputs: SimulationInputs, progress: bool = True
 
     imb_cfg = opt_cfg.imbalance
     imb_enabled = imb_cfg.enabled
+
+    nt_cfg = opt_cfg.net_tariff
+    grid_fee_enabled = bool(nt_cfg.enabled)
+    grid_fee_energy_price = float(nt_cfg.energy_price_eur_per_kwh or 0.0)
+    grid_fee_capacity_price = float(nt_cfg.capacity_price_eur_per_kw_year or 0.0)
+    grid_fee_mispel = nt_cfg.mispel_applicable
 
     terminal_enabled = bool(mpc_cfg.terminal_condition)
     terminal_weight = float(mpc_cfg.terminal_weight_eur_per_kwh)
@@ -183,7 +191,17 @@ def simulate(settings: Settings, inputs: SimulationInputs, progress: bool = True
     # ============================================================
     fees_by_market = build_fees_from_settings(settings)
 
-    start, report_start, _ = simulation_window(settings)
+    start, report_start, report_end = simulation_window(settings)
+
+    if grid_fee_enabled:
+        span_days = (report_end - report_start).total_seconds() / 86400.0
+        if span_days < 365.0 and float(nt_cfg.initial_annual_peak_kw) == 0.0:
+            logger.warning(
+                "net_tariff enabled over a sub-annual window (%.1f days) with "
+                "initial_annual_peak_kw=0: the historical annual peak is unknown, so the capacity-price "
+                "difference is an indicative annual peak-shaving potential, not a settled yearly saving.",
+                span_days,
+            )
 
     warmup_hours = float(getattr(sim_cfg, "warmup_hours", 0.0) or 0.0)
 
@@ -253,6 +271,14 @@ def simulate(settings: Settings, inputs: SimulationInputs, progress: bool = True
         )
     else:
         E_state = 0.0
+
+    # Running grid-fee state carried across MPC steps: the highest realized grid import this
+    # calendar year (seeded with the configured historical peak) and the month-to-date net grid
+    # energy per calendar month. Only realized reporting steps update them, so the running state
+    # matches the final settlement in postprocessing.
+    previous_annual_peak_kw = float(nt_cfg.initial_annual_peak_kw)
+    peak_year = report_start.year
+    monthly_realized_net_kwh: dict[tuple[int, int], float] = {}
 
     # ============================================================
     # 8) Result containers
@@ -429,6 +455,12 @@ def simulate(settings: Settings, inputs: SimulationInputs, progress: bool = True
                     fcr_balance_penalty_eur_per_kwh=fcr_balance_penalty,
                     fcr_rebap_prices_pos=fcr_rebap_pos,
                     fcr_rebap_prices_neg=fcr_rebap_neg,
+                    grid_fee_enabled=grid_fee_enabled,
+                    grid_fee_energy_eur_per_kwh=grid_fee_energy_price,
+                    grid_fee_capacity_eur_per_kw_year=grid_fee_capacity_price,
+                    grid_fee_previous_annual_peak_kw=previous_annual_peak_kw,
+                    grid_fee_mispel_applicable=grid_fee_mispel,
+                    grid_fee_monthly_realized_net_kwh=monthly_realized_net_kwh,
                 )
 
                 if hasattr(_m, "S_FCR"):
@@ -549,6 +581,20 @@ def simulate(settings: Settings, inputs: SimulationInputs, progress: bool = True
             first_row.name = window_idx[0]
             if current_time >= report_start:  # skip warm-up steps in recorded results
                 rows.append(first_row)
+
+                if grid_fee_enabled:
+                    # Advance the annual peak and the monthly net balance from the realized first
+                    # step only; planned horizon steps never update them. Reset at calendar-year
+                    # boundaries so the peak restarts without historical context in the new year.
+                    if current_time.year != peak_year:
+                        previous_annual_peak_kw = 0.0
+                        peak_year = current_time.year
+                    realized_net_kw = float(first_row["p_net_kw"])
+                    previous_annual_peak_kw = max(previous_annual_peak_kw, max(0.0, realized_net_kw))
+                    month = (current_time.year, current_time.month)
+                    monthly_realized_net_kwh[month] = (
+                        monthly_realized_net_kwh.get(month, 0.0) + realized_net_kw * step_hours
+                    )
 
             # --------------------------------------------------------
             # 9.7) Commit market positions at gate closure

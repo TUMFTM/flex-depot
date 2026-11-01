@@ -190,6 +190,7 @@ OBJECTIVE_TERM_NAMES = (
     "obj_e_slack_penalty",
     "obj_reserve_penalty",
     "obj_balance_penalty",
+    "obj_grid_fee_cost",
 )
 
 
@@ -296,5 +297,11 @@ def extract_dispatch(model: pyo.ConcreteModel, time_index: pd.DatetimeIndex) -> 
     if hasattr(model, "p_imb_pos"):
         df["p_imb_pos_kw"] = [pyo.value(model.p_imb_pos[t]) for t in model.T]
         df["p_imb_neg_kw"] = [pyo.value(model.p_imb_neg[t]) for t in model.T]
+
+    # -------------------------
+    # Grid-fee import (optional): billable import power per step.
+    # -------------------------
+    if hasattr(model, "p_grid_imp"):
+        df["p_grid_imp_kw"] = [float(pyo.value(model.p_grid_imp[t])) for t in T_list]
 
     return df

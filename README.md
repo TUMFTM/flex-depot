@@ -302,6 +302,18 @@ After changing a parameter there, run `python scripts/generate_config_reference.
 | `optimization.depot.eta_depot2grid` | float (> 0, ≤ 1) | required | Efficiency of the depot-to-grid power flow. |
 | `optimization.depot.grid_connection_limit` | float (> 0) | required | Symmetric grid connection limit in kW. |
 
+**`optimization.net_tariff`**: Grid usage fees (energy and capacity price) with optional MiSpeL-A11 netting.
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `optimization.net_tariff.enabled` | bool | `false` | Account for grid usage fees (energy and capacity price) in the optimization and KPIs. |
+| `optimization.net_tariff.energy_price_eur_per_kwh` | float, optional (≥ 0) | unset | Volumetric grid fee on billable grid import in €/kWh. Required when enabled. |
+| `optimization.net_tariff.capacity_price_eur_per_kw_year` | float, optional (≥ 0) | unset | Annual demand charge on the yearly peak grid import in €/kW·year. Required when enabled. |
+| `optimization.net_tariff.reference_peak_kw` | float, optional (≥ 0) | unset | Assumed annual peak import of the uncontrolled-charging reference in kW. Required when enabled; used only for the reference, never as a constraint on the use case. |
+| `optimization.net_tariff.initial_annual_peak_kw` | float (≥ 0) | `0.0` | Highest grid import already reached this calendar year before the simulation window, in kW. Seeds the running annual peak of the optimized connection; not the reference peak. |
+| `optimization.net_tariff.mispel_a11_enabled` | bool | `false` | Use the simplified MiSpeL special-case A11 monthly metering/settlement model (net billable import per calendar month) for the bidirectional connection. |
+| `optimization.net_tariff.v2g_grid_fee_exemption_eligible` | bool | `false` | Confirm the connection legally qualifies for the storage grid-fee privilege. Monthly netting is only applied when this and `mispel_a11_enabled` are both true. |
+
 **`postprocessing`**: What the evaluation step computes and keeps.
 
 | Parameter | Type | Default | Description |

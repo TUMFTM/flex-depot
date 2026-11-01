@@ -9,6 +9,7 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from flex_dep_opt.config.settings import Settings
+from flex_dep_opt.grid_fees import reference_grid_fees, settle_grid_fees
 from flex_dep_opt.io.prices import (
     build_fees_from_settings,
     build_forecast_prices_from_settings,
@@ -34,6 +35,7 @@ from flex_dep_opt.post.plots import plot_market_cashflows_plotly, plot_mpc_dispa
 from flex_dep_opt.post.reference_energy_costs import (
     DEFAULT_REFERENCE_ENERGY_COLUMN,
     compute_reference_driving_energy_costs,
+    read_reference_grid_energy_kwh,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,6 +48,7 @@ class Evaluation:
     reference_costs: pd.DataFrame | None
     dispatch_figure: go.Figure
     cashflow_figure: go.Figure
+    grid_fee_monthly: pd.DataFrame | None = None
 
     def save(self, run_dir: str | Path) -> Path:
         run_dir = Path(run_dir)
@@ -59,6 +62,8 @@ class Evaluation:
                 include_time_column=True,
                 output_tz=LOCAL_TIMEZONE,
             )
+        if self.grid_fee_monthly is not None:
+            self.grid_fee_monthly.to_csv(run_dir / "grid_fee_monthly.csv")
         save_summary_to_csv(self.kpis, run_dir / "kpis.csv")
         self.dispatch_figure.write_html(run_dir / "dispatch.html", include_plotlyjs="cdn")
         self.cashflow_figure.write_html(run_dir / "cashflow.html", include_plotlyjs="cdn")
@@ -270,6 +275,75 @@ def evaluate(result: SimulationResult) -> Evaluation:
         )
 
     # -------------------------------------------------------------------------
+    # Grid usage fees: settle the realized use case and the uncontrolled-charging
+    # reference on the fixed tariff, then report absolute costs and savings.
+    # -------------------------------------------------------------------------
+    grid_fee_monthly_df = None
+    nt_cfg = settings.optimization.net_tariff
+    if nt_cfg.enabled:
+        ap = float(nt_cfg.energy_price_eur_per_kwh or 0.0)
+        lp = float(nt_cfg.capacity_price_eur_per_kw_year or 0.0)
+
+        uc_summary, monthly_mispel = settle_grid_fees(
+            dispatch["p_net_kw"],
+            timestep_hours=dt,
+            energy_price_eur_per_kwh=ap,
+            capacity_price_eur_per_kw_year=lp,
+            mispel_applicable=nt_cfg.mispel_applicable,
+            initial_annual_peak_kw=float(nt_cfg.initial_annual_peak_kw),
+            initial_peak_year=start.year,
+        )
+        kpis.update(uc_summary)
+
+        # Reference grid-side driving energy (same column as the reference cost KPI); read
+        # independently so grid fees work even without the retail reference-cost calculation.
+        if "ref_grid_energy_kwh" in kpis:
+            ref_grid_energy = float(kpis["ref_grid_energy_kwh"])
+        else:
+            ref_grid_energy = read_reference_grid_energy_kwh(
+                settings.optimization.flexibility.bounds_file,
+                start=start,
+                end=end,
+                energy_column=str(ref_cfg.energy_column or DEFAULT_REFERENCE_ENERGY_COLUMN),
+            )
+        ref_fees = reference_grid_fees(
+            ref_grid_energy,
+            float(nt_cfg.reference_peak_kw or 0.0),
+            energy_price_eur_per_kwh=ap,
+            capacity_price_eur_per_kw_year=lp,
+        )
+        kpis.update(ref_fees)
+
+        kpis["grid_fee_savings_energy_eur"] = (
+            ref_fees["ref_grid_fee_energy_eur"] - uc_summary["grid_fee_energy_eur"]
+        )
+        kpis["grid_fee_savings_capacity_eur"] = (
+            ref_fees["ref_grid_fee_capacity_eur"] - uc_summary["grid_fee_capacity_eur"]
+        )
+        kpis["grid_fee_savings_eur"] = (
+            ref_fees["ref_grid_fee_total_eur"] - uc_summary["grid_fee_total_eur"]
+        )
+
+        kpis["profit_after_grid_fees_eur"] = (
+            float(kpis["gross_profit_eur"]) - uc_summary["grid_fee_total_eur"]
+        )
+        if "ref_gross_profit_eur" in kpis:
+            ref_profit_after = float(kpis["ref_gross_profit_eur"]) - ref_fees["ref_grid_fee_total_eur"]
+            kpis["reference_profit_after_grid_fees_eur"] = ref_profit_after
+            kpis["total_potential_after_grid_fees_eur"] = (
+                kpis["profit_after_grid_fees_eur"] - ref_profit_after
+            )
+
+        # Work prices cover the simulated window; the capacity price assumes a full billing year.
+        span_days = (end - start).total_seconds() / 86400.0
+        kpis["grid_fee_annual_basis"] = "full_year" if span_days >= 365.0 else "sub_annual_indicative"
+
+        if not monthly_mispel.empty:
+            gm = monthly_mispel.copy()
+            gm.index = pd.Index([f"{y:04d}-{mo:02d}" for (y, mo) in gm.index], name="month")
+            grid_fee_monthly_df = gm
+
+    # -------------------------------------------------------------------------
     # Plot 1: dispatch report
     # -------------------------------------------------------------------------
     fcr_cfg = settings.optimization.trading.fcr
@@ -325,6 +399,7 @@ def evaluate(result: SimulationResult) -> Evaluation:
         reference_costs=reference_df,
         dispatch_figure=fig_dispatch,
         cashflow_figure=fig_cf,
+        grid_fee_monthly=grid_fee_monthly_df,
     )
 
 

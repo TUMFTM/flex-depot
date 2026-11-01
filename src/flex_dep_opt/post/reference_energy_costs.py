@@ -91,3 +91,21 @@ def compute_reference_driving_energy_costs(
     }
 
     return ref, summary
+
+
+def read_reference_grid_energy_kwh(
+    flexibility_csv: str | Path,
+    *,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    energy_column: str = DEFAULT_REFERENCE_ENERGY_COLUMN,
+) -> float:
+    """Grid-side reference driving energy over the window (price-independent)."""
+    _, summary = compute_reference_driving_energy_costs(
+        flexibility_csv,
+        start=start,
+        end=end,
+        static_price_eur_per_kwh=0.0,
+        energy_column=energy_column,
+    )
+    return float(summary["ref_grid_energy_kwh"])
