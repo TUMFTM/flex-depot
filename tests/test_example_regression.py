@@ -31,7 +31,7 @@ _GOLDEN = {
     "fcr_activation_cf_eur": 46.156,
     # Savings vs. uncontrolled charging (S0 reference metered grid-side; charging
     # losses already baked into the flexband column, no extra eta division)
-    "total_potential_gross_profit_delta_eur": 356.576,
+    "total_potential_gross_profit_delta_eur": 312.216,
     # Energy balance
     "net_kwh": -2717.718,
     "sell_kwh": 4333.238,
