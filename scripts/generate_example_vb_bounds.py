@@ -141,12 +141,10 @@ CASE_OUTPUT = {
     "bidi": FLEXIBILITY_DIR / "vb_bounds_example.csv",
 }
 # Collapsed energy bands (lower == upper up to float noise) are snapped to an
-# exact single point only for the unidirectional file: it was exported through
-# the aggregation repo's main pipeline, which applies the snap. The
-# bidirectional file was exported through that repo's sensitivity pipeline,
-# which does not snap, so its collapsed bands keep their raw last-ULP spread.
-# Reproducing both files byte-for-byte therefore requires this per-case toggle.
-CASE_SNAP_COLLAPSED = {"uni": True, "bidi": False}
+# exact single point. Both files are exported through the aggregation repo's
+# main export (``data_io._snap_collapsed_energy_bands``), which applies this
+# snap, so reproducing them byte-for-byte requires it for both cases.
+CASE_SNAP_COLLAPSED = {"uni": True, "bidi": True}
 
 
 # --------------------------------------------------------------------------- #
@@ -473,9 +471,17 @@ def build_depot_flexbands(sessions: pd.DataFrame, cfg: PaperConfig) -> pd.DataFr
                 continue
 
             n_steps = departure_index - arrival_index
-            driving_energy[arrival_index:departure_index] += (
-                getattr(row, REQUIRED_ENERGY_KWH) / cfg.charging_efficiency / n_steps
-            )
+            # Grid-side energy to recharge this session to its departure target
+            # (battery-side REQUIRED_ENERGY_KWH is net of the charging
+            # efficiency on the grid meter).
+            grid_energy_to_target_kwh = getattr(row, REQUIRED_ENERGY_KWH) / cfg.charging_efficiency
+            # reference_energy_strategy = "delivered": cap the reference at the
+            # energy the depot can physically deliver within the connection
+            # window, so energy supplied en route by public charging is not
+            # re-billed at the depot tariff (matches the flexband energy bounds).
+            grid_energy_deliverable_kwh = cfg.max_charge_power_kw * n_steps * timestep_hours
+            session_reference_kwh = min(grid_energy_to_target_kwh, grid_energy_deliverable_kwh)
+            driving_energy[arrival_index:departure_index] += session_reference_kwh / n_steps
 
             envelopes.append(
                 build_vehicle_envelope(
