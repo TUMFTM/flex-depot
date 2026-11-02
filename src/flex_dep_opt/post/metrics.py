@@ -90,7 +90,9 @@ def compute_cashflows_per_step(
 
     # -------------------------------------------------------------------------
     # Optional: imbalance cashflow (reBAP)
-    # Treat as a cost component using IMB_POS and IMB_NEG prices.
+    # Sign convention mirrors the optimization objective (obj_imb_cashflow):
+    #   p_imb_pos (import-direction, BKV Unterdeckung)  → pay    IMB_POS price → cost
+    #   p_imb_neg (export-direction, BKV Überdeckung)   → earn   IMB_NEG price → revenue
     # -------------------------------------------------------------------------
     if has_imbalance(dispatch) and ("IMB_POS" in prices_by_market) and ("IMB_NEG" in prices_by_market):
         p_pos = dispatch["p_imb_pos_kw"].astype(float).copy().clip(lower=0.0)
@@ -106,7 +108,7 @@ def compute_cashflows_per_step(
             pos_price = pos_price.reindex(idx)
             neg_price = neg_price.reindex(idx)
 
-            cf_df["IMB Cashflow [€/step]"] = -(pos_price * p_pos + neg_price * p_neg) * dt
+            cf_df["IMB Cashflow [€/step]"] = (-pos_price * p_pos + neg_price * p_neg) * dt
 
     # -------------------------------------------------------------------------
     # FCR activation cashflow: reBAP settlement of FCR droop energy.
