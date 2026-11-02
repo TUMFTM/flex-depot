@@ -284,6 +284,13 @@ def evaluate(result: SimulationResult) -> Evaluation:
         ap = float(nt_cfg.energy_price_eur_per_kwh or 0.0)
         lp = float(nt_cfg.capacity_price_eur_per_kw_year or 0.0)
 
+        # Without active peak shaving the demand charge is owed on the contracted connection
+        # capacity (the reference peak), not on an incidentally lower realized peak. Flooring the
+        # billed peak at the reference keeps the capacity charge constant across scenarios, so the
+        # grid-fee delta reflects only the energy charge + MiSpeL netting — peak shaving stays a
+        # peak_shaving=true capability and never leaks into the flexibility-marketing comparison.
+        billed_peak_floor_kw = float(nt_cfg.reference_peak_kw or 0.0) if not nt_cfg.peak_shaving else 0.0
+
         uc_summary, monthly_mispel = settle_grid_fees(
             dispatch["p_net_kw"],
             timestep_hours=dt,
@@ -292,6 +299,7 @@ def evaluate(result: SimulationResult) -> Evaluation:
             mispel_applicable=nt_cfg.mispel_applicable,
             initial_annual_peak_kw=float(nt_cfg.initial_annual_peak_kw),
             initial_peak_year=start.year,
+            billed_peak_floor_kw=billed_peak_floor_kw,
         )
         kpis.update(uc_summary)
 

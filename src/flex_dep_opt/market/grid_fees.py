@@ -84,12 +84,18 @@ def settle_grid_fees(
     mispel_applicable: bool,
     initial_annual_peak_kw: float = 0.0,
     initial_peak_year: int | None = None,
+    billed_peak_floor_kw: float = 0.0,
 ) -> tuple[dict[str, float], pd.DataFrame]:
     """Settle grid fees on a realized net-power series.
 
     The energy charge is levied on the billable import (per-month MiSpeL netting when applicable).
     The capacity charge is levied once per calendar year on that year's peak import; the configured
     historical peak seeds ``initial_peak_year`` so a sub-annual window keeps its real yearly peak.
+
+    ``billed_peak_floor_kw`` floors every year's billed peak at the contracted connection capacity.
+    When peak shaving is not marketed, the demand charge is owed on that contracted capacity (the
+    reference peak) regardless of how low the realized peak happens to be, so an incidentally
+    sub-reference peak earns no phantom capacity credit. Pass 0.0 (default) to bill the realized peak.
 
     Returns a summary dict (gross import/export, billable import, headline peak, energy/capacity/
     total fees) and the per-month netting table for transparent export.
@@ -107,7 +113,11 @@ def settle_grid_fees(
         year_peak.loc[initial_peak_year] = max(
             float(year_peak.get(initial_peak_year, 0.0)), float(initial_annual_peak_kw)
         )
-    peak_kw = float(year_peak.max()) if len(year_peak) else float(initial_annual_peak_kw)
+    if float(billed_peak_floor_kw) > 0.0:
+        year_peak = year_peak.clip(lower=float(billed_peak_floor_kw))
+    peak_kw = (
+        float(year_peak.max()) if len(year_peak) else float(max(initial_annual_peak_kw, billed_peak_floor_kw))
+    )
 
     energy_eur = float(energy_price_eur_per_kwh) * billable
     capacity_eur = float(capacity_price_eur_per_kw_year) * float(year_peak.sum())

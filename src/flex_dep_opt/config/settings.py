@@ -271,7 +271,9 @@ class NetTariffSettings(_StrictModel):
             "Let the optimizer actively minimize the billed peak via the capacity price. "
             "When false, the capacity price drops out of the objective and the grid connection is "
             "limited to `reference_peak_kw`, so the depot only markets flexibility within the "
-            "reference connection (the capacity charge is still billed on the realized peak)."
+            "reference connection (the capacity charge is then billed on that contracted "
+            "connection capacity, i.e. floored at `reference_peak_kw`, so an incidentally lower "
+            "realized peak earns no capacity credit)."
         ),
     )
     mispel_a11_enabled: bool = Field(

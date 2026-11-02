@@ -191,6 +191,40 @@ def test_settle_per_year_peak_with_initial():
     assert summary["grid_fee_capacity_eur"] == pytest.approx(10.0 * 1200.0)
 
 
+def test_billed_peak_floored_at_reference_when_not_shaving():
+    # Without active peak shaving the demand charge is owed on the contracted connection
+    # capacity: a realized peak below the floor must still be billed on the floor, so no
+    # phantom capacity credit leaks in.
+    idx = pd.date_range(_ORIGIN, periods=4, freq="h", tz=_TZ)
+    p_net = pd.Series([300.0, 700.0, 200.0, 0.0], index=idx)  # realized peak 700 < floor
+    summary, _ = settle_grid_fees(
+        p_net,
+        timestep_hours=1.0,
+        energy_price_eur_per_kwh=0.0,
+        capacity_price_eur_per_kw_year=10.0,
+        mispel_applicable=False,
+        billed_peak_floor_kw=1400.0,
+    )
+    assert summary["grid_peak_kw"] == pytest.approx(1400.0)
+    assert summary["grid_fee_capacity_eur"] == pytest.approx(10.0 * 1400.0)
+
+
+def test_billed_peak_floor_does_not_cap_a_higher_realized_peak():
+    # The floor is a lower bound only; a realized peak above it is billed in full.
+    idx = pd.date_range(_ORIGIN, periods=3, freq="h", tz=_TZ)
+    p_net = pd.Series([300.0, 1600.0, 200.0], index=idx)  # realized peak 1600 > floor
+    summary, _ = settle_grid_fees(
+        p_net,
+        timestep_hours=1.0,
+        energy_price_eur_per_kwh=0.0,
+        capacity_price_eur_per_kw_year=10.0,
+        mispel_applicable=False,
+        billed_peak_floor_kw=1400.0,
+    )
+    assert summary["grid_peak_kw"] == pytest.approx(1600.0)
+    assert summary["grid_fee_capacity_eur"] == pytest.approx(10.0 * 1600.0)
+
+
 # ---------------------------------------------------------------------------
 # Optimization model integration
 # ---------------------------------------------------------------------------
