@@ -9,7 +9,8 @@ market setup — the TUM market colors are reserved for per-market quantities
 (panel (b) and the detail figure); S4 is hatched to mark imperfect price
 foresight (redundant encoding for grayscale print). Panel (b): stacked
 cashflow composition per scenario (DA, ID, FCR capacity revenue, fees &
-imbalance) with the net cashflow marker and the S0 reference line, y-axis
+imbalance, and battery-cycling cost) with the net-profit marker (net of fees
+and cycling, so the stack reconciles to it) and the S0 reference line, y-axis
 symmetric around zero.
 
 Style and palette are shared via figure_style.py.
@@ -157,8 +158,16 @@ def _panel_composition(ax, df: pd.DataFrame) -> None:
         "ID": df["id_cashflow_eur"],
         "FCR": df["fcr_revenue_eur"] + df.get("fcr_activation_cf_eur", pd.Series(0.0, index=df.index)),
         "Fees & imbalance": df["fees_eur"] + df["imb_cost_eur"],
+        # Battery-cycling cost (always a cost → negative component). Including it
+        # makes the stack reconcile exactly to the net-profit marker, which is
+        # net of this term (see gross_profit_eur KPI).
+        "Cycling cost": -df["cycling_cost_eur"],
     }
-    net = -df["total_energy_cost_eur"]  # gross profit (negative = net cost)
+    # Cycling cost reuses the fees gray but is hatched so the two cost terms stay
+    # visually distinct in grayscale print.
+    comp_colors = {**MARKET_COLORS, "Cycling cost": MARKET_COLORS["Fees & imbalance"]}
+    comp_hatches = {"Cycling cost": "///"}
+    net = -df["total_energy_cost_eur"]  # net profit, net of fees and cycling cost
     # S0 gross profit incl. reference battery-cycling wear, so the baseline is
     # cycling-consistent with the net-cashflow markers (both net of degradation).
     ref = float(df["ref_gross_profit_eur"].iloc[0])
@@ -174,14 +183,15 @@ def _panel_composition(ax, df: pd.DataFrame) -> None:
             bottom=bottoms,
             width=0.6,
             label=label,
-            color=MARKET_COLORS[label],
+            color=comp_colors[label],
             edgecolor="black",
             linewidth=0.4,
+            hatch=comp_hatches.get(label),
         )
         pos_base = [pb + max(v, 0.0) for v, pb in zip(values, pos_base)]
         neg_base = [nb + min(v, 0.0) for v, nb in zip(values, neg_base)]
 
-    ax.scatter(x, net, marker="D", s=18, color="black", zorder=5, label="Net cashflow")
+    ax.scatter(x, net, marker="D", s=18, color="black", zorder=5, label="Net profit")
     ax.axhline(ref, color="black", lw=1.4, ls="--", label="S0 (static price)")
     ax.axhline(0.0, color="black", lw=0.5)
 
@@ -196,11 +206,19 @@ def _panel_composition(ax, df: pd.DataFrame) -> None:
     ax.set_ylim(-limit, limit)
     ax.grid(**GRID_KW)
     ax.set_axisbelow(True)
-    # Column-wise legend order: [Net, S0, Fees | DA, ID, FCR] so the market
-    # patches share one column.
+    # Column-wise legend order: [Net, S0, Fees, Cycling | DA, ID, FCR] so the two
+    # gray cost terms share the left column and the market patches the right.
     handles, labels = ax.get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
-    order = ["Net cashflow", "S0 (static price)", "Fees & imbalance", "DA", "ID", "FCR"]
+    order = [
+        "Net profit",
+        "S0 (static price)",
+        "Fees & imbalance",
+        "Cycling cost",
+        "DA",
+        "ID",
+        "FCR",
+    ]
     ax.legend(
         [by_label[lb] for lb in order],
         order,

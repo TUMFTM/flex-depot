@@ -25,6 +25,7 @@ DEFAULT_INDEX = Path("results/illustrative_example/run_index.csv")
 # and defaults to 0 (market disabled) or empty (forecast MAE).
 _REQUIRED_KPIS = (
     "gross_profit_eur",
+    "cycling_cost_eur",
     "ref_energy_cost_eur",
     "ref_gross_profit_eur",
     "total_potential_gross_profit_delta_eur",
@@ -78,6 +79,10 @@ def _scenario_row(scenario: str, run_dir: Path, runtime_s: float) -> dict:
         "markets": _markets_label(settings),
         "price_foresight": str(kpis["price_foresight"]),
         "total_energy_cost_eur": -float(kpis["gross_profit_eur"]),
+        # Battery-cycling (degradation-proxy) cost, already subtracted inside
+        # gross_profit_eur; carried through so the composition panel can show it
+        # as its own stack component and reconcile to the net-profit marker.
+        "cycling_cost_eur": float(kpis["cycling_cost_eur"]),
         # Energy cost only, kept for the S0-consistency check across scenarios.
         "ref_cost_s0_eur": ref_cost,
         # S0 gross profit incl. reference battery-cycling wear; the S0 line in
