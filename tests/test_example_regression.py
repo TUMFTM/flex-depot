@@ -22,8 +22,10 @@ EXAMPLE_TOML = REPO_ROOT / "src/flex_dep_opt/config/settings_quickstart.toml"
 # Golden KPI values — update this dict after any intentional model change.
 _GOLDEN = {
     # Core economics
-    "gross_profit_eur": -95.629,
-    "cycling_cost_eur": 241.486,
+    "gross_profit_eur": -109.583,
+    "cycling_cost_eur": 255.440,
+    "cycling_cost_scheduled_eur": 241.486,
+    "cycling_cost_hidden_fcr_eur": 13.954,
     "trading_profit_eur": -96.611,
     "fees_eur": -0.864,
     "fcr_revenue_eur": 210.020,
@@ -31,7 +33,7 @@ _GOLDEN = {
     "fcr_activation_cf_eur": 46.156,
     # Savings vs. uncontrolled charging (S0 reference metered grid-side; charging
     # losses already baked into the flexband column, no extra eta division)
-    "total_potential_gross_profit_delta_eur": 313.763,
+    "total_potential_gross_profit_delta_eur": 299.810,
     # Energy balance
     "net_kwh": -2717.718,
     "sell_kwh": 4333.238,
@@ -66,6 +68,8 @@ def test_example_kpis(tmp_path, monkeypatch):
     for key in (
         "gross_profit_eur",
         "cycling_cost_eur",
+        "cycling_cost_scheduled_eur",
+        "cycling_cost_hidden_fcr_eur",
         "trading_profit_eur",
         "fees_eur",
         "fcr_revenue_eur",

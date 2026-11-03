@@ -28,6 +28,7 @@ from flex_dep_opt.post.metrics import (
     compute_cashflows_per_step,
     compute_fcr_activation_energy,
     compute_fcr_cashflow_per_slot,
+    compute_fcr_hidden_cycling_throughput,
     compute_kpis,
     compute_market_aggregates,
 )
@@ -167,19 +168,41 @@ def evaluate(result: SimulationResult) -> Evaluation:
         # Intentionally not added to `energy_by_mk` so the headline
         # buy_kwh / sell_kwh KPIs stay pure scheduled-market volumes.
 
-    # Battery-cycling (degradation-proxy) cost on realized grid-side throughput,
-    # mirroring the optimization objective's main deg term (c_deg * sum(p_ch +
-    # p_dis) * dt). Folded into gross profit below so the KPI is consistent with
-    # the objective. (The objective's small hidden-FCR sub-timestep term is not
-    # reconstructed here; the realized p_ch/p_dis throughput is the physical wear.)
+    # Battery-cycling (degradation-proxy) cost, reconstructing both throughput
+    # components of the optimization objective's deg term so the reported KPI and
+    # the objective account for cycling identically:
+    #   1) scheduled throughput  c_deg * sum(p_ch + p_dis) * dt  — grid-side wear
+    #      already carried by the mean dispatch;
+    #   2) hidden-FCR throughput c_deg * sum_t hidden_droop[t] * x_fcr * dt — the
+    #      intra-interval FCR activation the mean signed droop does not capture.
+    # Both are folded into gross profit below and surfaced separately as diagnostics.
     cyc_cfg = settings.optimization.flexibility.cycle_regularization
     c_deg = cyc_cfg.cost_eur_per_kwh_throughput if cyc_cfg.enabled else 0.0
-    throughput_kwh = float((dispatch["p_ch_kw"] + dispatch["p_dis_kw"]).sum()) * dt
-    cycling_cost_eur = c_deg * throughput_kwh
+    scheduled_throughput_kwh = float((dispatch["p_ch_kw"] + dispatch["p_dis_kw"]).sum()) * dt
+
+    fcr_cfg = settings.optimization.trading.fcr
+    fcr_frequency_data = (
+        get_fcr_frequency_data(fcr_cfg.frequency_source)
+        if c_deg > 0 and fcr_cfg.enabled and fcr_cfg.frequency_source
+        else None
+    )
+    hidden_fcr_throughput_kwh = compute_fcr_hidden_cycling_throughput(
+        dispatch.index,
+        fcr_commit_df,
+        fcr_frequency_data,
+        product_hours=float(fcr_cfg.product_hours),
+        timestep_hours=dt,
+    )
+
+    cycling_cost_scheduled_eur = c_deg * scheduled_throughput_kwh
+    cycling_cost_hidden_fcr_eur = c_deg * hidden_fcr_throughput_kwh
+    cycling_cost_eur = cycling_cost_scheduled_eur + cycling_cost_hidden_fcr_eur
 
     kpis = compute_kpis(
         cf_df, energy_by_mk, fees_by_market, commit=commit_df, cycling_cost_eur=cycling_cost_eur
     )
+    kpis["cycling_cost_scheduled_eur"] = cycling_cost_scheduled_eur
+    kpis["cycling_cost_hidden_fcr_eur"] = cycling_cost_hidden_fcr_eur
     kpis.update(fcr_kpis)
 
     pass2_steps = int(dispatch["used_rebap"].astype(bool).sum()) if "used_rebap" in dispatch.columns else 0

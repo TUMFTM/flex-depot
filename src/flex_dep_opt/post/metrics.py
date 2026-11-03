@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+import numpy as np
 import pandas as pd
+
+from flex_dep_opt.io.prices import FCR_DROOP_ABS_COL, FCR_DROOP_COL
 
 
 # =============================================================================
@@ -307,6 +310,67 @@ def compute_fcr_activation_energy(
     if buy_kwh == 0.0 and sell_kwh == 0.0:
         return None
     return buy_kwh, sell_kwh
+
+
+def compute_fcr_hidden_cycling_throughput(
+    index: pd.DatetimeIndex,
+    fcr_commit_df: pd.DataFrame | None,
+    fcr_frequency_data: pd.DataFrame | None,
+    *,
+    product_hours: float,
+    timestep_hours: float,
+) -> float:
+    """
+    Realized hidden-FCR cycling throughput [kWh].
+
+    Within a settlement step the depot follows the per-second FCR signal, but the
+    power balance only carries the mean signed droop, so the gap between the mean
+    |droop| and |mean droop| is extra charge/discharge throughput that p_ch/p_dis
+    never sees. For every committed slot this sums, over the slot's steps,
+
+        hidden_droop[t] * x_fcr_kw * dt,
+        hidden_droop[t] = max(|droop|_mean[t] - |mean droop[t]|, 0)
+
+    so the reported cycling throughput reflects the same sub-interval wear carried
+    in the optimization's degradation term. Returns 0.0 when the activation signal
+    (FREQ_DROOP_ABS_MEAN) or the FCR commitments are unavailable.
+    """
+    if (
+        fcr_commit_df is None
+        or fcr_commit_df.empty
+        or fcr_frequency_data is None
+        or fcr_frequency_data.empty
+        or FCR_DROOP_ABS_COL not in fcr_frequency_data.columns
+        or "slot_start" not in fcr_commit_df.columns
+        or "x_fcr_kw" not in fcr_commit_df.columns
+        or len(index) == 0
+    ):
+        return 0.0
+
+    dt = float(timestep_hours)
+
+    # Per-step hidden droop aligned to the dispatch index (nearest frequency row,
+    # mirroring the model's signal construction).
+    col_vals = fcr_frequency_data[FCR_DROOP_COL].to_numpy(dtype=float)
+    abs_vals = fcr_frequency_data[FCR_DROOP_ABS_COL].to_numpy(dtype=float)
+    locs = fcr_frequency_data.index.get_indexer(index, method="nearest")
+    droop = np.clip(col_vals[locs], -1.0, 1.0)
+    hidden = np.maximum(abs_vals[locs] - np.abs(droop), 0.0)
+    hidden_series = pd.Series(hidden, index=index)
+
+    throughput_kwh = 0.0
+    has_accepted = "accepted" in fcr_commit_df.columns
+    for _, row in fcr_commit_df.iterrows():
+        if has_accepted and not bool(row["accepted"]):
+            continue
+        x_fcr_kw = float(row["x_fcr_kw"])
+        if x_fcr_kw <= 0.0:
+            continue
+        slot_start = row["slot_start"]
+        slot_end = slot_start + pd.Timedelta(hours=float(product_hours))
+        in_slot = (index >= slot_start) & (index < slot_end)
+        throughput_kwh += float(hidden_series[in_slot].sum()) * x_fcr_kw * dt
+    return throughput_kwh
 
 
 def compute_kpis(
