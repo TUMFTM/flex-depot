@@ -30,8 +30,8 @@ keywords:
   - "day-ahead"
   - "intraday"
   - "energy markets"
-version: "2.1.0"
-date-released: "2026-10-26"
+version: "2.2.0"
+date-released: "2026-11-06"
 
 # Related paper
 preferred-citation:

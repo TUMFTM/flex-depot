@@ -40,6 +40,9 @@ Wurilege Wurilege, M.Sc. - Master's student <br>
 FLEX-DEPOT is licensed under the [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) open source license. <br>
 The full license text can be found in the LICENSE file in the root directory of the repository.
 
+## Changelog
+Notable changes for each release are documented in [`CHANGELOG.md`](CHANGELOG.md). Each tagged version is archived on [Zenodo](https://doi.org/10.5281/zenodo.21529546).
+
 ## Related Publications
 Brödel, M., Würth, A.S., Park, W.-H., Rosner, P., Lienkamp, M.: "FLEX-DEPOT: An open-source framework for multi-market flexibility commercialization of a logistics depot incorporating electric trucks." <br>
 Submitted to Energy Informatics (2026)
@@ -53,7 +56,7 @@ If you use FLEX-DEPOT in academic work, please cite **both**:
 2. The associated publication
 
 **Software:**
-Brödel, M. (2026). FLEX-DEPOT (Version 2.1.0). GitHub repository.  
+Brödel, M. (2026). FLEX-DEPOT (Version 2.2.0). GitHub repository.  
 https://github.com/TUMFTM/flex-depot
 
 **Publication:**

@@ -10,6 +10,8 @@ Each released version is archived on Zenodo (concept DOI
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-06
+
 ### Added
 - Grid fee (Netzentgelte) component: energy- and peak-power-based network
   tariffs integrated into the market/cost layer (`market/grid_fees.py`).
@@ -88,7 +90,8 @@ Reproducibility & Python API release.
 - Initial public release: rolling-horizon MPC optimization framework for
   energy-flexibility commercialization in logistics depots with electric trucks.
 
-[Unreleased]: https://github.com/TUMFTM/flex-depot/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/TUMFTM/flex-depot/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/TUMFTM/flex-depot/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/TUMFTM/flex-depot/compare/v2.0.1...v2.1.0
 [2.0.1]: https://github.com/TUMFTM/flex-depot/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/TUMFTM/flex-depot/compare/v1.0.0...v2.0.0
